@@ -23,6 +23,7 @@ Anything not confirmed against a primary source is flagged **UNVERIFIED**.
 | fab-inspector v3.4.0 | Power BI | **Adopt** | It *is* PBI Inspector V2 renamed — one actively-maintained PBIR rules engine replaces two POC tools |
 | Custom ajv PBIR schema validator (keep) | Power BI | **Adopt** | Microsoft's PBIR schemas are live and versioned; no off-the-shelf substitute exists |
 | Tabular Editor 2 (`-A` BPA) v2.28.0 | Power BI | **Adopt** | Free, license-free in CI, runs on `windows-latest`; only viable local semantic-model BPA |
+| pbi-cli v3.11.1 | Power BI | **Adopt** (local authoring, not CI) | PBIR/`.pbip`-native report authoring + live-Desktop DAX/TMDL for Claude Code — fills the authoring gap the validation triad doesn't cover (added 2026-07-13) |
 | uv (run/lock/dependency-groups/uvx) | pytest/uv | **Adopt** | Already in use; PEP 735 dependency groups replace requirements.txt sprawl |
 | ruff (lint + format) v0.15.x | pytest/uv | **Adopt** | One tool replaces flake8 + isort + black; same vendor as uv |
 | pytest-asyncio v1.4.0 | pytest/uv | **Adopt** | POC already configured `asyncio_mode = "auto"`; actively maintained |
@@ -121,6 +122,8 @@ That is exactly the POC's `validate-all.ps1` triad, modernized: one inspector in
 - **Fabric CLI `fab`** ([docs](https://learn.microsoft.com/rest/api/fabric/articles/fabric-command-line-interface), [microsoft/fabric-cli](https://github.com/microsoft/fabric-cli), `pip install ms-fabric-cli`, GA May 2025, v1.6.1 Apr 2026): deploy/automation over Fabric APIs, no validation capability; whether it publishes to a Pro-only (non-Fabric-capacity) workspace is **UNVERIFIED** in primary docs. **Skip for validation; revisit for publish automation.**
 - **fabric-cicd** (v1.2.0, 2026-06-30, actively maintained): "full deployment every time," 31 item types incl. Report/SemanticModel — deploy-only, no validation. **Skip for now.**
 - **TMDL tooling**: TMDL view in Desktop is GA, but PBIP-with-TMDL-folder is itself **still preview** ([projects-dataset](https://learn.microsoft.com/power-bi/developer/projects/projects-dataset#tmdl-format)). No standalone TMDL linter exists; practical validation = TE2 load or Desktop open. Microsoft's [TMDL VS Code extension](https://marketplace.visualstudio.com/items?itemName=analysis-services.TMDL) is a worthwhile human editor aid, not CI tooling.
+
+**Addendum (2026-07-13):** [MinaSaad1/pbi-cli](https://github.com/MinaSaad1/pbi-cli) (MIT, v3.11.1 2026-05-04, 413 stars, active) — **adopt for local report/model authoring**: PBIR-native report editing on `.pbip` projects plus live-Desktop DAX/TMDL via TOM; Windows-only, needs a running Power BI Desktop, so dev-machine complement to (never replacement for) the CI validation triad above. Review the skills `pbi-cli skills install` registers before use; pin the version.
 
 ## 4. pytest / uv workflow helpers
 
