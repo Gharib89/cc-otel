@@ -52,8 +52,9 @@ statusline wrapper (`cc-otel-wrapper.mjs`, ADR-0003) is a required build input.
 ## Testing
 
 ```powershell
-Invoke-ScriptAnalyzer -Path . -Recurse   # must be clean (acceptance)
-Invoke-Pester -Path .                     # unit + orchestration
+# from the repo root:
+Invoke-ScriptAnalyzer -Path installer -Recurse   # must be clean (acceptance)
+Invoke-Pester -Path installer                     # unit + orchestration
 ```
 
 The unit tests cover the pure logic (config, stamp, drift predicates, WSL

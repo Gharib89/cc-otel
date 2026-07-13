@@ -214,7 +214,7 @@ function Get-InstallState {
         return [ordered]@{ schemaVersion = $script:InstallerSchemaVersion; stamp = $stamp; wsl = $wsl }
     }
     catch {
-        Write-InstallLog "install-state.json unreadable ($($_.Exception.Message)); treating as fresh." 'WARN'
+        Write-InstallLog "State file $Path unreadable ($($_.Exception.Message)); treating as fresh." 'WARN'
         return $default
     }
 }
