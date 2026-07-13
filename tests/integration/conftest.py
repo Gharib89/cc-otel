@@ -22,6 +22,15 @@ from testcontainers.postgres import PostgresContainer  # noqa: E402
 MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "db" / "migrations"
 
 
+def pytest_collection_modifyitems(items) -> None:
+    """Mark every test under tests/integration/ `integration` so `-m integration`
+    selects the whole suite without decorating each test."""
+    marker = pytest.mark.integration
+    for item in items:
+        if "/tests/integration/" in str(item.path).replace("\\", "/"):
+            item.add_marker(marker)
+
+
 def _up_section(sql: str) -> str:
     """Return the SQL between `-- migrate:up` and `-- migrate:down`."""
     return sql.split("-- migrate:up", 1)[1].split("-- migrate:down", 1)[0]

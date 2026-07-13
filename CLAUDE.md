@@ -23,6 +23,7 @@ Pipeline: Claude Code OTel exporter → OTel Collector (bearer auth) → FastAPI
 ```sh
 uv sync                      # install workspace deps
 uv run pytest                # unit (sink/tests) + integration (tests/integration)
+uv run pytest -m integration # integration only (needs Docker) — the `integration` CI job
 uv run ruff check .          # Python lint
 uv run sqlfluff lint db/     # SQL lint
 uv run pre-commit run -a     # all hooks
