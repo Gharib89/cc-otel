@@ -28,7 +28,11 @@ BEGIN
     $cron$DELETE FROM meta.processed_batches WHERE processed_at < now() - INTERVAL '7 days'$cron$
   );
 EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'pg_cron trim of meta.processed_batches not scheduled (extension unavailable here): %', SQLERRM;
+  -- Tolerated by design so the migration applies cleanly everywhere: pg_cron may be
+  -- absent (vanilla Postgres, CI) or present but bound to a different cron.database_name
+  -- (e.g. the dev server). Report the real error as a WARNING rather than asserting a
+  -- cause, so a genuine scheduling failure on a pg_cron server is visible, not masked.
+  RAISE WARNING 'pg_cron trim of meta.processed_batches not scheduled (SQLSTATE %): %. Schedule manually if pg_cron is expected here.', SQLSTATE, SQLERRM;
 END
 $$;
 
