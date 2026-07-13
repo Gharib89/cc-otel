@@ -1,0 +1,33 @@
+# Local compose smoke harness (issue #21 acceptance). Mirrors the ACA layout:
+# the collector and its downstream sink share one network namespace, so the
+# collector's exporter target `localhost:8080` reaches the sink stand-in.
+# Driven by tests/integration/test_collector_smoke.py.
+services:
+  collector:
+    build: .
+    environment:
+      # Inline YAML list — the form the collector env provider parses into the
+      # bearertokenauth `tokens:` list (see config.yaml).
+      FLEET_TOKENS: '["smoke-token"]'
+    ports:
+      - "4318:4318"
+    volumes:
+      - queue:/var/lib/otelcol
+    # Local-only: run as root so file_storage's create_directory can write into
+    # the named volume. In ACA the emptyDir mount is writable by the container
+    # user, so production needs no such override.
+    user: "0:0"
+
+  mocksink:
+    image: otel/opentelemetry-collector-contrib:0.156.0
+    command: ["--config=/etc/otelcol/mocksink.yaml"]
+    volumes:
+      - ./mocksink.smoke.yaml:/etc/otelcol/mocksink.yaml:ro
+    # Share the collector's network namespace so the collector's localhost:8080
+    # is this container's :8080 (the ACA co-location, reproduced locally).
+    network_mode: "service:collector"
+    depends_on:
+      - collector
+
+volumes:
+  queue:
