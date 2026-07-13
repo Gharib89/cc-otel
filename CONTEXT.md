@@ -58,7 +58,7 @@ _Avoid_: raw dump, blob backup
 `meta.column_registry` — the curated catalogue of every promoted column and known `attrs` key: type, description, what it's useful for, status. Source of truth for the generated data dictionary.
 
 **Drift**:
-An `attrs`/`resource` JSONB key observed in live data but absent from the column registry — the signal that Anthropic added new telemetry. Surfaced by `v_new_attr_keys`; checked manually.
+An `attrs`/`resource` key observed in the raw reservoir but absent from the column registry — the signal that Anthropic added new telemetry. Surfaced on demand by prepared DuckDB queries (`tools/`) over the reservoir; analysis is manual. Postgres cannot detect it — schema-v2 drops the JSONB there.
 
 ### Deployment
 
