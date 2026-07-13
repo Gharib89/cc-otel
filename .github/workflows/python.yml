@@ -1,0 +1,38 @@
+name: python
+
+# Path-filtered per concern (CLAUDE.md): Python + SQL sources and their dep lock.
+# Lint (ruff + sqlfluff) and the fast unit tests only — the Docker-backed
+# integration suite lives in integration.yml, gated on its own paths (#37).
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - "**/*.py"
+      - "db/**/*.sql"
+      - ".sqlfluff"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/python.yml"
+  pull_request:
+    paths: *paths
+
+# Private repo, metered minutes (#32): a review-loop push cancels the stale run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # One ubuntu runner (1x multiplier): a plain `uv sync` installs the sink
+  # workspace member, then lint + unit tests in sequence. `-m "not integration"`
+  # deselects the testcontainers suite so this job needs no Docker.
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run sqlfluff lint db/
+      - run: uv run pytest -m "not integration"

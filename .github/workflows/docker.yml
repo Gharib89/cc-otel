@@ -1,0 +1,32 @@
+name: docker
+
+# Path-filtered per concern (CLAUDE.md): smoke-build the sink and collector
+# images so a broken Dockerfile can't merge. PR-only and build-only — no registry
+# push (that belongs with the deploy pipeline in #25). Private repo, metered
+# minutes (#32).
+on:
+  pull_request:
+    paths:
+      - "sink/**"
+      - "collector/**"
+      - ".github/workflows/docker.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Docker is preinstalled on GitHub-hosted ubuntu runners; plain `docker build`
+  # needs no extra actions. Each build context matches the Dockerfile's COPY paths
+  # (sink/ is self-contained; collector/ bakes config.yaml into the contrib image).
+  sink:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t cc-otel-sink:ci sink/
+
+  collector:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t cc-otel-collector:ci collector/
