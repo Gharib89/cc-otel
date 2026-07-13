@@ -41,17 +41,21 @@ $env:FLEET_TOKEN = '<fleet-bearer-token>'   # or a locally-exported .env value /
 ./build-installer.ps1 -Endpoint https://<collector-fqdn> -WrapperPath <path-to>/cc-otel-wrapper.mjs
 ```
 
-Stages `dist/` with `install.ps1`, the baked `managed-settings.json`, the wrapper,
-and `.install-stamp`, then prints the stamp — `SHA256(wrapper + managed-settings +
-schema version)` — on stdout. Rotating the token changes the baked managed settings
-and therefore the stamp, forcing every machine (and WSL distro) to overwrite.
+Bakes the generated `managed-settings.json` (endpoint + token + gates) and the
+wrapper into a **single self-contained `dist/install.ps1`** as base64, then prints
+the stamp — `SHA256(wrapper + managed-settings + schema version)` — on stdout.
+Rotating the token changes the baked managed settings and therefore the stamp,
+forcing every machine (and WSL distro) to overwrite. On each run the script
+materializes the managed settings and wrapper back onto disk under the install root.
 
-The token is read from `$env:FLEET_TOKEN` (a GitHub/ACA secret in CI, issue #11, or
-a locally-exported `.env` value); `-Token` overrides it. **It only ever lives in the
-environment and the baked artifact — `installer/dist/` is gitignored and never
-committed.** With no token set, the build warns and stages a non-authenticating
-placeholder. The statusline wrapper (`cc-otel-wrapper.mjs`, ADR-0003) is a required
-build input.
+**`dist/install.ps1` is the only file handed to IS** — a single script their managed
+tool distributes fleet-wide. The token is read from `$env:FLEET_TOKEN` (a GitHub/ACA
+secret in CI, issue #11, or a locally-exported `.env` value); `-Token` overrides it.
+**The token only ever lives in the environment and the baked `dist/install.ps1` —
+`installer/dist/` is gitignored and never committed; the committed `install.ps1`
+carries only placeholders.** With no token set, the build warns and bakes a
+non-authenticating placeholder. The statusline wrapper (`cc-otel-wrapper.mjs`,
+ADR-0003) is a required build input.
 
 ## Testing
 

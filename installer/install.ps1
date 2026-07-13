@@ -18,9 +18,10 @@
     env vars (a mirror, so telemetry still routes if a managed entry is dropped by the
     tolerant managed-settings parser). No traces exporter is set (ADR-0001).
 
-    Payload (baked by build-installer.ps1, co-located in -PayloadRoot):
-      managed-settings.json - the {"env": {...}} policy, endpoint + fleet token baked in.
-      cc-otel-wrapper.mjs    - statusline wrapper (ADR-0003), wired only when Node is present.
+    SELF-CONTAINED: build-installer.ps1 bakes the managed-settings.json (endpoint +
+    fleet token + gates) and the statusline wrapper (ADR-0003) into this one script as
+    base64. On each run it materializes both onto disk under $InstallRoot, so IS ships
+    a single install.ps1. The committed source carries only placeholders (no secret).
 
 .NOTES
     Exit codes: 0 success/no-op * 1 core failure * 2 partial (e.g. Node absent -> no
@@ -28,10 +29,6 @@
     (the LTS MSI is an IS prerequisite, issue #31); statusline self-heals next tick.
 #>
 param(
-    # Directory holding the baked payload; defaults to the script's own directory
-    # (the built artifact IS pushes). Overridable for testing.
-    [string]$PayloadRoot = $PSScriptRoot,
-
     # Install target root. C:\Program Files\ClaudeCode on a real fleet machine.
     [string]$InstallRoot = (Join-Path $env:ProgramFiles 'ClaudeCode')
 )
@@ -45,6 +42,16 @@ $script:InstallerSchemaVersion = 1
 # Managed settings path inside a WSL distro (Linux system dir; verified against
 # the Claude Code settings docs). Windows uses $InstallRoot\managed-settings.json.
 $script:WslManagedSettingsPath = '/etc/claude-code/managed-settings.json'
+$script:WslManagedSettingsDir  = '/etc/claude-code'
+
+# --- baked payload -----------------------------------------------------------
+# This script is SELF-CONTAINED: IS distributes a single install.ps1. build-installer.ps1
+# base64-substitutes the managed-settings.json (endpoint + fleet token + gates) and the
+# statusline wrapper into the two placeholders below, then gitignores the built copy.
+# The committed source keeps the placeholders (no secret) - it is a template, not runnable
+# as-is (Invoke-Install exits 1 with "not built" if the payload is still a placeholder).
+$script:ManagedSettingsB64 = '__CC_OTEL_MANAGED_B64__'
+$script:WrapperB64         = '__CC_OTEL_WRAPPER_B64__'
 
 # =============================================================================
 # Pure functions (no side effects) - the tested seam.
@@ -158,6 +165,18 @@ function Read-Text {
     param([Parameter(Mandatory)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) { return $null }
     return [System.IO.File]::ReadAllText($Path)
+}
+
+function ConvertFrom-BakedPayload {
+    <#
+    .SYNOPSIS Decode a base64 payload baked in by build-installer.ps1.
+    .DESCRIPTION Returns the UTF-8 text, or $null when the value is still the
+        unbuilt placeholder / not valid base64 (the placeholder contains '_',
+        which the standard base64 alphabet excludes, so it fails to decode).
+    #>
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Base64)
+    try { return [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($Base64)) }
+    catch { return $null }
 }
 
 function Write-TextFile {
@@ -333,8 +352,9 @@ function Invoke-WslLeg {
             return $false
         }
         if (-not $PSCmdlet.ShouldProcess("WSL:$Distro", 'Install managed settings')) { return $false }
-        $dir = Split-Path -Parent $script:WslManagedSettingsPath
-        $ManagedSettingsJson | & wsl.exe -d $Distro -u root -- sh -c "mkdir -p '$dir' && cat > '$script:WslManagedSettingsPath'"
+        # Use the Linux dir constant, not Split-Path - on Windows PowerShell Split-Path
+        # rewrites '/etc/...' to '\etc\...', which sh would treat as a bad relative path.
+        $ManagedSettingsJson | & wsl.exe -d $Distro -u root -- sh -c "mkdir -p '$script:WslManagedSettingsDir' && cat > '$script:WslManagedSettingsPath'"
         if ($LASTEXITCODE -ne 0) {
             Write-InstallLog "WSL distro '$Distro' leg failed (exit $LASTEXITCODE)." 'WARN'
             return $false
@@ -352,7 +372,7 @@ function Invoke-WslLeg {
 # =============================================================================
 
 function Invoke-Install {
-    param([string]$PayloadRoot, [string]$InstallRoot)
+    param([string]$InstallRoot)
 
     Set-StrictMode -Version Latest
     $ErrorActionPreference = 'Stop'
@@ -360,14 +380,12 @@ function Invoke-Install {
     $coreOk = $true
     $partial = $false
 
-    $managedPayloadPath = Join-Path $PayloadRoot 'managed-settings.json'
-    $wrapperPayloadPath = Join-Path $PayloadRoot 'cc-otel-wrapper.mjs'
-    $managedJson = Read-Text -Path $managedPayloadPath
+    $managedJson = ConvertFrom-BakedPayload -Base64 $script:ManagedSettingsB64
     if (-not $managedJson) {
-        Write-InstallLog "Baked managed-settings.json missing at $managedPayloadPath - cannot install." 'ERROR'
+        Write-InstallLog 'Managed settings payload missing - this install.ps1 was not built (run build-installer.ps1).' 'ERROR'
         return (Resolve-InstallExitCode -CoreOk $false -Partial $false)
     }
-    $wrapperContent = Read-Text -Path $wrapperPayloadPath   # may be $null (wrapper not baked yet)
+    $wrapperContent = ConvertFrom-BakedPayload -Base64 $script:WrapperB64   # $null if wrapper not baked
     $stamp = Get-InstallerStamp -WrapperContent ([string]$wrapperContent) -ManagedSettingsJson $managedJson -SchemaVersion $script:InstallerSchemaVersion
 
     $managedInstalledPath = Join-Path $InstallRoot 'managed-settings.json'
@@ -472,5 +490,5 @@ $script:TelemetryEnvKey = @((Get-DesiredTelemetryEnv -Endpoint 'placeholder' -To
 
 # Run only when executed directly; dot-sourcing (Pester) defines functions without running.
 if ($MyInvocation.InvocationName -ne '.') {
-    exit (Invoke-Install -PayloadRoot $PayloadRoot -InstallRoot $InstallRoot)
+    exit (Invoke-Install -InstallRoot $InstallRoot)
 }

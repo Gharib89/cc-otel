@@ -126,46 +126,43 @@ Describe 'Get-WrapperStatusLineCommand' {
 }
 
 Describe 'Invoke-Install (orchestration)' {
-    # The OS-boundary shims are mocked so orchestration runs off a real machine;
-    # file I/O uses throwaway temp dirs. Covers the runnable slice of the #26 matrix.
+    # The OS-boundary shims are mocked so orchestration runs off a real machine; file
+    # I/O uses a throwaway temp dir. The embedded payload is set here to mimic what
+    # build-installer.ps1 bakes in. Covers the runnable slice of the #26 matrix.
     BeforeEach {
-        $script:payload = Join-Path ([System.IO.Path]::GetTempPath()) ("ccpay-" + [guid]::NewGuid())
-        $script:target  = Join-Path ([System.IO.Path]::GetTempPath()) ("cctgt-" + [guid]::NewGuid())
-        New-Item -ItemType Directory -Path $script:payload -Force | Out-Null
-        $env = Get-DesiredTelemetryEnv -Endpoint 'https://c.example.com' -Token 'tok'
-        Set-Content -LiteralPath (Join-Path $script:payload 'managed-settings.json') -Value (ConvertTo-ManagedSettingsJson -TelemetryEnv $env)
-        Set-Content -LiteralPath (Join-Path $script:payload 'cc-otel-wrapper.mjs') -Value '// wrapper'
+        $script:target = Join-Path ([System.IO.Path]::GetTempPath()) ("cctgt-" + [guid]::NewGuid())
+        $b64 = { param($t) [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($t)) }
+        $managed = ConvertTo-ManagedSettingsJson -TelemetryEnv (Get-DesiredTelemetryEnv -Endpoint 'https://c.example.com' -Token 'tok')
+        $script:ManagedSettingsB64 = & $b64 $managed
+        $script:WrapperB64         = & $b64 '// wrapper'
         Mock Set-MachineEnvVar { $false }   # pretend machine env already correct
         Mock Get-WslDistro { @() }
         Mock Get-UserSettingsPath { @() }
     }
     AfterEach {
-        Remove-Item -LiteralPath $script:payload -Recurse -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $script:target -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    It 'installs the managed settings and exits 0 when Node is present' {
+    It 'materializes managed settings and exits 0 when Node is present' {
         Mock Test-NodePresent { $true }
-        $code = Invoke-Install -PayloadRoot $script:payload -InstallRoot $script:target
-        $code | Should -Be 0
+        Invoke-Install -InstallRoot $script:target | Should -Be 0
         Test-Path -LiteralPath (Join-Path $script:target 'managed-settings.json') | Should -BeTrue
     }
 
     It 'is idempotent - a clean second run also exits 0' {
         Mock Test-NodePresent { $true }
-        Invoke-Install -PayloadRoot $script:payload -InstallRoot $script:target | Out-Null
-        Invoke-Install -PayloadRoot $script:payload -InstallRoot $script:target | Should -Be 0
+        Invoke-Install -InstallRoot $script:target | Out-Null
+        Invoke-Install -InstallRoot $script:target | Should -Be 0
     }
 
     It 'exits 2 (partial) when Node is absent but installs core telemetry' {
         Mock Test-NodePresent { $false }
-        $code = Invoke-Install -PayloadRoot $script:payload -InstallRoot $script:target
-        $code | Should -Be 2
+        Invoke-Install -InstallRoot $script:target | Should -Be 2
         Test-Path -LiteralPath (Join-Path $script:target 'managed-settings.json') | Should -BeTrue
     }
 
-    It 'exits 1 when the baked managed-settings payload is missing' {
-        Remove-Item -LiteralPath (Join-Path $script:payload 'managed-settings.json') -Force
-        Invoke-Install -PayloadRoot $script:payload -InstallRoot $script:target | Should -Be 1
+    It 'exits 1 when the payload is still the unbuilt placeholder' {
+        $script:ManagedSettingsB64 = '__CC_OTEL_MANAGED_B64__'   # as committed, not built
+        Invoke-Install -InstallRoot $script:target | Should -Be 1
     }
 }
