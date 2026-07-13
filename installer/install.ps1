@@ -167,7 +167,8 @@ function Write-TextFile {
     if (-not $PSCmdlet.ShouldProcess($Path, 'Write file')) { return }
     $dir = Split-Path -Parent $Path
     if ($dir -and -not (Test-Path -LiteralPath $dir)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        # .NET call: literal path, no PowerShell wildcard expansion (New-Item has no -LiteralPath).
+        [System.IO.Directory]::CreateDirectory($dir) | Out-Null
     }
     [System.IO.File]::WriteAllText($Path, $Content, (New-Object System.Text.UTF8Encoding $false))
 }
@@ -182,7 +183,9 @@ function Sync-InstalledFile {
     param([Parameter(Mandatory)][string]$SourceText, [Parameter(Mandatory)][string]$TargetPath)
     $current = Read-Text -Path $TargetPath
     if ($current -eq $SourceText) { return $false }
-    Write-TextFile -Path $TargetPath -Content $SourceText
+    if (-not $PSCmdlet.ShouldProcess($TargetPath, 'Sync file')) { return $false }
+    # Sync owns the decision; force the write so it can't be independently declined.
+    Write-TextFile -Path $TargetPath -Content $SourceText -Confirm:$false
     return $true
 }
 
@@ -224,7 +227,7 @@ function Save-InstallState {
     [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][System.Collections.IDictionary]$State)
     if (-not $PSCmdlet.ShouldProcess($Path, 'Save install state')) { return }
-    Write-TextFile -Path $Path -Content ($State | ConvertTo-Json -Depth 5)
+    Write-TextFile -Path $Path -Content ($State | ConvertTo-Json -Depth 5) -Confirm:$false
 }
 
 function Get-UserSettingsPath {
@@ -264,11 +267,12 @@ function Set-UserStatusLine {
         return $false
     }
     if (-not $PSCmdlet.ShouldProcess($Path, 'Wire statusLine')) { return $false }
-    if ($text) { Backup-File -Path $Path }
+    # Wiring is confirmed; backup + write are mandatory parts of it, not separately declinable.
+    if ($text) { Backup-File -Path $Path -Confirm:$false }
     $statusLine = [ordered]@{ type = 'command'; command = $Command }
     if ($settings.PSObject.Properties['statusLine']) { $settings.statusLine = $statusLine }
     else { $settings | Add-Member -NotePropertyName statusLine -NotePropertyValue $statusLine }
-    Write-TextFile -Path $Path -Content ($settings | ConvertTo-Json -Depth 10)
+    Write-TextFile -Path $Path -Content ($settings | ConvertTo-Json -Depth 10) -Confirm:$false
     return $true
 }
 
@@ -289,9 +293,10 @@ function Clear-UserTelemetryKey {
     $toRemove = @($Key | Where-Object { $settings.env.PSObject.Properties[$_] })
     if ($toRemove.Count -eq 0) { return $false }
     if (-not $PSCmdlet.ShouldProcess($Path, 'Strip telemetry keys')) { return $false }
-    Backup-File -Path $Path
+    # Sanitize is confirmed; backup + write are mandatory parts of it, not separately declinable.
+    Backup-File -Path $Path -Confirm:$false
     foreach ($k in $toRemove) { $settings.env.PSObject.Properties.Remove($k) }
-    Write-TextFile -Path $Path -Content ($settings | ConvertTo-Json -Depth 10)
+    Write-TextFile -Path $Path -Content ($settings | ConvertTo-Json -Depth 10) -Confirm:$false
     return $true
 }
 

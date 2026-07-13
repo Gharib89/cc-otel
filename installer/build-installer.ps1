@@ -53,13 +53,15 @@ $managedJson    = ConvertTo-ManagedSettingsJson -TelemetryEnv $telemetryEnv
 $stamp          = Get-InstallerStamp -WrapperContent $wrapperContent -ManagedSettingsJson $managedJson -SchemaVersion $script:InstallerSchemaVersion
 
 if ($PSCmdlet.ShouldProcess($OutputPath, 'Stage installer artifact')) {
-    if (Test-Path -LiteralPath $OutputPath) { Remove-Item -LiteralPath $OutputPath -Recurse -Force }
-    New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
+    # Outer ShouldProcess is authoritative; force nested writes so they can't be
+    # independently declined, leaving a half-staged artifact reported as staged.
+    if (Test-Path -LiteralPath $OutputPath) { Remove-Item -LiteralPath $OutputPath -Recurse -Force -Confirm:$false }
+    [System.IO.Directory]::CreateDirectory($OutputPath) | Out-Null
 
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'install.ps1') -Destination (Join-Path $OutputPath 'install.ps1') -Force
-    Copy-Item -LiteralPath $WrapperPath -Destination (Join-Path $OutputPath 'cc-otel-wrapper.mjs') -Force
-    Write-TextFile -Path (Join-Path $OutputPath 'managed-settings.json') -Content $managedJson
-    Write-TextFile -Path (Join-Path $OutputPath '.install-stamp') -Content $stamp
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'install.ps1') -Destination (Join-Path $OutputPath 'install.ps1') -Force -Confirm:$false
+    Copy-Item -LiteralPath $WrapperPath -Destination (Join-Path $OutputPath 'cc-otel-wrapper.mjs') -Force -Confirm:$false
+    Write-TextFile -Path (Join-Path $OutputPath 'managed-settings.json') -Content $managedJson -Confirm:$false
+    Write-TextFile -Path (Join-Path $OutputPath '.install-stamp') -Content $stamp -Confirm:$false
 
     Write-Information "[INFO] Artifact staged at $OutputPath (schema v$script:InstallerSchemaVersion)." -InformationAction Continue
 }
