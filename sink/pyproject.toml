@@ -1,0 +1,9 @@
+[project]
+name = "cc-otel-sink"
+version = "0.1.0"
+description = "Claude Code OTLP → Postgres sink"
+requires-python = ">=3.13"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
