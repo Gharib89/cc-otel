@@ -38,7 +38,7 @@ def get_blob(request: Request) -> BlobReservoir | None:
 
 # Annotated deps keep the Depends() call out of the parameter default (ruff B008).
 StoreDep = Annotated[Store, Depends(get_store)]
-BlobDep = Annotated["BlobReservoir | None", Depends(get_blob)]
+BlobDep = Annotated[BlobReservoir | None, Depends(get_blob)]
 
 
 async def _ingest(

@@ -41,3 +41,19 @@ def test_close_releases_container():
     container = FakeContainer()
     BlobReservoir(container).close()
     assert container.closed is True
+
+
+class FakeCredential:
+    def __init__(self) -> None:
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
+def test_close_releases_credential_when_present():
+    container = FakeContainer()
+    credential = FakeCredential()
+    BlobReservoir(container, credential).close()
+    assert container.closed is True
+    assert credential.closed is True

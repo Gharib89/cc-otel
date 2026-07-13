@@ -22,8 +22,11 @@ logger = logging.getLogger("cc_otel_sink.blob")
 
 
 class BlobReservoir:
-    def __init__(self, container_client: ContainerClient) -> None:
+    def __init__(self, container_client: ContainerClient, credential=None) -> None:
         self._container = container_client
+        # Kept so close() can release the credential's own transport (managed
+        # identity holds a token-cache HTTP session distinct from the client's).
+        self._credential = credential
 
     @classmethod
     def from_settings(cls, settings: Settings) -> BlobReservoir | None:
@@ -37,17 +40,18 @@ class BlobReservoir:
             client = ContainerClient.from_connection_string(
                 settings.blob_connection_string, settings.blob_container
             )
+            return cls(client)
         elif settings.blob_account_url:
             from azure.identity import DefaultAzureCredential
 
+            credential = DefaultAzureCredential()
             client = ContainerClient(
                 settings.blob_account_url,
                 settings.blob_container,
-                credential=DefaultAzureCredential(),
+                credential=credential,
             )
-        else:
-            return None
-        return cls(client)
+            return cls(client, credential)
+        return None
 
     def write(self, signal: str, payload: bytes) -> None:
         """Upload one gzipped batch. Best-effort: warns on failure, never raises."""
@@ -59,5 +63,7 @@ class BlobReservoir:
             logger.warning("blob reservoir write failed for signal=%s", signal, exc_info=True)
 
     def close(self) -> None:
-        """Release the underlying Azure client's transport (sockets/threads)."""
+        """Release the client's (and any credential's) transport (sockets/threads)."""
         self._container.close()
+        if self._credential is not None:
+            self._credential.close()
