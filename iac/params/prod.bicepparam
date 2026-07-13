@@ -7,6 +7,7 @@
 using '../main.bicep'
 
 param environmentName = 'prod'
+param location = 'swedencentral'
 
 // Burstable B2ms / 128 GB / 7-day PITR (ADR-0004).
 param postgresSkuName = 'Standard_B2ms'

@@ -5,6 +5,7 @@
 using '../main.bicep'
 
 param environmentName = 'interim'
+param location = 'swedencentral'
 
 // Burstable B2s — the cheap interim class (issue #23 scope).
 param postgresSkuName = 'Standard_B2s'
