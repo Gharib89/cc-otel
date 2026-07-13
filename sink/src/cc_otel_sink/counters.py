@@ -1,24 +1,26 @@
 """In-process counter for defense-in-depth redaction strips (#8).
 
-A rising count means a fleet client gate drifted (raw content reaching the sink
-that a gate should have suppressed). Exposed on ``/healthz`` for scraping.
+A "gate leak" is non-empty content that reached the sink despite a fleet client
+gate that should have suppressed it — a rising count means a gate drifted out of
+config. (Distinct from the glossary's *Drift*, which is an unregistered attrs
+key.) Exposed on ``/healthz`` for scraping.
 """
 
 from __future__ import annotations
 
-_drift_strips = 0
+_gate_leaks = 0
 
 
-def record_drift_strips(n: int) -> None:
-    global _drift_strips
-    _drift_strips += n
+def record_gate_leaks(n: int) -> None:
+    global _gate_leaks
+    _gate_leaks += n
 
 
-def drift_strip_count() -> int:
-    return _drift_strips
+def gate_leak_count() -> int:
+    return _gate_leaks
 
 
 def reset() -> None:
     """Test hook."""
-    global _drift_strips
-    _drift_strips = 0
+    global _gate_leaks
+    _gate_leaks = 0

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from cc_otel_sink.redaction import redact
 
 
@@ -81,7 +82,8 @@ def test_denylist_stripped_from_metric_datapoint_attributes():
     assert _keys(dp_attrs) == {"model"}
 
 
-def test_tool_parameters_recursive_sweep_on_tool_result():
+@pytest.mark.parametrize("event_name", ["tool_result", "tool_decision"])
+def test_tool_parameters_recursive_sweep(event_name):
     tool_params = {
         "key": "tool_parameters",
         "value": {
@@ -105,7 +107,7 @@ def test_tool_parameters_recursive_sweep_on_tool_result():
             }
         },
     }
-    payload = _log("tool_result", [tool_params])
+    payload = _log(event_name, [tool_params])
     redact(payload)
     values = _record_attrs(payload)[1]["value"]["kvlistValue"]["values"]
     top_keys = {v["key"] for v in values}
@@ -121,9 +123,7 @@ def test_tool_parameters_not_swept_on_non_tool_event():
     tool_params = {
         "key": "tool_parameters",
         "value": {
-            "kvlistValue": {
-                "values": [{"key": "full_command", "value": {"stringValue": "keep"}}]
-            }
+            "kvlistValue": {"values": [{"key": "full_command", "value": {"stringValue": "keep"}}]}
         },
     }
     payload = _log("user_prompt", [tool_params])
@@ -141,14 +141,14 @@ def test_defense_in_depth_nonempty_counted_and_stripped():
         ],
     )
     result = redact(payload)
-    assert result.drift_strips == 1
+    assert result.gate_leaks == 1
     assert _keys(_record_attrs(result.payload)) == {"event.name", "command_name"}
 
 
 def test_defense_in_depth_empty_stripped_but_not_counted():
     payload = _log("user_prompt", [_attr("prompt", "")])
     result = redact(payload)
-    assert result.drift_strips == 0
+    assert result.gate_leaks == 0
     assert _keys(_record_attrs(result.payload)) == {"event.name"}
 
 
@@ -164,5 +164,5 @@ def test_defense_in_depth_all_keys_and_kept_survivors():
         ],
     )
     result = redact(payload)
-    assert result.drift_strips == 3
+    assert result.gate_leaks == 3
     assert _keys(_record_attrs(result.payload)) == {"event.name", "user.email", "model"}

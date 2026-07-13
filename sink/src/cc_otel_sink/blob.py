@@ -11,16 +11,22 @@ import gzip
 import logging
 import uuid
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
+
+from .config import Settings
+
+if TYPE_CHECKING:
+    from azure.storage.blob import ContainerClient
 
 logger = logging.getLogger("cc_otel_sink.blob")
 
 
 class BlobReservoir:
-    def __init__(self, container_client) -> None:
+    def __init__(self, container_client: ContainerClient) -> None:
         self._container = container_client
 
     @classmethod
-    def from_settings(cls, settings) -> BlobReservoir | None:
+    def from_settings(cls, settings: Settings) -> BlobReservoir | None:
         """Build a reservoir from settings, or None when blob storage is unconfigured."""
         try:
             from azure.storage.blob import ContainerClient

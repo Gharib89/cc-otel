@@ -24,6 +24,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .attrs import get_attr
+
 # POC four — secret-bearing, stripped wherever seen.
 DENYLIST = frozenset({"full_command", "bash_command", "file_path", "error"})
 
@@ -38,8 +40,9 @@ DEFENSE_IN_DEPTH = frozenset({"prompt", "response", "body", "body_ref"})
 @dataclass
 class RedactionResult:
     payload: dict[str, Any]
-    # Count of non-empty defense-in-depth values actually removed (drift signal).
-    drift_strips: int
+    # Count of non-empty defense-in-depth values removed — content that leaked
+    # past a client gate (see counters.py).
+    gate_leaks: int
 
 
 def _value_is_nonempty(value: dict[str, Any]) -> bool:
@@ -50,8 +53,7 @@ def _value_is_nonempty(value: dict[str, Any]) -> bool:
         return sv != ""
     # Any non-string typed value present counts as content.
     return any(
-        k in value
-        for k in ("intValue", "doubleValue", "boolValue", "arrayValue", "kvlistValue")
+        k in value for k in ("intValue", "doubleValue", "boolValue", "arrayValue", "kvlistValue")
     )
 
 
@@ -92,11 +94,7 @@ def _iter_log_records(payload: dict[str, Any]):
 
 
 def _event_name(record: dict[str, Any]) -> str | None:
-    for a in record.get("attributes", []) or []:
-        if a.get("key") == "event.name":
-            v = a.get("value", {})
-            return v.get("stringValue")
-    return record.get("name")
+    return get_attr(record.get("attributes"), "event.name") or record.get("name")
 
 
 def redact(payload: dict[str, Any]) -> RedactionResult:
@@ -105,7 +103,7 @@ def redact(payload: dict[str, Any]) -> RedactionResult:
     for attributes in _walk_attribute_lists(payload):
         _strip_denylist(attributes)
 
-    drift_strips = 0
+    gate_leaks = 0
     for record in _iter_log_records(payload):
         attributes = record.get("attributes")
         if not isinstance(attributes, list):
@@ -122,9 +120,9 @@ def redact(payload: dict[str, Any]) -> RedactionResult:
         for a in attributes:
             if a.get("key") in DEFENSE_IN_DEPTH:
                 if _value_is_nonempty(a.get("value", {})):
-                    drift_strips += 1
+                    gate_leaks += 1
                 continue
             kept.append(a)
         attributes[:] = kept
 
-    return RedactionResult(payload=payload, drift_strips=drift_strips)
+    return RedactionResult(payload=payload, gate_leaks=gate_leaks)

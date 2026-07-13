@@ -126,12 +126,24 @@ async def test_write_batch_persists_promoted_columns(store: Store, clean_db: str
         (batches,) = c.execute("SELECT count(*) FROM meta.processed_batches").fetchone()
 
     assert metric_row == (
-        "claude_code.token.usage", 42.0, "gauge_last", "input", "opus",
-        "dev@corp.com", uuid.UUID(SESSION_ID), "2.1.0", "cc",
+        "claude_code.token.usage",
+        42.0,
+        "gauge_last",
+        "input",
+        "opus",
+        "dev@corp.com",
+        uuid.UUID(SESSION_ID),
+        "2.1.0",
+        "cc",
     )
     assert event_row == (
-        "api_request", 120, 45, True,
-        uuid.UUID(SESSION_ID), uuid.UUID(PROMPT_ID), "api_request",
+        "api_request",
+        120,
+        45,
+        True,
+        uuid.UUID(SESSION_ID),
+        uuid.UUID(PROMPT_ID),
+        "api_request",
     )
     assert batches == 1
 

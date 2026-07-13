@@ -129,7 +129,12 @@ def _coerce(column: str, value: Any) -> Any:
     return value
 
 
-def _apply_promoted(row: dict[str, Any], attrs: dict[str, Any], mapping: dict[str, str]) -> None:
+def _apply_promoted(
+    row: dict[str, Any],
+    attrs: dict[str, Any],
+    mapping: dict[str, str],
+    resource_version: str | None,
+) -> None:
     for key, column in mapping.items():
         if key in attrs:
             row[column] = _coerce(column, attrs[key])
@@ -139,7 +144,8 @@ def _apply_promoted(row: dict[str, Any], attrs: dict[str, Any], mapping: dict[st
     account = attrs.get("user.account_uuid") or attrs.get("user.account_id")
     if account is not None:
         row["user_account_id"] = account
-    cc_version = attrs.get("app.version")
+    # cc_version = app.version, falling back to resource service.version.
+    cc_version = attrs.get("app.version") or resource_version
     if cc_version is not None:
         row["cc_version"] = cc_version
 
@@ -215,9 +221,7 @@ def _metric_row(
         if raw_value is None:
             raw_value = dp.get("asInt")
         row["value"] = _coerce("value", raw_value)
-    _apply_promoted(row, attrs, METRIC_ATTR_COLUMNS)
-    if resource_version is not None and row.get("cc_version") is None:
-        row["cc_version"] = resource_version
+    _apply_promoted(row, attrs, METRIC_ATTR_COLUMNS, resource_version)
     return row
 
 
@@ -232,9 +236,7 @@ def parse_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
             scope_name = scope.get("name")
             scope_version = scope.get("version")
             for rec in sl.get("logRecords", []) or []:
-                rows.append(
-                    _event_row(rec, res_attrs, resource_version, scope_name, scope_version)
-                )
+                rows.append(_event_row(rec, res_attrs, resource_version, scope_name, scope_version))
     return rows
 
 
@@ -262,7 +264,5 @@ def _event_row(
         "scope_name": scope_name,
         "scope_version": scope_version,
     }
-    _apply_promoted(row, attrs, EVENT_ATTR_COLUMNS)
-    if resource_version is not None and row.get("cc_version") is None:
-        row["cc_version"] = resource_version
+    _apply_promoted(row, attrs, EVENT_ATTR_COLUMNS, resource_version)
     return row

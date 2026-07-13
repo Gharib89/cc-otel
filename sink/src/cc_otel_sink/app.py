@@ -10,15 +10,14 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from collections.abc import Callable
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 
 from .blob import BlobReservoir
 from .config import Settings, load_settings
-from .counters import drift_strip_count, record_drift_strips
+from .counters import gate_leak_count, record_gate_leaks
 from .parser import parse_events, parse_metrics
 from .redaction import redact
 from .store import Store
@@ -37,11 +36,15 @@ def get_blob(request: Request) -> BlobReservoir | None:
     return request.app.state.blob
 
 
+# Annotated deps keep the Depends() call out of the parameter default (ruff B008).
+StoreDep = Annotated[Store, Depends(get_store)]
+BlobDep = Annotated["BlobReservoir | None", Depends(get_blob)]
+
+
 async def _ingest(
     request: Request,
     background_tasks: BackgroundTasks,
     signal: str,
-    parse_fn: Callable[[dict[str, Any]], list[dict[str, Any]]],
     store: Store,
     blob: BlobReservoir | None,
 ) -> dict[str, Any]:
@@ -52,12 +55,12 @@ async def _ingest(
         raise HTTPException(400, "invalid OTLP/JSON body") from exc
 
     result = redact(payload)
-    if result.drift_strips:
-        record_drift_strips(result.drift_strips)
+    if result.gate_leaks:
+        record_gate_leaks(result.gate_leaks)
         logger.warning(
             "redaction stripped %d non-empty defense-in-depth field(s); a client "
-            "content gate has drifted",
-            result.drift_strips,
+            "content gate has leaked",
+            result.gate_leaks,
         )
 
     # Canonical serialization: the hash key AND the blob content. Redacted, so a
@@ -65,8 +68,10 @@ async def _ingest(
     redacted_bytes = json.dumps(result.payload, separators=(",", ":"), sort_keys=True).encode()
     batch_hash = hashlib.sha256(redacted_bytes).hexdigest()
 
-    metrics = parse_fn(result.payload) if signal == "metrics" else []
-    events = parse_fn(result.payload) if signal == "logs" else []
+    if signal == "metrics":
+        metrics, events = parse_metrics(result.payload), []
+    else:
+        metrics, events = [], parse_events(result.payload)
     try:
         await store.write_batch(metrics, events, batch_hash)
     except Exception as exc:
@@ -100,27 +105,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/healthz")
     async def healthz() -> dict[str, Any]:
-        return {"status": "ok", "drift_strips": drift_strip_count()}
+        return {"status": "ok", "gate_leaks": gate_leak_count()}
 
     @app.post("/v1/metrics")
     async def ingest_metrics(
         request: Request,
         background_tasks: BackgroundTasks,
-        store: Store = Depends(get_store),
-        blob: BlobReservoir | None = Depends(get_blob),
+        store: StoreDep,
+        blob: BlobDep,
     ) -> dict[str, Any]:
-        return await _ingest(
-            request, background_tasks, "metrics", parse_metrics, store, blob
-        )
+        return await _ingest(request, background_tasks, "metrics", store, blob)
 
     @app.post("/v1/logs")
     async def ingest_logs(
         request: Request,
         background_tasks: BackgroundTasks,
-        store: Store = Depends(get_store),
-        blob: BlobReservoir | None = Depends(get_blob),
+        store: StoreDep,
+        blob: BlobDep,
     ) -> dict[str, Any]:
-        return await _ingest(request, background_tasks, "logs", parse_events, store, blob)
+        return await _ingest(request, background_tasks, "logs", store, blob)
 
     return app
 

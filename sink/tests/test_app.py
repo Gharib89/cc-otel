@@ -130,7 +130,7 @@ def test_redaction_runs_before_store_and_counts_drift():
     _, events, _ = store.calls[0]
     (row,) = events
     assert row["command_name"] == "commit"
-    assert health["drift_strips"] == 1
+    assert health["gate_leaks"] == 1
 
 
 def test_duplicate_batch_is_noop_200():

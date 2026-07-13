@@ -46,9 +46,7 @@ def _metric_payload(metric: dict, res_attrs: list[dict] | None = None) -> dict:
         "resourceMetrics": [
             {
                 "resource": {"attributes": res_attrs or []},
-                "scopeMetrics": [
-                    {"scope": {"name": "cc", "version": "1.0"}, "metrics": [metric]}
-                ],
+                "scopeMetrics": [{"scope": {"name": "cc", "version": "1.0"}, "metrics": [metric]}],
             }
         ]
     }
@@ -143,9 +141,7 @@ def test_histogram_metric_uses_sum_and_count():
         {
             "name": "claude_code.some.histogram",
             "histogram": {
-                "dataPoints": [
-                    {"timeUnixNano": "1700000000000000000", "sum": 12.0, "count": "7"}
-                ]
+                "dataPoints": [{"timeUnixNano": "1700000000000000000", "sum": 12.0, "count": "7"}]
             },
         }
     )
