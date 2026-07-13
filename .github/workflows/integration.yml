@@ -1,0 +1,86 @@
+name: integration
+
+# Path-filtered per concern (CLAUDE.md): only the ingest/store/test surfaces and
+# their dependency lock can affect these checks. Private repo — every run is
+# metered, so keep the trigger tight.
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - "sink/**"
+      - "db/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/integration.yml"
+  pull_request:
+    paths: *paths
+
+jobs:
+  # End-to-end suite: testcontainers spins a throwaway Postgres (Docker is present
+  # on GitHub-hosted ubuntu runners), applies every migration, and exercises the
+  # OTLP → sink → raw → staging → marts pipeline.
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run pytest -m integration
+
+  # Schema-drift gate: regenerating db/schema.sql from the migrations must not
+  # change it. Uses dbmate + pg_dump 17 to match the committed dump's generator;
+  # the two `-- Dumped ...` version-comment lines vary by toolchain minor and are
+  # normalized before the structural diff.
+  schema-drift:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cc_otel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/cc_otel?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pg_dump 17 (matches the committed schema.sql generator)
+        run: |
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Install dbmate
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/dbmate \
+            https://github.com/amacneil/dbmate/releases/latest/download/dbmate-linux-amd64
+          sudo chmod +x /usr/local/bin/dbmate
+
+      - name: Apply migrations and regenerate schema.sql
+        run: |
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+          dbmate up
+
+      - name: Fail on schema drift
+        run: |
+          norm() { sed -E 's/^-- Dumped (from database version|by pg_dump version).*/-- Dumped <normalized>/'; }
+          git show HEAD:db/schema.sql | norm > /tmp/committed.sql
+          norm < db/schema.sql > /tmp/regenerated.sql
+          if ! diff -u /tmp/committed.sql /tmp/regenerated.sql; then
+            echo "::error::db/schema.sql is out of date — run 'dbmate up' and commit the regenerated dump."
+            exit 1
+          fi
