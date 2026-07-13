@@ -18,6 +18,14 @@
     "hyperlink": "#2A2D7F",
     "followedHyperlink": "#B21E23"
   },
+  "charts": {
+    "$comment": "Chart-safe categorical palettes derived from the theme accents (same hues, lightness snapped into the OKLCH band per mode). Raw theme accents FAIL as data colors: accent1 too dark, accent4/accent6 too light + sub-3:1 contrast on white. Validated with the dataviz six-checks script 2026-07-13 — all checks pass in both modes (worst adjacent CVD deltaE: 19.7 light / 28.9 dark, all contrast >= 3:1). Assign slots in this fixed order, never cycled; >6 series folds into 'Other'.",
+    "categoricalLight": ["#3A44D4", "#0198CB", "#6E9A21", "#792A8E", "#A17E00", "#B61E24"],
+    "categoricalDark": ["#5D67E6", "#0AA2D3", "#73A129", "#9F54B6", "#B58E0A", "#CE3F45"],
+    "surfaceLight": "#FCFCFB",
+    "surfaceDark": "#1A1A19",
+    "slotHues": ["blue", "cyan", "green", "purple", "gold", "red"]
+  },
   "logo": {
     "file": "AIWorx_logo.png",
     "wordmark": "#00197F",
