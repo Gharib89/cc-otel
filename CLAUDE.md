@@ -57,6 +57,8 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 | `powerbi/` | `.pbip` report + branding |
 | `tools/` | DuckDB curation queries over the blob reservoir |
 | `tests/integration/` | end-to-end suite |
+| `scripts/` | skill-sync + cloud-ship bootstrap |
+| `.claude/skills/` | tracked agent skills (vendored + project-native) |
 
 - Python 3.13; ruff (line 100); sqlfluff for SQL; PSScriptAnalyzer for PowerShell.
 - **Everything is a migration** — views, grants, matviews, column-registry rows all land via dbmate; CI checks schema drift; never edit the schema out-of-band.
@@ -80,3 +82,13 @@ Default five canonical labels, used as-is (no remapping). See `docs/agents/triag
 ### Domain docs
 
 Single-context layout — `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Shipping
+
+`ship` (issue → merge-ready PR, human merge gate) and `cloud-ship` (unattended
+routine fire) are **project-native** skills in `.claude/skills/` — their source
+of truth is this repo. Everything else under `.claude/skills/` is **vendored**
+from the operator's personal skills by `uv run python scripts/sync-skills.py`
+(run locally, commit the result; never edit vendored copies by hand). The
+scheduled routine that drives `cloud-ship` over the `ready-for-agent` frontier:
+`docs/agents/cloud-ship-routine.md`.
