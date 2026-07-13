@@ -20,6 +20,7 @@ dev = [
     "testcontainers>=4.14",
     "pre-commit>=4",
     "psycopg[binary]>=3.2",
+    "httpx>=0.28",
 ]
 
 [tool.ruff]
@@ -32,3 +33,4 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["sink/tests", "tests/integration"]
+pythonpath = ["sink/src"]

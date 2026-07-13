@@ -3,7 +3,18 @@ name = "cc-otel-sink"
 version = "0.1.0"
 description = "Claude Code OTLP → Postgres sink"
 requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "psycopg[binary]>=3.2",
+    "psycopg-pool>=3.2",
+    "azure-storage-blob>=12.24",
+    "azure-identity>=1.19",
+]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cc_otel_sink"]

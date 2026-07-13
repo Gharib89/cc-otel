@@ -1,0 +1,53 @@
+"""Best-effort redacted-raw blob reservoir (ADR-0005).
+
+One gzipped file per batch, Hive-partitioned ``signal=<metrics|logs>/dt=<date>/``.
+Written after the 200 response via a background task; any failure logs a warning
+and never affects ingest. Unconfigured ⇒ a no-op reservoir.
+"""
+
+from __future__ import annotations
+
+import gzip
+import logging
+import uuid
+from datetime import UTC, datetime
+
+logger = logging.getLogger("cc_otel_sink.blob")
+
+
+class BlobReservoir:
+    def __init__(self, container_client) -> None:
+        self._container = container_client
+
+    @classmethod
+    def from_settings(cls, settings) -> BlobReservoir | None:
+        """Build a reservoir from settings, or None when blob storage is unconfigured."""
+        try:
+            from azure.storage.blob import ContainerClient
+        except ImportError:  # pragma: no cover - dependency always present in prod
+            return None
+
+        if settings.blob_connection_string:
+            client = ContainerClient.from_connection_string(
+                settings.blob_connection_string, settings.blob_container
+            )
+        elif settings.blob_account_url:
+            from azure.identity import DefaultAzureCredential
+
+            client = ContainerClient(
+                settings.blob_account_url,
+                settings.blob_container,
+                credential=DefaultAzureCredential(),
+            )
+        else:
+            return None
+        return cls(client)
+
+    def write(self, signal: str, payload: bytes) -> None:
+        """Upload one gzipped batch. Best-effort: warns on failure, never raises."""
+        try:
+            now = datetime.now(UTC)
+            name = f"signal={signal}/dt={now:%Y-%m-%d}/{now:%H%M%S}-{uuid.uuid4().hex}.json.gz"
+            self._container.upload_blob(name, gzip.compress(payload), overwrite=False)
+        except Exception:
+            logger.warning("blob reservoir write failed for signal=%s", signal, exc_info=True)
