@@ -65,9 +65,11 @@ jobs:
           sudo apt-get install -y postgresql-client-17
 
       - name: Install dbmate
+        # Pinned: dbmate controls schema.sql layout (incl. the `\restrict dbmate`
+        # marker), so a floating version could drift the dump with no code change.
         run: |
           sudo curl -fsSL -o /usr/local/bin/dbmate \
-            https://github.com/amacneil/dbmate/releases/latest/download/dbmate-linux-amd64
+            https://github.com/amacneil/dbmate/releases/download/v2.34.1/dbmate-linux-amd64
           sudo chmod +x /usr/local/bin/dbmate
 
       - name: Apply migrations and regenerate schema.sql

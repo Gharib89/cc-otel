@@ -27,7 +27,7 @@ def pytest_collection_modifyitems(items) -> None:
     selects the whole suite without decorating each test."""
     marker = pytest.mark.integration
     for item in items:
-        if str(item.path).replace("\\", "/").find("/tests/integration/") != -1:
+        if "/tests/integration/" in str(item.path).replace("\\", "/"):
             item.add_marker(marker)
 
 

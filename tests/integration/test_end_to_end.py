@@ -23,10 +23,9 @@ import pytest
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from fastapi.testclient import TestClient  # noqa: E402
-
-from cc_otel_sink.app import create_app  # noqa: E402
+from cc_otel_sink.app import create_app, get_blob  # noqa: E402
 from cc_otel_sink.config import Settings  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
 SESSION_ID = "3c9f0000-0000-0000-0000-000000000001"
 
@@ -135,6 +134,18 @@ def _logs_body(*, with_denylist: bool = True) -> dict:
     }
 
 
+class _CaptureBlob:
+    """Stand-in reservoir that records the exact bytes handed to it, so a test can
+    assert the blob payload is redacted at rest without an Azure/Azurite backend
+    (the app writes the same `redacted_bytes` to Postgres' hash and the blob)."""
+
+    def __init__(self) -> None:
+        self.payloads: list[bytes] = []
+
+    def write(self, signal: str, payload: bytes) -> None:
+        self.payloads.append(payload)
+
+
 @pytest.fixture
 def db(pg_url: str) -> str:
     """pg_url with raw tables and the idempotency ledger truncated for this test."""
@@ -172,8 +183,7 @@ def test_end_to_end_pipeline_raw_staging_marts(client: TestClient, db: str):
     with psycopg.connect(db) as c:
         # raw
         metric = c.execute(
-            "SELECT metric_name, value, value_kind, session_id, user_email "
-            "FROM raw.metrics"
+            "SELECT metric_name, value, value_kind, session_id, user_email FROM raw.metrics"
         ).fetchone()
         assert metric == (
             "claude_code.commit.count",
@@ -252,3 +262,27 @@ def test_redaction_runs_before_the_idempotency_hash(client: TestClient, db: str)
         (batch_count,) = c.execute("SELECT count(*) FROM meta.processed_batches").fetchone()
     assert event_count == 2  # both events from the first batch only
     assert batch_count == 1
+
+
+def test_redaction_at_rest_in_blob_reservoir_payload(db: str):
+    # The other at-rest store (ADR-0005): assert the bytes the app hands the blob
+    # reservoir carry no secrets. A capturing fake stands in for Azure so the check
+    # runs with no cloud backend.
+    settings = Settings(
+        database_url=db,
+        blob_account_url=None,
+        blob_connection_string=None,
+        blob_container="raw",
+        host="127.0.0.1",
+        port=8080,
+    )
+    app = create_app(settings)
+    capture = _CaptureBlob()
+    app.dependency_overrides[get_blob] = lambda: capture
+    with TestClient(app) as c:
+        _post(c, "/v1/logs", _logs_body())
+
+    assert capture.payloads, "expected a blob write to be scheduled"
+    reservoir = b" ".join(capture.payloads).decode()
+    for secret in (SECRET_PATH, SECRET_PROMPT, SECRET_ERROR):
+        assert secret not in reservoir
