@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .attrs import get_attr
+from .attrs import event_name as _event_name_of
 
 # POC four — secret-bearing, stripped wherever seen.
 DENYLIST = frozenset({"full_command", "bash_command", "file_path", "error"})
@@ -94,7 +94,7 @@ def _iter_log_records(payload: dict[str, Any]):
 
 
 def _event_name(record: dict[str, Any]) -> str | None:
-    return get_attr(record.get("attributes"), "event.name") or record.get("name")
+    return _event_name_of(record.get("attributes"), record.get("name"))
 
 
 def redact(payload: dict[str, Any]) -> RedactionResult:

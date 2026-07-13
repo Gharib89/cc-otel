@@ -195,6 +195,30 @@ def test_event_row_promotes_columns_and_coerces_types():
     assert row["event_time"] == datetime(2023, 11, 14, 22, 13, 20, tzinfo=UTC)
 
 
+def test_event_name_strips_claude_code_prefix():
+    payload = {
+        "resourceLogs": [
+            {
+                "resource": {"attributes": []},
+                "scopeLogs": [
+                    {
+                        "logRecords": [
+                            {
+                                "timeUnixNano": "1700000000000000000",
+                                "attributes": [
+                                    _attr("event.name", _s("claude_code.api_request")),
+                                ],
+                            }
+                        ]
+                    }
+                ],
+            }
+        ]
+    }
+    (row,) = parse_events(payload)
+    assert row["event_name"] == "api_request"
+
+
 def test_event_success_bool_coercion():
     payload = {
         "resourceLogs": [

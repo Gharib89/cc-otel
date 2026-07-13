@@ -46,3 +46,19 @@ def get_attr(attributes: list[dict[str, Any]] | None, key: str) -> Any:
         if a.get("key") == key:
             return attr_value(a.get("value", {}))
     return None
+
+
+def event_name(attributes: list[dict[str, Any]] | None, fallback: Any = None) -> str | None:
+    """Resolve a log record's event name to the unprefixed form the registry uses.
+
+    Claude Code's OTel names events unprefixed (``tool_result``), matching the
+    column-registry seed; strip a ``claude_code.`` prefix defensively so both the
+    promoted-column routing and the redaction sweep still key correctly if the
+    collector ever forwards the fully-qualified name.
+    """
+    name = get_attr(attributes, "event.name")
+    if not isinstance(name, str):
+        name = fallback if isinstance(fallback, str) else None
+    if isinstance(name, str):
+        return name.removeprefix("claude_code.")
+    return name

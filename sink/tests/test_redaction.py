@@ -82,7 +82,10 @@ def test_denylist_stripped_from_metric_datapoint_attributes():
     assert _keys(dp_attrs) == {"model"}
 
 
-@pytest.mark.parametrize("event_name", ["tool_result", "tool_decision"])
+@pytest.mark.parametrize(
+    "event_name",
+    ["tool_result", "tool_decision", "claude_code.tool_result", "claude_code.tool_decision"],
+)
 def test_tool_parameters_recursive_sweep(event_name):
     tool_params = {
         "key": "tool_parameters",

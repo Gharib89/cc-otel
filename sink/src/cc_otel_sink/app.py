@@ -93,13 +93,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         store = Store.from_dsn(settings.database_url) if settings.database_url else None
         if store is not None:
             await store.open()
+        blob = BlobReservoir.from_settings(settings)
         app.state.store = store
-        app.state.blob = BlobReservoir.from_settings(settings)
+        app.state.blob = blob
         try:
             yield
         finally:
             if store is not None:
                 await store.close()
+            if blob is not None:
+                blob.close()
 
     app = FastAPI(title="cc-otel sink", lifespan=lifespan)
 

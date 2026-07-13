@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from .attrs import flatten, get_attr
+from .attrs import event_name, flatten
 
 # attr key → raw.metrics column (universal + per-signal, flattened).
 METRIC_ATTR_COLUMNS: dict[str, str] = {
@@ -252,7 +252,7 @@ def _event_row(
     body = rec.get("body")
     row: dict[str, Any] = {
         "event_time": _ts(rec.get("timeUnixNano")),
-        "event_name": get_attr(rec_attrs, "event.name") or rec.get("name"),
+        "event_name": event_name(rec_attrs, rec.get("name")),
         "severity": rec.get("severityText"),
         "body": body.get("stringValue") if isinstance(body, dict) else None,
         "severity_number": _coerce("severity_number", rec.get("severityNumber")),

@@ -57,3 +57,7 @@ class BlobReservoir:
             self._container.upload_blob(name, gzip.compress(payload), overwrite=False)
         except Exception:
             logger.warning("blob reservoir write failed for signal=%s", signal, exc_info=True)
+
+    def close(self) -> None:
+        """Release the underlying Azure client's transport (sockets/threads)."""
+        self._container.close()
