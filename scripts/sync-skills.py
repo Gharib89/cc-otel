@@ -84,15 +84,18 @@ EXCLUDE = {"setup-matt-pocock-skills"}
 # reference) must never `rmtree` the tracked copy and destroy project edits.
 PROJECT_NATIVE = {"ship", "cloud-ship"}
 
-# A backticked `/name` or `name` token that matches a known skill directory.
-_REF = re.compile(r"`/?([a-z][a-z0-9-]+)`")
+# A backticked `/name` / `name` token, or a plain-text /name slash-command
+# mention. False positives (URL path segments etc.) are harmless: only tokens
+# matching a known skill directory survive the universe intersection below.
+_REF = re.compile(r"`/?([a-z][a-z0-9-]+)`|(?:^|[\s(])/([a-z][a-z0-9-]+)\b", re.MULTILINE)
 
 
 def find_refs(skill_dir: Path, universe: set[str]) -> set[str]:
     """Skill names this skill references (composes/invokes) in its markdown."""
     refs: set[str] = set()
     for md in skill_dir.rglob("*.md"):
-        for token in _REF.findall(md.read_text(encoding="utf-8")):
+        for backticked, plain in _REF.findall(md.read_text(encoding="utf-8")):
+            token = backticked or plain
             if token in universe:
                 refs.add(token)
     return refs
@@ -151,13 +154,20 @@ def main() -> int:
     seed = {e["name"]: e["model_invokable"] for e in SYNC}
     wanted, auto = resolve_closure(seed, universe)
 
-    # Hard guard: refuse to vendor over a project-native skill, even if one was
-    # named in SYNC. resolve_closure already skips them as deps; this catches a
-    # direct SYNC edit before any rmtree runs.
+    # Hard guards: refuse to vendor over a project-native skill or to vendor an
+    # excluded one, even if named in SYNC. resolve_closure already skips both as
+    # deps; this catches a direct SYNC edit before any rmtree runs.
     clash = PROJECT_NATIVE & set(wanted)
     if clash:
         print(
             f"error: refusing to overwrite project-native skill(s): {', '.join(sorted(clash))}",
+            file=sys.stderr,
+        )
+        return 1
+    excluded = EXCLUDE & set(wanted)
+    if excluded:
+        print(
+            f"error: refusing to vendor excluded skill(s): {', '.join(sorted(excluded))}",
             file=sys.stderr,
         )
         return 1
