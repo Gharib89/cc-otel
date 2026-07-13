@@ -21,10 +21,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Bicep CLI
+      # Pinned standalone Bicep on PATH: `az bicep` is pointed at it and PSRule
+      # discovers it there, so both gates use the same fixed compiler version.
+      - name: Install Bicep CLI (pinned)
         run: |
-          az bicep install
-          az bicep version
+          curl -sSLo bicep https://github.com/Azure/bicep/releases/download/v0.45.6/bicep-linux-x64
+          chmod +x bicep
+          sudo mv bicep /usr/local/bin/bicep
+          az config set bicep.use_binary_from_path=true --only-show-errors
+          bicep --version
 
       - name: Lint — bicep build (fails on any error-level linter rule)
         run: |
@@ -35,8 +40,6 @@ jobs:
       - name: PSRule for Azure
         shell: pwsh
         run: |
-          # az bicep installs to ~/.azure/bin/bicep on the hosted runner.
-          $env:PSRULE_AZURE_BICEP_PATH = Join-Path $HOME '.azure/bin/bicep'
           Install-Module PSRule -RequiredVersion 2.9.0 -Scope CurrentUser -Force
           Install-Module PSRule.Rules.Azure -RequiredVersion 1.47.0 -Scope CurrentUser -Force
           Import-Module PSRule.Rules.Azure

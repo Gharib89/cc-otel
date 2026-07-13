@@ -70,7 +70,9 @@ param tags object = {
   environment: environmentName
 }
 
-var storageName = take(toLower('${namePrefix}sa${uniqueString(resourceGroup().id)}'), 24)
+// Storage account names allow only lowercase alphanumerics, so strip the separators
+// that are legal in the other (hyphenated) resource names derived from namePrefix.
+var storageName = take(toLower(replace(replace('${namePrefix}sa${uniqueString(resourceGroup().id)}', '-', ''), '_', '')), 24)
 var containerAppName = '${namePrefix}-app-${environmentName}'
 var blobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 
@@ -143,6 +145,9 @@ resource blobRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01'
     principalId: containerApp.outputs.principalId
     principalType: 'ServicePrincipal'
   }
+  // The scope is an `existing` reference (no implicit dependency), so pin the
+  // assignment behind the storage module that actually creates the account.
+  dependsOn: [storage]
 }
 
 @description('Public HTTPS ingress FQDN of the collector — the fleet OTLP endpoint.')

@@ -52,8 +52,8 @@ az deployment group create -g <PROD_RG> \
 ```sh
 az bicep build --file iac/main.bicep --stdout > /dev/null            # lint
 az bicep build-params --file iac/params/interim.bicepparam --stdout > /dev/null
-pwsh -c '$env:PSRULE_AZURE_BICEP_PATH="$HOME/.azure/bin/bicep.exe"; \
-  Assert-PSRule -InputPath ./iac/ -Module PSRule.Rules.Azure -Outcome Fail,Error -As Summary'
+# PSRule (one line — point the env var at your local bicep; drop the .exe on non-Windows):
+pwsh -c '$env:PSRULE_AZURE_BICEP_PATH="$HOME/.azure/bin/bicep.exe"; Assert-PSRule -InputPath ./iac/ -Module PSRule.Rules.Azure -Outcome Fail,Error -As Summary'
 ```
 
 PSRule suppressions live in the repo-root `ps-rule.yaml`; each excluded rule is a
