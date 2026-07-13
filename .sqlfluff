@@ -1,3 +1,7 @@
 [sqlfluff]
 dialect = postgres
 max_line_length = 100
+# PG01 wants CREATE INDEX CONCURRENTLY, impossible inside dbmate's transactional
+# migrations. RF04 rejects keyword identifiers, but promoted column names mirror OTLP
+# attribute names (value, count, source, trigger, decision) by design.
+exclude_rules = PG01, RF04
