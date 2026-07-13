@@ -1,0 +1,49 @@
+# PSRule for Azure — validates the iac/ deployments against Azure best practice.
+# The two .bicepparam entrypoints are expanded to full deployments and analyzed;
+# bare module .bicep files are not deployable on their own, so file-expansion is off.
+configuration:
+  AZURE_BICEP_FILE_EXPANSION: false
+  AZURE_BICEP_PARAMS_FILE_EXPANSION: true
+  # First-run Bicep compilation is a cold start (module JIT); 5s (the default) can
+  # trip on the first param file. 30s is comfortably above a warm compile.
+  AZURE_BICEP_FILE_EXPANSION_TIMEOUT: 30
+
+input:
+  pathIgnore:
+    - '**/*.md'
+    - '**/*.json'
+
+# Every excluded rule below is a deliberate, documented design choice — a POC-scale
+# resiliency/cost trade-off or an architecture requirement — not an oversight. The
+# stack runs one always-on replica in a single region on Burstable compute.
+rule:
+  exclude:
+    # Public endpoints are deliberate. The collector is the fleet's internet-facing
+    # OTLP ingress (auth is bearer-token, not IP — #6); Postgres stays public so the
+    # Power BI refresh needs no gateway (ADR-0004). Both are firewall/token guarded.
+    - Azure.PostgreSQL.PublicAccess
+    - Azure.ContainerApp.PublicAccess
+    - Azure.ContainerApp.RestrictIngress
+    - Azure.Storage.Firewall
+
+    # Single always-on replica by design (#7): the collector's file-backed queue is
+    # per-replica emptyDir and the loopback collector→sink hop assumes co-location.
+    - Azure.ContainerApp.MinReplicas
+    - Azure.ContainerApp.Storage
+
+    # Single-region, non-zone-redundant, locally-redundant storage — a cost trade-off
+    # for a daily-refresh internal adoption report (LRS storage per issue #23).
+    - Azure.Storage.UseReplication
+    - Azure.Log.Replication
+    - Azure.ContainerApp.AvailabilityZone
+    - Azure.PostgreSQL.GeoRedundantBackup
+    - Azure.PostgreSQL.ZoneRedundantHA
+
+    # Password auth on the single admin login (the documented secrets shape, #11);
+    # Entra-only auth would need a directory principal this deploy doesn't own.
+    - Azure.PostgreSQL.AAD
+    - Azure.PostgreSQL.AADOnly
+
+    # No customer-controlled maintenance window — Azure-managed scheduling is fine
+    # for a workload that tolerates a daily-refresh gap.
+    - Azure.PostgreSQL.MaintenanceWindow

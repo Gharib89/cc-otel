@@ -26,6 +26,8 @@ uv run pytest                # unit (sink/tests) + integration (tests/integratio
 uv run pytest -m integration # integration only (needs Docker) — the `integration` CI job
 uv run ruff check .          # Python lint
 uv run sqlfluff lint db/     # SQL lint
+az bicep build --file iac/main.bicep --stdout >/dev/null  # Bicep lint (the `iac` CI job)
+Assert-PSRule -InputPath ./iac/ -Module PSRule.Rules.Azure  # Bicep static analysis (pwsh; see iac/README.md)
 uv run pre-commit run -a     # all hooks
 dbmate new <name>            # new migration in db/migrations/
 dbmate up                    # apply migrations (reads DATABASE_URL from .env)

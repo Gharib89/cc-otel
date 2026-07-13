@@ -1,0 +1,46 @@
+name: iac
+
+# Path-filtered per concern (CLAUDE.md): only the Bicep surface and this workflow
+# can trigger these checks. Deploys are NOT here — they are manual `az deployment`
+# (issue #11); this job only lints and static-analyzes the templates.
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - "iac/**"
+      - "ps-rule.yaml"
+      - ".github/workflows/iac.yml"
+  pull_request:
+    paths: *paths
+
+jobs:
+  # Bicep compile + linter (bicepconfig.json) and PSRule for Azure over the expanded
+  # interim/prod deployments. Both must be clean — the issue #23 acceptance gate.
+  bicep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned standalone Bicep on PATH: `az bicep` is pointed at it and PSRule
+      # discovers it there, so both gates use the same fixed compiler version.
+      - name: Install Bicep CLI (pinned)
+        run: |
+          curl -sSLo bicep https://github.com/Azure/bicep/releases/download/v0.45.6/bicep-linux-x64
+          chmod +x bicep
+          sudo mv bicep /usr/local/bin/bicep
+          az config set bicep.use_binary_from_path=true --only-show-errors
+          bicep --version
+
+      - name: Lint — bicep build (fails on any error-level linter rule)
+        run: |
+          az bicep build --file iac/main.bicep --stdout > /dev/null
+          az bicep build-params --file iac/params/interim.bicepparam --stdout > /dev/null
+          az bicep build-params --file iac/params/prod.bicepparam --stdout > /dev/null
+
+      - name: PSRule for Azure
+        shell: pwsh
+        run: |
+          Install-Module PSRule -RequiredVersion 2.9.0 -Scope CurrentUser -Force
+          Install-Module PSRule.Rules.Azure -RequiredVersion 1.47.0 -Scope CurrentUser -Force
+          Import-Module PSRule.Rules.Azure
+          Assert-PSRule -InputPath './iac/' -Module PSRule.Rules.Azure -Outcome Fail,Error -As Summary
