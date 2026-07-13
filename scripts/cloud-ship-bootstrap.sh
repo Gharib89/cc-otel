@@ -10,7 +10,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-uv sync
+uv sync --frozen
 
 if docker info >/dev/null 2>&1; then
     echo "DOCKER=present"
