@@ -47,7 +47,7 @@ Wall clock: `last_seen_at − started_at` of a non-empty session. Distinct from 
 ### Data model
 
 **Mart**:
-A materialized view holding pre-aggregated daily-grain data (per user/day). The only thing the adoption report reads; refreshed nightly by `pg_cron` inside Postgres before the Power BI refresh. Raw tables are archive + drill source.
+A materialized view in the `marts` schema — the conformed star schema (dimensions, facts, bridges) the adoption report reads. Refreshed hourly by `pg_cron` inside Postgres via `marts.refresh_all()` before the Power BI refresh, each cycle logged to `mart_refresh_log`. Raw tables are archive + drill source.
 _Avoid_: aggregate table, summary view
 
 **Raw reservoir**:
