@@ -11,7 +11,7 @@ CREATE SCHEMA IF NOT EXISTS meta;
 -- secrets, #23 Bicep): LOGIN users + passwords are provisioned out of band, then joined
 -- with `GRANT <group> TO <login>`.
 --   cc_otel_ingest — the sink write path.
---   cc_otel_read   — read consumers (data-dictionary tooling now; marts SELECT added in #20).
+--   cc_otel_read   — read consumers (data-dictionary tooling now; marts SELECT added in #19).
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cc_otel_ingest') THEN
