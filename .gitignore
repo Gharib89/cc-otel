@@ -1,4 +1,6 @@
 .env
+.env.interim
+.env.prod
 
 # Installer build output — dist/managed-settings.json carries the baked fleet token
 installer/dist/
