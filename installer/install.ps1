@@ -36,7 +36,11 @@
     distro (the LTS MSI is an IS prerequisite, issue #31).
 #>
 param(
-    # Install target root. C:\Program Files\ClaudeCode on a real fleet machine.
+    # Install target root. C:\Program Files\ClaudeCode on a real fleet machine
+    # (SYSTEM-context 64-bit, where $env:ProgramFiles is C:\Program Files). The
+    # managed-settings statusLine path is baked to that literal at build time
+    # (build-installer.ps1), so keep this default aligned with it; overriding it
+    # (e.g. tests) does not re-point the baked statusLine command.
     [string]$InstallRoot = (Join-Path $env:ProgramFiles 'ClaudeCode')
 )
 
