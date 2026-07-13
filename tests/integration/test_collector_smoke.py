@@ -81,6 +81,16 @@ def _wait_marker(service: str, marker: str, timeout: float) -> bool:
     return False
 
 
+def _wait_collector_export_failure(timeout: float) -> bool:
+    """True once the collector logs an export failure (the sink being unreachable)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if "Exporting failed" in _logs("collector"):
+            return True
+        time.sleep(2)
+    return False
+
+
 @pytest.fixture(scope="module")
 def stack():
     _compose("up", "-d", "--build")
@@ -107,7 +117,13 @@ def test_sink_down_request_retained_and_delivered_on_recovery(stack):
     marker = f"queued-{uuid.uuid4().hex}"
     # Collector accepts and queues even though the sink is unreachable.
     assert _post(marker, token=TOKEN).status_code == 200
-    time.sleep(5)  # let the batch flush and fail at least once against the down sink
+    # The batch flushes on the 60s timeout, so the sink must stay down past that
+    # for the export to actually fail — otherwise the record is delivered on the
+    # first try and the retain-and-retry path (the point of this test) never runs.
+    # Wait for a real export failure before recovering the sink.
+    assert _wait_collector_export_failure(timeout=90), (
+        "expected the export to fail while the sink was down"
+    )
     _compose("start", "mocksink")
     assert _wait_marker("mocksink", marker, timeout=120), (
         "queued record was not delivered after the sink recovered"
