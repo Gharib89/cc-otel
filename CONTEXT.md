@@ -67,7 +67,7 @@ A developer machine with Claude Code telemetry configured (managed settings + wr
 _Avoid_: seat, endpoint
 
 **Installer**:
-`install.ps1` — the idempotent per-machine setup script that configures managed settings + wrapper and installs Node.js if missing. IS pushes it fleet-wide via their managed tool on a 90-minute cadence; the distribution mechanism itself is out of our scope, the script is ours.
+`install.ps1` — the idempotent, **drift-repairing** per-machine setup script. Each tick it verifies real state (installed files, machine-scope env vars, statusline wiring, user-settings telemetry keys) and repairs any drift; a clean machine no-ops fast. It **checks** for Node.js but never installs it (the LTS MSI is an IS prerequisite, issue #31) — statusline wiring self-heals once Node is present. IS pushes it fleet-wide via their managed tool on a 90-minute cadence; the distribution mechanism itself is out of our scope, the script is ours. `build-installer.ps1` bakes the collector endpoint + fleet token + wrapper into a **single self-contained `install.ps1`** (the only file handed to IS) and **stamps** it (`SHA256(wrapper + managed-settings + schema version)`), so a rotated token forces every machine to re-converge. The token lives only in the environment and the gitignored built artifact — never the repo.
 _Avoid_: deployment script, rollout tool
 
 **Parallel cutover**:
