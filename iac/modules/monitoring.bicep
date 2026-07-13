@@ -13,9 +13,6 @@ param location string
 @maxValue(730)
 param retentionInDays int = 30
 
-@description('Optional Action Group resource ID for alert notifications; empty means the rules fire and record but notify nobody (acceptance only requires the rules to exist).')
-param actionGroupId string = ''
-
 @description('Resource tags.')
 param tags object = {}
 
@@ -35,19 +32,22 @@ resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
 }
 
 // ContainerAppConsoleLogs_CL is the table the ACA environment streams stdout into;
-// Log_s is the log line, ContainerName_s the emitting container.
+// Log_s is the log line, ContainerName_s the emitting container. `contains` (not the
+// token-based `has`) is used deliberately: it substring-matches, so "queue is full"
+// catches both the "sending queue is full" and "sending_queue is full" phrasings the
+// collector may emit across versions, and no exact wording has to be pinned.
 var alertRules = [
   {
     name: 'ccotel-collector-ingest-failure'
     description: 'Collector export failed or the persistent sending queue is full (#7) — points at a downstream outage or sustained backpressure.'
     severity: 1
-    query: 'ContainerAppConsoleLogs_CL | where ContainerName_s == "collector" | where Log_s has "sending queue is full" or Log_s has "Exporting failed"'
+    query: 'ContainerAppConsoleLogs_CL | where ContainerName_s == "collector" | where Log_s contains "Exporting failed" or Log_s contains "queue is full"'
   }
   {
     name: 'ccotel-sink-strip-fire'
     description: 'Sink redaction stripped a non-empty defense-in-depth field (#8) — a client-side content gate has leaked and needs investigation.'
     severity: 2
-    query: 'ContainerAppConsoleLogs_CL | where ContainerName_s == "sink" | where Log_s has "a client content gate has leaked"'
+    query: 'ContainerAppConsoleLogs_CL | where ContainerName_s == "sink" | where Log_s contains "a client content gate has leaked"'
   }
 ]
 
@@ -79,11 +79,6 @@ resource alerts 'Microsoft.Insights/scheduledQueryRules@2023-12-01' = [
         ]
       }
       autoMitigate: true
-      actions: empty(actionGroupId)
-        ? {}
-        : {
-            actionGroups: [actionGroupId]
-          }
     }
   }
 ]

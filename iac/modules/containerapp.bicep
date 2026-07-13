@@ -33,9 +33,6 @@ param fleetTokens string
 @secure()
 param databaseUrl string
 
-@description('GHCR registry server, e.g. ghcr.io.')
-param registryServer string = 'ghcr.io'
-
 @description('GHCR username for the pull credential.')
 param registryUsername string
 
@@ -91,7 +88,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
       ]
       registries: [
         {
-          server: registryServer
+          server: 'ghcr.io'
           username: registryUsername
           passwordSecretRef: 'ghcr-pull-token'
         }

@@ -64,9 +64,6 @@ param ghcrPassword string
 @description('Log Analytics retention in days.')
 param logRetentionInDays int = 30
 
-@description('Optional Action Group resource ID for alert notifications.')
-param actionGroupId string = ''
-
 @description('Resource tags applied to every resource.')
 param tags object = {
   application: 'cc-otel'
@@ -108,7 +105,6 @@ module monitoring 'modules/monitoring.bicep' = {
     workspaceName: '${namePrefix}-law-${environmentName}'
     location: location
     retentionInDays: logRetentionInDays
-    actionGroupId: actionGroupId
     tags: tags
   }
 }

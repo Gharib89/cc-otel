@@ -12,9 +12,9 @@ param postgresStorageGB = 32
 param postgresBackupRetentionDays = 7
 param postgresAdminUser = 'ccotel_admin'
 param postgresAdminPassword = readEnvironmentVariable('PG_ADMIN_PASSWORD', '')
-param postgresDatabaseName = 'cc_otel'
 param postgresFirewallRules = [
-  // Lets the Container App (Azure-hosted) reach the public endpoint.
+  // Lets the Container App (Azure-hosted) reach the public endpoint. This is all the
+  // ingest pipeline needs; append operator/office IP ranges here for ad-hoc psql.
   {
     name: 'AllowAllAzureServices'
     startIpAddress: '0.0.0.0'

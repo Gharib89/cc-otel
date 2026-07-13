@@ -11,10 +11,6 @@ param location string
 @description('Compute SKU name, e.g. Standard_B2s (interim) or Standard_B2ms (prod).')
 param skuName string
 
-@description('Compute tier. Burstable for both targets (ADR-0004).')
-@allowed(['Burstable', 'GeneralPurpose', 'MemoryOptimized'])
-param skuTier string = 'Burstable'
-
 @description('Storage size in GB.')
 param storageSizeGB int
 
@@ -48,7 +44,7 @@ resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   tags: tags
   sku: {
     name: skuName
-    tier: skuTier
+    tier: 'Burstable' // Both targets are Burstable (ADR-0004).
   }
   properties: {
     version: version
@@ -102,6 +98,9 @@ resource cronDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@
   dependsOn: [sharedPreload]
 }
 
+// shared_preload_libraries restarts the server; Azure PG Flexible Server rejects
+// concurrent operations mid-restart, so the database and firewall rules are gated
+// behind the full configuration chain rather than racing it.
 resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
   parent: server
   name: databaseName
@@ -109,6 +108,7 @@ resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-0
     charset: 'UTF8'
     collation: 'en_US.utf8'
   }
+  dependsOn: [cronDatabase]
 }
 
 resource firewall 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = [
@@ -119,6 +119,7 @@ resource firewall 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-
       startIpAddress: rule.startIpAddress
       endIpAddress: rule.endIpAddress
     }
+    dependsOn: [cronDatabase]
   }
 ]
 

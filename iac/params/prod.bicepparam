@@ -14,7 +14,6 @@ param postgresStorageGB = 128
 param postgresBackupRetentionDays = 7
 param postgresAdminUser = 'ccotel_admin'
 param postgresAdminPassword = readEnvironmentVariable('PG_ADMIN_PASSWORD', '')
-param postgresDatabaseName = 'cc_otel'
 param postgresFirewallRules = [
   {
     name: 'AllowAllAzureServices'
