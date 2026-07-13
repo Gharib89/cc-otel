@@ -3,12 +3,18 @@ name = "cc-otel"
 version = "0.1.0"
 description = "Claude Code developer-usage telemetry: ingest → store → report"
 requires-python = ">=3.13"
+# Depend on every workspace member so a plain `uv sync` installs them (and their
+# runtime deps) into the environment — the virtual root isn't built itself.
+dependencies = ["cc-otel-sink"]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
 members = ["sink"]
+
+[tool.uv.sources]
+cc-otel-sink = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -20,6 +26,7 @@ dev = [
     "testcontainers>=4.14",
     "pre-commit>=4",
     "psycopg[binary]>=3.2",
+    "httpx>=0.28",
 ]
 
 [tool.ruff]
