@@ -1,6 +1,6 @@
 # Local compose smoke harness (issue #21 acceptance). Mirrors the ACA layout:
 # the collector and its downstream sink share one network namespace, so the
-# collector's exporter target `localhost:8080` reaches the sink stand-in.
+# collector's exporter target `127.0.0.1:8080` reaches the sink stand-in.
 # Driven by tests/integration/test_collector_smoke.py.
 services:
   collector:
@@ -23,7 +23,7 @@ services:
     command: ["--config=/etc/otelcol/mocksink.yaml"]
     volumes:
       - ./mocksink.smoke.yaml:/etc/otelcol/mocksink.yaml:ro
-    # Share the collector's network namespace so the collector's localhost:8080
+    # Share the collector's network namespace so the collector's 127.0.0.1:8080
     # is this container's :8080 (the ACA co-location, reproduced locally).
     network_mode: "service:collector"
     depends_on:

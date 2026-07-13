@@ -2,7 +2,7 @@
 # collector that accepts OTLP/JSON on :8080 and prints every record via the
 # debug exporter, so the smoke test can assert delivery by scanning its logs.
 # Runs in the primary collector's network namespace, so this :8080 is exactly
-# the localhost:8080 the primary's exporter targets.
+# the 127.0.0.1:8080 the primary's exporter targets.
 receivers:
   otlp:
     protocols:
