@@ -1,5 +1,8 @@
 .env
 
+# Installer build output — dist/managed-settings.json carries the baked fleet token
+installer/dist/
+
 # Python
 __pycache__/
 *.pyc

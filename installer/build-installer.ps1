@@ -23,9 +23,11 @@ param(
     # Public HTTPS ingress FQDN of the collector - the fleet OTLP endpoint (iac/main.bicep).
     [Parameter(Mandatory)][string]$Endpoint,
 
-    # Fleet bearer token (issue #6). Defaults to a placeholder so the committed
-    # script carries no secret; pass the real token at build time.
-    [string]$Token = '__FLEET_TOKEN_PLACEHOLDER__',
+    # Fleet bearer token (issue #6). Sourced from $env:FLEET_TOKEN by default
+    # (a GitHub/ACA secret in CI, or a locally-exported .env value) so the committed
+    # script carries no secret and the token only ever lives in the environment and
+    # the gitignored dist/ artifact - never in the repo. Override with -Token.
+    [string]$Token = $env:FLEET_TOKEN,
 
     # Statusline wrapper source (ADR-0003) bundled into the artifact and hashed
     # into the stamp. A required build input.
@@ -43,8 +45,9 @@ $ErrorActionPreference = 'Stop'
 if (-not (Test-Path -LiteralPath $WrapperPath)) {
     throw "Wrapper not found at '$WrapperPath'. Build the wrapper (cc-otel-wrapper.mjs, ADR-0003) or pass -WrapperPath."
 }
-if ($Token -eq '__FLEET_TOKEN_PLACEHOLDER__') {
-    Write-Warning 'Building with the PLACEHOLDER token - this artifact will not authenticate. Pass -Token for a real build.'
+if ([string]::IsNullOrWhiteSpace($Token)) {
+    Write-Warning 'No fleet token in $env:FLEET_TOKEN (and none passed via -Token) - this artifact will NOT authenticate. Set FLEET_TOKEN or pass -Token for a real build.'
+    $Token = '__FLEET_TOKEN_PLACEHOLDER__'
 }
 
 $wrapperContent = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $WrapperPath))
