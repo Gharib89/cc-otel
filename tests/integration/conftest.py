@@ -9,7 +9,6 @@ directly, so CI needs no dbmate binary — only Docker.
 from __future__ import annotations
 
 import os
-import re
 from pathlib import Path
 
 # The `with PostgresContainer(...)` context already stops the container, so the Ryuk
@@ -25,11 +24,7 @@ MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "db" / "migrations"
 
 def _up_section(sql: str) -> str:
     """Return the SQL between `-- migrate:up` and `-- migrate:down`."""
-    up = sql.split("-- migrate:up", 1)[1]
-    up = up.split("-- migrate:down", 1)[0]
-    # Drop a leading `transaction:false` directive if present (irrelevant here —
-    # we apply each section in its own autocommit statement).
-    return re.sub(r"^\s*transaction:false\s*", "", up, count=1)
+    return sql.split("-- migrate:up", 1)[1].split("-- migrate:down", 1)[0]
 
 
 def _apply_migrations(conn: psycopg.Connection) -> None:

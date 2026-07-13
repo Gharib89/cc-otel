@@ -35,8 +35,9 @@ SELECT
     skill_name,
     start_type
 FROM raw.metrics
-WHERE metric_type = 'sum'
-  AND value_kind = 'sum_delta';
+WHERE
+    metric_type = 'sum'
+    AND value_kind = 'sum_delta';
 
 -- Typed projection of api_request log events — the densest usage signal, richer
 -- than the token.usage metric (carries model/effort/query_source per request).
@@ -61,8 +62,8 @@ SELECT
 FROM raw.events
 WHERE event_name = 'api_request';
 
-GRANT USAGE ON SCHEMA staging TO cc_otel_read;
-GRANT SELECT ON ALL TABLES IN SCHEMA staging TO cc_otel_read;
+-- No reader grants on staging: it is an internal layer feeding the matviews, refreshed
+-- by the DB owner. The Power BI reader reads the marts schema only (#19).
 
 -- migrate:down
 

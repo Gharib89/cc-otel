@@ -11,31 +11,44 @@
 -- exist in production (ADR-0003).
 CREATE MATERIALIZED VIEW marts.fact_session AS
 WITH sig AS (
-    SELECT session_id, user_email, cc_version, ts AS t FROM raw.metrics
+    SELECT
+        session_id,
+        user_email,
+        cc_version,
+        ts AS t
+    FROM raw.metrics
     WHERE session_id IS NOT NULL
     UNION ALL
-    SELECT session_id, user_email, cc_version, event_time FROM raw.events
+    SELECT
+        session_id,
+        user_email,
+        cc_version,
+        event_time
+    FROM raw.events
     WHERE session_id IS NOT NULL
 ),
+
 start_type AS (
-    SELECT session_id,
-           (ARRAY_AGG(start_type ORDER BY ts DESC) FILTER (WHERE start_type IS NOT NULL))[1]
-               AS start_type
+    SELECT
+        session_id,
+        (ARRAY_AGG(start_type ORDER BY ts DESC) FILTER (WHERE start_type IS NOT NULL))[1]
+            AS start_type
     FROM raw.metrics
     WHERE metric_name = 'claude_code.session.count' AND session_id IS NOT NULL
     GROUP BY session_id
 )
+
 SELECT
     sig.session_id,
+    st.start_type,
     (ARRAY_AGG(sig.user_email ORDER BY sig.t) FILTER (WHERE sig.user_email IS NOT NULL))[1]
         AS user_email,
     MIN(sig.t) AS started_at,
-    st.start_type,
     (ARRAY_AGG(sig.cc_version ORDER BY sig.t DESC) FILTER (WHERE sig.cc_version IS NOT NULL))[1]
         AS cc_version,
     EXTRACT(EPOCH FROM (MAX(sig.t) - MIN(sig.t)))::bigint AS duration_s
 FROM sig
-LEFT JOIN start_type st USING (session_id)
+LEFT JOIN start_type AS st ON sig.session_id = st.session_id
 GROUP BY sig.session_id, st.start_type;
 
 CREATE UNIQUE INDEX fact_session_pk ON marts.fact_session (session_id);
@@ -45,7 +58,9 @@ CREATE UNIQUE INDEX fact_session_pk ON marts.fact_session (session_id);
 CREATE MATERIALIZED VIEW marts.fact_session_daily AS
 WITH m AS (
     SELECT
-        session_id, user_email, ts::date AS activity_date,
+        session_id,
+        user_email,
+        ts::date AS activity_date,
         SUM(value) FILTER (WHERE metric_name = 'claude_code.commit.count') AS commits,
         SUM(value) FILTER (WHERE metric_name = 'claude_code.pull_request.count') AS prs,
         SUM(value) FILTER (
@@ -64,12 +79,18 @@ WITH m AS (
     WHERE session_id IS NOT NULL
     GROUP BY session_id, user_email, ts::date
 ),
+
 p AS (
-    SELECT session_id, user_email, event_time::date AS activity_date, COUNT(*) AS prompts
+    SELECT
+        session_id,
+        user_email,
+        event_time::date AS activity_date,
+        COUNT(*) AS prompts
     FROM raw.events
     WHERE event_name = 'user_prompt' AND session_id IS NOT NULL
     GROUP BY session_id, user_email, event_time::date
 )
+
 SELECT
     COALESCE(m.session_id, p.session_id) AS session_id,
     COALESCE(m.user_email, p.user_email) AS user_email,
@@ -87,7 +108,7 @@ FULL OUTER JOIN p
     ON m.session_id = p.session_id AND m.activity_date = p.activity_date;
 
 CREATE UNIQUE INDEX fact_session_daily_pk
-    ON marts.fact_session_daily (session_id, activity_date);
+ON marts.fact_session_daily (session_id, activity_date);
 
 -- fact_api_usage: session × day × model × effort × query_source. Sourced from api_request
 -- events (richer than the token.usage metric). last_event_ts (max api_request timestamp per
@@ -111,7 +132,7 @@ WHERE session_id IS NOT NULL
 GROUP BY session_id, event_time::date, model, effort, query_source;
 
 CREATE UNIQUE INDEX fact_api_usage_pk ON marts.fact_api_usage
-    (session_id, activity_date, model, effort, query_source);
+(session_id, activity_date, model, effort, query_source);
 
 -- fact_edit_decision: session × day × tool × language × decision × source. Drives edit
 -- acceptance rate AND language mix — language mix is edit-decision counts only, never
@@ -131,7 +152,7 @@ WHERE metric_name = 'claude_code.code_edit_tool.decision' AND session_id IS NOT 
 GROUP BY session_id, ts::date, tool_name, language, decision, source;
 
 CREATE UNIQUE INDEX fact_edit_decision_pk ON marts.fact_edit_decision
-    (session_id, activity_date, tool_name, language, decision, source);
+(session_id, activity_date, tool_name, language, decision, source);
 
 -- migrate:down
 

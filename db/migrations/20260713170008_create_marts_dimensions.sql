@@ -9,12 +9,23 @@
 -- single '(unknown)' member (an install-health signal, never dropped).
 CREATE MATERIALIZED VIEW marts.dim_user AS
 WITH seen AS (
-    SELECT user_email, user_account_id, organization_id, cc_version, ts AS seen_at
+    SELECT
+        user_email,
+        user_account_id,
+        organization_id,
+        cc_version,
+        ts AS seen_at
     FROM raw.metrics
     UNION ALL
-    SELECT user_email, user_account_id, organization_id, cc_version, event_time
+    SELECT
+        user_email,
+        user_account_id,
+        organization_id,
+        cc_version,
+        event_time
     FROM raw.events
 )
+
 SELECT
     COALESCE(user_email, '(unknown)') AS user_email,
     user_email IS NULL AS is_unknown,
@@ -34,15 +45,6 @@ CREATE UNIQUE INDEX dim_user_pk ON marts.dim_user (user_email);
 -- dim_date: calendar spanning the earliest observed signal → present (#15: no raw
 -- trim, so the range only grows). CURRENT_DATE is re-evaluated each refresh.
 CREATE MATERIALIZED VIEW marts.dim_date AS
-WITH bounds AS (
-    SELECT COALESCE(
-        LEAST(
-            (SELECT MIN(ts)::date FROM raw.metrics),
-            (SELECT MIN(event_time)::date FROM raw.events)
-        ),
-        CURRENT_DATE
-    ) AS start_day
-)
 SELECT
     d::date AS date_day,
     EXTRACT(YEAR FROM d)::int AS year,
@@ -54,17 +56,30 @@ SELECT
     TO_CHAR(d, 'Dy') AS day_name,
     EXTRACT(ISODOW FROM d) >= 6 AS is_weekend,
     EXTRACT(WEEK FROM d)::int AS iso_week
-FROM bounds, generate_series(bounds.start_day, CURRENT_DATE, INTERVAL '1 day') AS d;
+FROM GENERATE_SERIES(
+    COALESCE(
+        LEAST(
+            (SELECT MIN(ts)::date FROM raw.metrics),
+            (SELECT MIN(event_time)::date FROM raw.events)
+        ),
+        CURRENT_DATE
+    ),
+    CURRENT_DATE,
+    interval '1 day'
+) AS d;
 
 CREATE UNIQUE INDEX dim_date_pk ON marts.dim_date (date_day);
 
 -- dim_model: one row per model id seen, parsed into family / version / long-context.
 CREATE MATERIALIZED VIEW marts.dim_model AS
 WITH ids AS (
-    SELECT model FROM raw.metrics WHERE model IS NOT NULL
+    SELECT model FROM raw.metrics
+    WHERE model IS NOT NULL
     UNION
-    SELECT model FROM raw.events WHERE model IS NOT NULL
+    SELECT model FROM raw.events
+    WHERE model IS NOT NULL
 )
+
 SELECT
     model AS model_id,
     CASE
@@ -74,8 +89,8 @@ SELECT
         WHEN model ILIKE '%fable%' THEN 'fable'
         ELSE 'other'
     END AS family,
-    regexp_replace(
-        regexp_replace(model, '\[1m\]$', ''),
+    REGEXP_REPLACE(
+        REGEXP_REPLACE(model, '\[1m\]$', ''),
         '^claude-(opus|sonnet|haiku|fable)-', ''
     ) AS version,
     model LIKE '%[1m]%' AS is_long_context

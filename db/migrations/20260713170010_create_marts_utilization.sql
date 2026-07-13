@@ -23,32 +23,37 @@ WITH samples AS (
             u.ts + make_interval(secs => r.value),
             TIMESTAMPTZ '2000-01-01 00:00:00+00'
         ) AS window_end
-    FROM raw.metrics u
-    JOIN raw.metrics r
-        ON r.metric_name = 'claude_code.usage.reset_in_seconds'
-        AND r.user_email IS NOT DISTINCT FROM u.user_email
-        AND r.usage_window IS NOT DISTINCT FROM u.usage_window
-        AND r.ts = u.ts
-    WHERE u.metric_name = 'claude_code.usage.utilization'
+    FROM raw.metrics AS u
+    INNER JOIN raw.metrics AS r
+        ON
+            r.metric_name = 'claude_code.usage.reset_in_seconds'
+            AND r.user_email IS NOT DISTINCT FROM u.user_email
+            AND r.usage_window IS NOT DISTINCT FROM u.usage_window
+            AND u.ts = r.ts
+    WHERE
+        u.metric_name = 'claude_code.usage.utilization'
         AND u.value_kind = 'gauge_last'
 ),
+
 flagged AS (
     SELECT
         samples.*,
-        LAG(util_pct) OVER w AS prev_pct
+        lag(samples.util_pct) OVER w AS prev_pct
     FROM samples
     WINDOW w AS (PARTITION BY user_email, window_type, window_end ORDER BY ts)
 )
+
 SELECT
     user_email,
     window_type,
     window_end,
     ts,
     util_pct,
-    1 + SUM(
+    1 + sum(
         CASE
             WHEN prev_pct IS NOT NULL AND util_pct < 0.8 * prev_pct AND prev_pct - util_pct >= 5
-                THEN 1 ELSE 0
+                THEN 1
+            ELSE 0
         END
     ) OVER (PARTITION BY user_email, window_type, window_end ORDER BY ts) AS segment_no
 FROM flagged;
@@ -62,39 +67,40 @@ WITH seg AS (
         window_type,
         window_end,
         segment_no,
-        MIN(ts) AS first_sample_ts,
-        MAX(ts) AS last_sample_ts,
-        COUNT(*) AS sample_count,
-        (ARRAY_AGG(util_pct ORDER BY ts DESC))[1] AS end_pct,
-        MAX(util_pct) AS peak_pct,
-        (ARRAY_AGG(ts ORDER BY util_pct DESC, ts))[1] AS peak_ts
+        min(ts) AS first_sample_ts,
+        max(ts) AS last_sample_ts,
+        count(*) AS sample_count,
+        (array_agg(util_pct ORDER BY ts DESC))[1] AS end_pct,
+        max(util_pct) AS peak_pct,
+        (array_agg(ts ORDER BY util_pct DESC, ts ASC))[1] AS peak_ts
     FROM staging.stg_utilization_segments
     GROUP BY user_email, window_type, window_end, segment_no
 )
+
 SELECT
     user_email,
     window_type,
     window_end,
     segment_no,
+    end_pct,
+    peak_pct,
+    peak_ts,
+    first_sample_ts,
+    last_sample_ts,
+    sample_count,
     window_end - CASE window_type
         WHEN '5h' THEN INTERVAL '5 hours'
         WHEN '7d' THEN INTERVAL '7 days'
         ELSE INTERVAL '0'
     END AS window_start,
-    MAX(segment_no) OVER (PARTITION BY user_email, window_type, window_end) > 1
+    max(segment_no) OVER (PARTITION BY user_email, window_type, window_end) > 1
         AS is_reset_split,
-    end_pct,
-    peak_pct,
-    peak_ts,
-    peak_pct / NULLIF(EXTRACT(EPOCH FROM (peak_ts - first_sample_ts)) / 3600.0, 0)
-        AS pace_pct_per_hour,
-    first_sample_ts,
-    last_sample_ts,
-    sample_count
+    peak_pct / nullif(extract(EPOCH FROM (peak_ts - first_sample_ts)) / 3600.0, 0)
+        AS pace_pct_per_hour
 FROM seg;
 
 CREATE UNIQUE INDEX fact_usage_window_pk ON marts.fact_usage_window
-    (user_email, window_type, window_end, segment_no);
+(user_email, window_type, window_end, segment_no);
 
 -- fact_utilization_hourly: user × window × hour, avg/max utilization — the time-of-day
 -- burn heatmap. reset_in_seconds is otherwise dropped from marts (a countdown, meaningless
@@ -104,13 +110,13 @@ SELECT
     user_email,
     window_type,
     date_trunc('hour', ts) AS hour,
-    AVG(util_pct) AS avg_pct,
-    MAX(util_pct) AS max_pct
+    avg(util_pct) AS avg_pct,
+    max(util_pct) AS max_pct
 FROM staging.stg_utilization_segments
 GROUP BY user_email, window_type, date_trunc('hour', ts);
 
 CREATE UNIQUE INDEX fact_utilization_hourly_pk ON marts.fact_utilization_hourly
-    (user_email, window_type, hour);
+(user_email, window_type, hour);
 
 -- migrate:down
 

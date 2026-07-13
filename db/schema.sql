@@ -279,23 +279,19 @@ CREATE TABLE raw.metrics (
 --
 
 CREATE MATERIALIZED VIEW marts.dim_date AS
- WITH bounds AS (
-         SELECT COALESCE(LEAST(( SELECT (min(metrics.ts))::date AS min
-                   FROM raw.metrics), ( SELECT (min(events.event_time))::date AS min
-                   FROM raw.events)), CURRENT_DATE) AS start_day
-        )
- SELECT (d.d)::date AS date_day,
-    (EXTRACT(year FROM d.d))::integer AS year,
-    (EXTRACT(quarter FROM d.d))::integer AS quarter,
-    (EXTRACT(month FROM d.d))::integer AS month,
-    to_char(d.d, 'Mon'::text) AS month_name,
-    (EXTRACT(day FROM d.d))::integer AS day_of_month,
-    (EXTRACT(isodow FROM d.d))::integer AS iso_dow,
-    to_char(d.d, 'Dy'::text) AS day_name,
-    (EXTRACT(isodow FROM d.d) >= (6)::numeric) AS is_weekend,
-    (EXTRACT(week FROM d.d))::integer AS iso_week
-   FROM bounds,
-    LATERAL generate_series((bounds.start_day)::timestamp with time zone, (CURRENT_DATE)::timestamp with time zone, '1 day'::interval) d(d)
+ SELECT (d)::date AS date_day,
+    (EXTRACT(year FROM d))::integer AS year,
+    (EXTRACT(quarter FROM d))::integer AS quarter,
+    (EXTRACT(month FROM d))::integer AS month,
+    to_char(d, 'Mon'::text) AS month_name,
+    (EXTRACT(day FROM d))::integer AS day_of_month,
+    (EXTRACT(isodow FROM d))::integer AS iso_dow,
+    to_char(d, 'Dy'::text) AS day_name,
+    (EXTRACT(isodow FROM d) >= (6)::numeric) AS is_weekend,
+    (EXTRACT(week FROM d))::integer AS iso_week
+   FROM generate_series((COALESCE(LEAST(( SELECT (min(metrics.ts))::date AS min
+           FROM raw.metrics), ( SELECT (min(events.event_time))::date AS min
+           FROM raw.events)), CURRENT_DATE))::timestamp with time zone, (CURRENT_DATE)::timestamp with time zone, '1 day'::interval) d(d)
   WITH NO DATA;
 
 
@@ -508,13 +504,13 @@ CREATE MATERIALIZED VIEW marts.fact_session AS
           GROUP BY metrics.session_id
         )
  SELECT sig.session_id,
+    st.start_type,
     (array_agg(sig.user_email ORDER BY sig.t) FILTER (WHERE (sig.user_email IS NOT NULL)))[1] AS user_email,
     min(sig.t) AS started_at,
-    st.start_type,
     (array_agg(sig.cc_version ORDER BY sig.t DESC) FILTER (WHERE (sig.cc_version IS NOT NULL)))[1] AS cc_version,
     (EXTRACT(epoch FROM (max(sig.t) - min(sig.t))))::bigint AS duration_s
    FROM (sig
-     LEFT JOIN start_type st USING (session_id))
+     LEFT JOIN start_type st ON ((sig.session_id = st.session_id)))
   GROUP BY sig.session_id, st.start_type
   WITH NO DATA;
 
@@ -574,7 +570,7 @@ CREATE VIEW staging.stg_utilization_segments AS
             u.value AS util_pct,
             date_bin('00:05:00'::interval, (u.ts + make_interval(secs => r.value)), '2000-01-01 00:00:00+00'::timestamp with time zone) AS window_end
            FROM (raw.metrics u
-             JOIN raw.metrics r ON (((r.metric_name = 'claude_code.usage.reset_in_seconds'::text) AND (NOT (r.user_email IS DISTINCT FROM u.user_email)) AND (NOT (r.usage_window IS DISTINCT FROM u.usage_window)) AND (r.ts = u.ts))))
+             JOIN raw.metrics r ON (((r.metric_name = 'claude_code.usage.reset_in_seconds'::text) AND (NOT (r.user_email IS DISTINCT FROM u.user_email)) AND (NOT (r.usage_window IS DISTINCT FROM u.usage_window)) AND (u.ts = r.ts))))
           WHERE ((u.metric_name = 'claude_code.usage.utilization'::text) AND (u.value_kind = 'gauge_last'::text))
         ), flagged AS (
          SELECT samples.user_email,
@@ -622,6 +618,12 @@ CREATE MATERIALIZED VIEW marts.fact_usage_window AS
     window_type,
     window_end,
     segment_no,
+    end_pct,
+    peak_pct,
+    peak_ts,
+    first_sample_ts,
+    last_sample_ts,
+    sample_count,
     (window_end -
         CASE window_type
             WHEN '5h'::text THEN '05:00:00'::interval
@@ -629,13 +631,7 @@ CREATE MATERIALIZED VIEW marts.fact_usage_window AS
             ELSE '00:00:00'::interval
         END) AS window_start,
     (max(segment_no) OVER (PARTITION BY user_email, window_type, window_end) > 1) AS is_reset_split,
-    end_pct,
-    peak_pct,
-    peak_ts,
-    (peak_pct / (NULLIF((EXTRACT(epoch FROM (peak_ts - first_sample_ts)) / 3600.0), (0)::numeric))::double precision) AS pace_pct_per_hour,
-    first_sample_ts,
-    last_sample_ts,
-    sample_count
+    (peak_pct / (NULLIF((EXTRACT(epoch FROM (peak_ts - first_sample_ts)) / 3600.0), (0)::numeric))::double precision) AS pace_pct_per_hour
    FROM seg
   WITH NO DATA;
 
