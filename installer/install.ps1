@@ -472,22 +472,27 @@ function Invoke-Install {
     }
 
     # --- 5. WSL leg (marker-gated per distro) ------------------------------
-    # The baked managed JSON points statusLine at the Windows wrapper path, which
-    # is meaningless inside a distro. Rebuild it against the Linux wrapper path -
-    # same env block, retargeted statusLine (ADR-0003).
-    $wslEnv = [ordered]@{}
-    foreach ($p in (($managedJson | ConvertFrom-Json).env.PSObject.Properties)) { $wslEnv[$p.Name] = [string]$p.Value }
-    $wslManagedJson = ConvertTo-ManagedSettingsJson -TelemetryEnv $wslEnv -WrapperPath $script:WslWrapperPath
-
     $state = Get-InstallState -Path $statePath
     $wslMap = $state.wsl
-    $distros = @(Get-WslDistro)   # @() guard: a bare return collapses an empty array to $null
-    foreach ($distro in (Get-WslLegTarget -Distro $distros -StampMap $wslMap -Stamp $stamp)) {
-        if (Invoke-WslLeg -Distro $distro -ManagedSettingsJson $wslManagedJson -WrapperContent ([string]$wrapperContent)) {
-            $wslMap[$distro] = $stamp
-            Write-InstallLog "WSL distro '$distro' converged."
+    # The WSL leg materializes the wrapper + a Linux-retargeted managed settings, so
+    # it only runs when we actually have wrapper content. A broken/unbuilt artifact
+    # (wrapper missing, core already failed) must not write an empty wrapper into a distro.
+    if ($null -ne $wrapperContent) {
+        # The baked managed JSON points statusLine at the Windows wrapper path, which
+        # is meaningless inside a distro. Rebuild it against the Linux wrapper path -
+        # same env block, retargeted statusLine (ADR-0003).
+        $wslEnv = [ordered]@{}
+        foreach ($p in (($managedJson | ConvertFrom-Json).env.PSObject.Properties)) { $wslEnv[$p.Name] = [string]$p.Value }
+        $wslManagedJson = ConvertTo-ManagedSettingsJson -TelemetryEnv $wslEnv -WrapperPath $script:WslWrapperPath
+
+        $distros = @(Get-WslDistro)   # @() guard: a bare return collapses an empty array to $null
+        foreach ($distro in (Get-WslLegTarget -Distro $distros -StampMap $wslMap -Stamp $stamp)) {
+            if (Invoke-WslLeg -Distro $distro -ManagedSettingsJson $wslManagedJson -WrapperContent $wrapperContent) {
+                $wslMap[$distro] = $stamp
+                Write-InstallLog "WSL distro '$distro' converged."
+            }
+            else { $partial = $true }
         }
-        else { $partial = $true }
     }
 
     # --- 6. persist state ---------------------------------------------------

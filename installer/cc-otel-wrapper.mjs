@@ -203,7 +203,12 @@ export function resolveHeaders(env = process.env) {
 }
 
 const OTLP_ENDPOINT = resolveEndpoint();
-const OTLP_TIMEOUT_MS = Number(process.env.STATUSLINE_OTLP_TIMEOUT_MS ?? 5000);
+// Guard against a misconfigured value: Number("") is 0 and Number("abc") is NaN,
+// either of which would abort the request instantly. Fall back to the default.
+const OTLP_TIMEOUT_MS = (() => {
+  const n = Number(process.env.STATUSLINE_OTLP_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : 5000;
+})();
 const OTLP_HEADERS = resolveHeaders();
 const DEBUG_LOG = process.env.STATUSLINE_DEBUG_LOG;
 const THROTTLE_FILE =
