@@ -117,24 +117,6 @@ function Get-WrapperStatusLineCommand {
     return "node `"$WrapperPath`""
 }
 
-function Test-TelemetryEnvDrift {
-    <#
-    .SYNOPSIS Returns the env keys whose actual value differs from desired.
-    .DESCRIPTION Empty result = no drift. Pure comparison; the caller supplies
-        both the desired block and the observed machine-scope values.
-    #>
-    param(
-        [Parameter(Mandatory)][System.Collections.IDictionary]$Desired,
-        [Parameter(Mandatory)][System.Collections.IDictionary]$Actual
-    )
-    $drifted = New-Object System.Collections.Generic.List[string]
-    foreach ($key in $Desired.Keys) {
-        $have = if ($Actual.Contains($key)) { $Actual[$key] } else { $null }
-        if ($have -ne $Desired[$key]) { $drifted.Add($key) }
-    }
-    return $drifted.ToArray()
-}
-
 function Get-WslLegTarget {
     <#
     .SYNOPSIS Distros that need the WSL leg: absent from the stamp map or below the current stamp.
@@ -479,16 +461,9 @@ function Invoke-Install {
     return $code
 }
 
-# The managed telemetry keys the sanitize pass strips from user settings, and the
-# machine-scope env vars the drift loop maintains. Declared after the functions so
-# it is in scope for both Invoke-Install and tests.
-$script:TelemetryEnvKey = @(
-    'CLAUDE_CODE_ENABLE_TELEMETRY',
-    'OTEL_METRICS_EXPORTER', 'OTEL_LOGS_EXPORTER',
-    'OTEL_EXPORTER_OTLP_PROTOCOL', 'OTEL_EXPORTER_OTLP_ENDPOINT', 'OTEL_EXPORTER_OTLP_HEADERS',
-    'OTEL_LOG_USER_PROMPTS', 'OTEL_LOG_ASSISTANT_RESPONSES', 'OTEL_LOG_TOOL_DETAILS',
-    'OTEL_LOG_TOOL_CONTENT', 'OTEL_LOG_RAW_API_BODIES'
-)
+# The telemetry keys the installer manages; the sanitize pass strips these from user
+# settings. Derived from the single desired-env source so the two can never drift.
+$script:TelemetryEnvKey = @((Get-DesiredTelemetryEnv -Endpoint 'placeholder' -Token 'placeholder').Keys)
 
 # Run only when executed directly; dot-sourcing (Pester) defines functions without running.
 if ($MyInvocation.InvocationName -ne '.') {

@@ -90,20 +90,6 @@ Describe 'Get-InstallerStamp' {
     }
 }
 
-Describe 'Test-TelemetryEnvDrift' {
-    It 'reports no drift when actual matches desired' {
-        $desired = @{ A = '1'; B = '2' }
-        $actual  = @{ A = '1'; B = '2' }
-        (Test-TelemetryEnvDrift -Desired $desired -Actual $actual).Count | Should -Be 0
-    }
-    It 'reports a key missing from actual' {
-        (Test-TelemetryEnvDrift -Desired @{ A = '1' } -Actual @{}) | Should -Be 'A'
-    }
-    It 'reports a key whose value differs' {
-        (Test-TelemetryEnvDrift -Desired @{ A = '1' } -Actual @{ A = '9' }) | Should -Be 'A'
-    }
-}
-
 Describe 'Get-WslLegTarget' {
     It 'targets a distro absent from the stamp map' {
         (Get-WslLegTarget -Distro @('Ubuntu') -StampMap @{} -Stamp 's') | Should -Be 'Ubuntu'
