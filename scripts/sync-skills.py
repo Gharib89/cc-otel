@@ -128,6 +128,8 @@ def strip_model_invocation_flag(skill_md: Path) -> bool:
     contains the string `disable-model-invocation: true`. Returns True if a line
     was removed.
     """
+    if not skill_md.is_file():
+        return False
     lines = skill_md.read_text(encoding="utf-8").splitlines(keepends=True)
     if not lines or lines[0].strip() != "---":
         return False
@@ -172,13 +174,16 @@ def main() -> int:
         )
         return 1
 
+    # Fail fast before any destructive rmtree: a missing source must not leave
+    # the tracked tree partially updated.
+    missing = sorted(name for name in wanted if not (SRC / name).is_dir())
+    if missing:
+        print(f"error: not found under {SRC}: {', '.join(missing)}", file=sys.stderr)
+        return 1
+
     DST.mkdir(parents=True, exist_ok=True)
-    missing: list[str] = []
     for name in sorted(wanted):
         src, dst = SRC / name, DST / name
-        if not src.is_dir():
-            missing.append(name)
-            continue
         if dst.exists():
             shutil.rmtree(dst)
         shutil.copytree(src, dst)
@@ -189,10 +194,6 @@ def main() -> int:
             if stripped_dst or stripped_src:
                 tag += " (stripped disable-model-invocation)"
         print(f"synced {name}{tag}")
-
-    if missing:
-        print(f"\nerror: not found under {SRC}: {', '.join(missing)}", file=sys.stderr)
-        return 1
     return 0
 
 
