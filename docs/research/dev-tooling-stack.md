@@ -19,7 +19,7 @@ Anything not confirmed against a primary source is flagged **UNVERIFIED**.
 | sqlfluff v4.2.2 | Postgres | **Adopt** | Actively maintained SQL linter with first-class `postgres` dialect; lints migrations/views in CI |
 | Bicep CLI linter + `bicepconfig.json` | Bicep | **Adopt** | Built into `az bicep`; Error-level rules fail the build — free CI gate |
 | Azure Verified Modules (AVM) | Bicep | **Adopt** | Published, versioned modules exist for all four resources this project deploys |
-| PSRule for Azure v1.47.0 | Bicep | **Adopt** (via module, not the stale action) | 500+ WAF-aligned checks over expanded Bicep; useful evidence for the IS production handover |
+| PSRule for Azure v1.47.0 | Bicep | **Adopt** (via module, not the stale action) | 500+ WAF-aligned checks over expanded Bicep; WAF/security evidence for IS governance sign-off |
 | fab-inspector v3.4.0 | Power BI | **Adopt** | It *is* PBI Inspector V2 renamed — one actively-maintained PBIR rules engine replaces two POC tools |
 | Custom ajv PBIR schema validator (keep) | Power BI | **Adopt** | Microsoft's PBIR schemas are live and versioned; no off-the-shelf substitute exists |
 | Tabular Editor 2 (`-A` BPA) v2.28.0 | Power BI | **Adopt** | Free, license-free in CI, runs on `windows-latest`; only viable local semantic-model BPA |
@@ -80,11 +80,11 @@ AVM is Microsoft's official module strategy; the [Bicep resource-module index](h
 
 ### azd — skip
 
-azd **v1.27.1 (2026-07-09)** ([Azure/azure-dev](https://github.com/Azure/azure-dev/releases/latest)) adds environment management, `azure.yaml` service mapping, and `azd up/deploy` convenience. It *can* deploy into a pre-provisioned RG via the beta [resource-group-scoped deployments](https://learn.microsoft.com/azure/developer/azure-developer-cli/resource-group-scoped-deployments) feature (`targetScope = 'resourceGroup'` + `AZURE_RESOURCE_GROUP`), but that requires the template itself to be RG-scoped — azd doesn't switch between a subscription-scoped full-stack template and an RG-scoped app-layer template within one project, which is exactly this repo's dual-target shape. Plain `az deployment sub create` / `az deployment group create` + `az containerapp update` stays simpler and fully scriptable in CI. **Skip.**
+azd **v1.27.1 (2026-07-09)** ([Azure/azure-dev](https://github.com/Azure/azure-dev/releases/latest)) adds environment management, `azure.yaml` service mapping, and `azd up/deploy` convenience. It *can* deploy into a pre-provisioned RG via the beta [resource-group-scoped deployments](https://learn.microsoft.com/azure/developer/azure-developer-cli/resource-group-scoped-deployments) feature (`targetScope = 'resourceGroup'` + `AZURE_RESOURCE_GROUP`), but that requires the template itself to be RG-scoped — azd doesn't switch between a subscription-scoped template (the POC creates its own RG) and an RG-scoped template (prod deploys into IS's pre-provisioned RG) within one project, which is exactly this repo's dual-target shape (both full-stack, differing only in deploy scope). Plain `az deployment sub create` / `az deployment group create` + `az containerapp update` stays simpler and fully scriptable in CI. **Skip.**
 
 ### PSRule for Azure — adopt (module, not the action)
 
-[Azure/PSRule.Rules.Azure](https://github.com/Azure/PSRule.Rules.Azure) is **active, not deprecated** — v1.47.0 (2026-01-08), 392 releases, 500+ WAF-aligned rules, maintainer active; no maintenance-mode announcement exists on the repo (the deprecation rumor is **UNVERIFIED / not confirmed at the source**). It analyzes Bicep via ARM expansion (`AZURE_BICEP_FILE_EXPANSION`). Caveat: the official GitHub Action [microsoft/ps-rule](https://github.com/microsoft/ps-rule/releases/latest) is stale (v2.9.0, 2023-06-18, pinned to PSRule v2.x) — invoke the PowerShell module directly (`Assert-PSRule`) in a script step instead. Value here: WAF/security evidence for the production RG handover to IS, beyond what the Bicep linter checks. **Adopt.**
+[Azure/PSRule.Rules.Azure](https://github.com/Azure/PSRule.Rules.Azure) is **active, not deprecated** — v1.47.0 (2026-01-08), 392 releases, 500+ WAF-aligned rules, maintainer active; no maintenance-mode announcement exists on the repo (the deprecation rumor is **UNVERIFIED / not confirmed at the source**). It analyzes Bicep via ARM expansion (`AZURE_BICEP_FILE_EXPANSION`). Caveat: the official GitHub Action [microsoft/ps-rule](https://github.com/microsoft/ps-rule/releases/latest) is stale (v2.9.0, 2023-06-18, pinned to PSRule v2.x) — invoke the PowerShell module directly (`Assert-PSRule`) in a script step instead. Value here: WAF/security evidence for IS governance sign-off on deploying into their subscription, beyond what the Bicep linter checks. **Adopt.**
 
 ### Azure MCP Server — skip for now
 
@@ -170,7 +170,7 @@ The POC sink already ran uv (pyproject + uv.lock) and pytest with `asyncio_mode 
 | pgTAP | Absent from [Azure flexible server allowed extensions](https://learn.microsoft.com/en-us/azure/postgresql/extensions/concepts-extensions-versions); pytest + testcontainers covers the same assertions |
 | sqitch | Maintained, but Perl + deploy/revert/verify machinery exceeds what numbered plain-SQL migrations need |
 | alembic | ORM-autogenerate paradigm; wrong fit for a plain-SQL analytics schema |
-| azd | Dual-target scopes (subscription full-stack vs RG app-layer) fight its one-template convention; RG-scoped deploys are beta ([docs](https://learn.microsoft.com/azure/developer/azure-developer-cli/resource-group-scoped-deployments)) |
+| azd | Dual-target scopes (sub-scoped POC vs RG-scoped prod, both full-stack) fight its one-template convention; RG-scoped deploys are beta ([docs](https://learn.microsoft.com/azure/developer/azure-developer-cli/resource-group-scoped-deployments)) |
 | Azure MCP Server / Azure Skills plugin | Hundreds of tool schemas to wrap what `az` does in the shell; revisit on demonstrated friction |
 | microsoft/ps-rule GitHub Action | Stale (v2.9.0, 2023-06-18), pinned to PSRule v2 — use the PowerShell module directly instead |
 | pbi-tools | PBIX-era, no PBIR support, no release in ~18 months |

@@ -74,4 +74,4 @@ _Avoid_: deployment script, rollout tool
 The POC Azure env stays live as fallback until the adoption report completes its first successful Power BI refresh from the **production** Azure Postgres; only then is the POC decommissioned. See ADR-0004.
 
 **Azure prod stack**:
-The production environment: a second Azure resource group (IS-provisioned, in an ITWorx subscription) holding a managed Postgres Flexible Server plus an Azure Container Apps environment running the collector + sink in one Container App. Deployed by the app-layer Bicep against IS-provisioned Postgres (ADR-0004).
+The production environment: a second Azure resource group — IS-provisioned but empty, in an ITWorx subscription — holding a Postgres Flexible Server (public endpoint) plus an Azure Container Apps environment running the collector + sink in one Container App. IS grants RG Contributor only; Ahmed deploys all of it, Postgres included, via Bicep (ADR-0004).
