@@ -1,0 +1,70 @@
+# OpenTelemetry Collector (contrib v0.156.0) — the only authenticated ingest
+# boundary for the fleet. Receives OTLP/protobuf over HTTP, verifies the fleet
+# bearer token, converts to OTLP/JSON, and forwards to the co-located sink on
+# loopback. No traces pipeline (ADR-0001; traces are off at the source).
+#
+# Design bullets: issue #6 (auth), issue #7 (ingest reliability), ADR-0005
+# (batch.timeout tuning). FLEET_TOKENS wiring: issue #11.
+
+extensions:
+  # Server-side bearer auth on the external ingress. FLEET_TOKENS must be a YAML
+  # inline list of strings, e.g. ["tokenA","tokenB"] — the collector env provider
+  # parses ${env:...} as YAML, so a bare comma-separated string will NOT parse
+  # into the `tokens:` list. Multiple tokens enable zero-loss overlap rotation
+  # (issue #6): add the new token, let the fleet converge, then drop the old one.
+  bearertokenauth:
+    scheme: Bearer
+    tokens: ${env:FLEET_TOKENS}
+
+  # Backs the persistent sending queue below. Points at the emptyDir mount the
+  # Container App provides (issue #7; Bicep defines the volume in issue #23).
+  file_storage/sending_queue:
+    directory: /var/lib/otelcol/sending-queue
+    create_directory: true
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+        auth:
+          authenticator: bearertokenauth
+
+processors:
+  # 60s batches → ~12× fewer/larger blob files downstream (ADR-0005). Costs ~1min
+  # extra latency into Postgres, irrelevant for a daily-refresh report.
+  batch:
+    timeout: 60s
+
+exporters:
+  otlp_http:
+    # Co-located sink in the same Container App; loopback only (issue #6). JSON
+    # encoding because the sink parses OTLP/JSON (CONTEXT.md). otlp_http appends
+    # /v1/logs and /v1/metrics automatically. 127.0.0.1 (not "localhost") pins
+    # IPv4 — the sink binds 127.0.0.1, and "localhost" can resolve to the IPv6
+    # loopback [::1] first, which the sink isn't listening on.
+    endpoint: http://127.0.0.1:8080
+    encoding: json
+    # Persistent, retry-forever delivery (issue #7): the queue is backed by
+    # file_storage so an outage or restart never drops data, and retries never
+    # expire (max_elapsed_time: 0 — the default 5min expiry would drop data
+    # mid-outage). Sized for ~1 day of fleet traffic (a few thousand batches).
+    sending_queue:
+      enabled: true
+      storage: file_storage/sending_queue
+      queue_size: 10000
+    retry_on_failure:
+      enabled: true
+      max_elapsed_time: 0
+
+service:
+  extensions: [bearertokenauth, file_storage/sending_queue]
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http]
