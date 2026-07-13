@@ -1,0 +1,159 @@
+name: deploy
+
+# Manual deploy pipeline (#25, resolution on #11): one workflow, environment
+# input selects `INTERIM_`/`PROD_`-prefixed repo secrets (no GitHub environments
+# on the free plan). Merges trigger CI only — this never runs on push.
+#
+# Order: migrations first, then image rollout (new sink code may expect new
+# schema; expand-style migrations keep the old sink tolerant in between).
+#
+# OIDC login (no stored Azure secrets) via the shared `cc-otel-deploy` app
+# registration — one app registration, one tenant, so AZURE_CLIENT_ID and
+# AZURE_TENANT_ID are unprefixed; per-RG/per-subscription facts are prefixed.
+#
+# Required repo secrets:
+#   AZURE_CLIENT_ID, AZURE_TENANT_ID          — shared OIDC app registration
+#   <ENV>_AZURE_SUBSCRIPTION_ID               — target subscription
+#   <ENV>_RESOURCE_GROUP                      — target resource group
+#   <ENV>_DATABASE_URL                        — dbmate migration target
+# where <ENV> is INTERIM or PROD. GHCR push uses the built-in GITHUB_TOKEN;
+# Postgres/Container App names are derived from the environment input
+# (iac/main.bicep's `ccotel-{pg,app}-<environmentName>` convention).
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment target
+        required: true
+        type: choice
+        options:
+          - interim
+          - prod
+
+run-name: deploy ${{ inputs.environment }} @ ${{ github.sha }}
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+# Manual and rare — queue rather than cancel, so a second dispatch never lands
+# mid-migration.
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: migrate (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve secret prefix
+        id: env
+        run: echo "prefix=$(echo '${{ inputs.environment }}' | tr '[:lower:]' '[:upper:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets[format('{0}_AZURE_SUBSCRIPTION_ID', steps.env.outputs.prefix)] }}
+
+      - name: Detect runner egress IP
+        id: ip
+        run: echo "address=$(curl -fsS https://api.ipify.org)" >> "$GITHUB_OUTPUT"
+
+      # Public Postgres guarded by password alone (#11) — open the firewall to
+      # this single IP for the run, never a standing allow-all.
+      - name: Open firewall rule for this run
+        env:
+          RESOURCE_GROUP: ${{ secrets[format('{0}_RESOURCE_GROUP', steps.env.outputs.prefix)] }}
+        run: |
+          az postgres flexible-server firewall-rule create \
+            --resource-group "$RESOURCE_GROUP" \
+            --server-name ccotel-pg-${{ inputs.environment }} \
+            --name gha-${{ github.run_id }} \
+            --start-ip-address ${{ steps.ip.outputs.address }} \
+            --end-ip-address ${{ steps.ip.outputs.address }}
+
+      - name: Install dbmate
+        # Pinned to match the version schema.sql is generated with (integration.yml).
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/dbmate \
+            https://github.com/amacneil/dbmate/releases/download/v2.34.1/dbmate-linux-amd64
+          sudo chmod +x /usr/local/bin/dbmate
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: ${{ secrets[format('{0}_DATABASE_URL', steps.env.outputs.prefix)] }}
+        run: dbmate up
+
+      - name: Close firewall rule for this run
+        if: always()
+        env:
+          RESOURCE_GROUP: ${{ secrets[format('{0}_RESOURCE_GROUP', steps.env.outputs.prefix)] }}
+        run: |
+          az postgres flexible-server firewall-rule delete \
+            --resource-group "$RESOURCE_GROUP" \
+            --server-name ccotel-pg-${{ inputs.environment }} \
+            --name gha-${{ github.run_id }} \
+            --yes
+
+  deploy:
+    name: deploy (${{ inputs.environment }})
+    needs: migrate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve secret prefix
+        id: env
+        run: echo "prefix=$(echo '${{ inputs.environment }}' | tr '[:lower:]' '[:upper:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets[format('{0}_AZURE_SUBSCRIPTION_ID', steps.env.outputs.prefix)] }}
+
+      - name: Ensure containerapp CLI support
+        run: az extension add --name containerapp --upgrade -y
+
+      # Zero-setup push credential (#11) — GHCR pull for ACA uses a separate
+      # classic PAT, set as an ACA secret by the (manual) Bicep deploy.
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # SHA-tagged, built from the dispatched ref — exact revision-to-commit
+      # traceability, no orphan `:latest` images.
+      - name: Build and push collector image
+        run: |
+          docker build -t ghcr.io/gharib89/cc-otel-collector:${{ github.sha }} collector/
+          docker push ghcr.io/gharib89/cc-otel-collector:${{ github.sha }}
+
+      - name: Build and push sink image
+        run: |
+          docker build -t ghcr.io/gharib89/cc-otel-sink:${{ github.sha }} sink/
+          docker push ghcr.io/gharib89/cc-otel-sink:${{ github.sha }}
+
+      - name: Update Container App revision
+        env:
+          RESOURCE_GROUP: ${{ secrets[format('{0}_RESOURCE_GROUP', steps.env.outputs.prefix)] }}
+        run: |
+          az containerapp update \
+            --name ccotel-app-${{ inputs.environment }} \
+            --resource-group "$RESOURCE_GROUP" \
+            --container-name collector \
+            --image ghcr.io/gharib89/cc-otel-collector:${{ github.sha }}
+          az containerapp update \
+            --name ccotel-app-${{ inputs.environment }} \
+            --resource-group "$RESOURCE_GROUP" \
+            --container-name sink \
+            --image ghcr.io/gharib89/cc-otel-sink:${{ github.sha }}
