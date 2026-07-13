@@ -23,9 +23,10 @@ Pipeline: Claude Code OTel exporter → OTel Collector (bearer auth) → FastAPI
 ```sh
 uv sync                      # install workspace deps
 uv run pytest                # unit (sink/tests) + integration (tests/integration)
+uv run pytest -m "not integration"  # unit only — the `python` CI job
 uv run pytest -m integration # integration only (needs Docker) — the `integration` CI job
-uv run ruff check .          # Python lint
-uv run sqlfluff lint db/     # SQL lint
+uv run ruff check .          # Python lint — the `python` CI job
+uv run sqlfluff lint db/     # SQL lint — the `python` CI job
 az bicep build --file iac/main.bicep --stdout >/dev/null  # Bicep lint (the `iac` CI job)
 Assert-PSRule -InputPath ./iac/ -Module PSRule.Rules.Azure  # Bicep static analysis (pwsh; see iac/README.md)
 uv run pre-commit run -a     # all hooks

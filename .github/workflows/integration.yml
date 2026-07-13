@@ -9,12 +9,18 @@ on:
     paths: &paths
       - "sink/**"
       - "db/**"
-      - "tests/**"
+      - "collector/**"
+      - "tests/integration/**"
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/integration.yml"
   pull_request:
     paths: *paths
+
+# Private repo, metered minutes (#32): a review-loop push cancels the stale run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # End-to-end suite: testcontainers spins a throwaway Postgres (Docker is present

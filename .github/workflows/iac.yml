@@ -13,6 +13,11 @@ on:
   pull_request:
     paths: *paths
 
+# Private repo, metered minutes (#32): a review-loop push cancels the stale run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Bicep compile + linter (bicepconfig.json) and PSRule for Azure over the expanded
   # interim/prod deployments. Both must be clean — the issue #23 acceptance gate.
