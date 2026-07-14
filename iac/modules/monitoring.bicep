@@ -62,6 +62,11 @@ resource alerts 'Microsoft.Insights/scheduledQueryRules@2023-12-01' = [
       severity: rule.severity
       enabled: true
       scopes: [workspace.id]
+      // ContainerAppConsoleLogs_CL doesn't exist until the Container App has streamed
+      // its first logs, so Azure's create-time query validation can't resolve the table
+      // on a fresh environment and the deploy fails. Skip validation: the queries are
+      // static and reviewed, and the table appears once ingestion starts.
+      skipQueryValidation: true
       evaluationFrequency: 'PT15M'
       windowSize: 'PT15M'
       criteria: {

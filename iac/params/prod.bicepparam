@@ -13,6 +13,9 @@ param location = 'swedencentral'
 param postgresSkuName = 'Standard_B2ms'
 param postgresStorageGB = 128
 param postgresBackupRetentionDays = 7
+// "" lets Azure pick the zone; cycle "1"/"2"/"3" to work around a zone-level
+// CapacityNotAvailable without leaving the region.
+param postgresAvailabilityZone = ''
 param postgresAdminUser = 'ccotel_admin'
 param postgresAdminPassword = readEnvironmentVariable('PG_ADMIN_PASSWORD', '')
 param postgresFirewallRules = [

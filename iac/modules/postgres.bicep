@@ -8,6 +8,9 @@ param name string
 @description('Location for the server.')
 param location string
 
+@description('Availability zone ("1"/"2"/"3", or "" to let Azure pick). Pin or cycle this to dodge a zone-level CapacityNotAvailable without leaving the region (which would change cost/SKU availability).')
+param availabilityZone string = ''
+
 @description('Compute SKU name, e.g. Standard_B2s (interim) or Standard_B2ms (prod).')
 param skuName string
 
@@ -48,6 +51,9 @@ resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   }
   properties: {
     version: version
+    // Omit entirely when unset so Azure picks a zone (empty string is the "no
+    // preference" sentinel; sending nothing is the unambiguous form).
+    availabilityZone: empty(availabilityZone) ? null : availabilityZone
     administratorLogin: administratorLogin
     administratorLoginPassword: administratorLoginPassword
     storage: {

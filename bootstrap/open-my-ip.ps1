@@ -66,7 +66,7 @@ function Get-FirewallRuleStartIp {
         [Parameter(Mandatory)][string]$RuleName
     )
     $ip = az postgres flexible-server firewall-rule show --resource-group $ResourceGroup `
-        --server-name $ServerName --name $RuleName --query 'startIpAddress' --output tsv 2>$null
+        --name $ServerName --rule-name $RuleName --query 'startIpAddress' --output tsv 2>$null
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($ip)) { return $null }
     return $ip.Trim()
 }
@@ -82,7 +82,7 @@ function Set-FirewallRule {
     )
     if (-not $PSCmdlet.ShouldProcess("$ServerName/$RuleName", "allow $IpAddress")) { return }
     az postgres flexible-server firewall-rule create --resource-group $ResourceGroup `
-        --server-name $ServerName --name $RuleName `
+        --name $ServerName --rule-name $RuleName `
         --start-ip-address $IpAddress --end-ip-address $IpAddress --output none
     if ($LASTEXITCODE -ne 0) { throw "Firewall rule create failed (az exit $LASTEXITCODE)." }
 }
