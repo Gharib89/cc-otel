@@ -1,0 +1,51 @@
+name: bootstrap
+
+# Path-filtered per concern (CLAUDE.md): only the operator-run bootstrap scripts
+# and this workflow trigger these checks. Bootstrap is run locally by the operator
+# (not in CI, #52); this job only lints and unit-tests the scripts' pure seams.
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - "bootstrap/**"
+      - ".github/workflows/bootstrap.yml"
+  pull_request:
+    paths: *paths
+
+# Private repo, metered minutes (#32): a review-loop push cancels the stale run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # PSScriptAnalyzer (must be clean) + Pester over the pure logic. Windows runner
+  # so Windows PowerShell semantics match the operator's machine.
+  powershell:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned analyzer + test modules
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
+          Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force
+
+      - name: PSScriptAnalyzer (fails on any finding)
+        shell: pwsh
+        run: |
+          $findings = Invoke-ScriptAnalyzer -Path ./bootstrap -Recurse
+          if ($findings) {
+            $findings | Format-Table -AutoSize
+            throw "PSScriptAnalyzer found $($findings.Count) issue(s)."
+          }
+
+      - name: Pester
+        shell: pwsh
+        run: |
+          Import-Module Pester
+          $config = New-PesterConfiguration
+          $config.Run.Path = './bootstrap'
+          $config.Run.Exit = $true
+          $config.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $config

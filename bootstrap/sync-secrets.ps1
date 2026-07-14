@@ -1,0 +1,151 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+    Fan out secrets from a single-source .env.<env> file to the GitHub repo secrets.
+.DESCRIPTION
+    Bootstrap step for issue #52 (friction item #4 on map #48). The one source of
+    truth is `.env.<env>` (e.g. .env.interim); this script upserts the values
+    deploy.yml consumes into GitHub Actions secrets with `gh secret set`, so
+    DATABASE_URL is byte-identical across the Bicep input, the sink runtime secret,
+    and the CI migration target.
+
+    Per-environment values are pushed prefixed (INTERIM_/PROD_); the shared OIDC
+    app identity (AZURE_CLIENT_ID/AZURE_TENANT_ID) is pushed unprefixed. The set of
+    keys mirrors deploy.yml's required secrets exactly - nothing else is fanned out
+    (Bicep-only inputs like PG_ADMIN_PASSWORD stay in .env for the local deploy).
+
+    `gh secret set` is an upsert, so re-running converges.
+.NOTES
+    Exit codes: 0 all secrets synced * 1 failure (missing key or gh error).
+    Requires an authenticated `gh` session with repo secret write access.
+#>
+param(
+    [Parameter(Mandatory)][ValidateSet('interim', 'prod')][string]$Environment,
+    # Defaults to .env.<environment> next to the repo root.
+    [string]$EnvFile,
+    [string]$Repository = 'Gharib89/cc-otel'
+)
+
+# =============================================================================
+# Pure functions (no side effects) - the tested seam.
+# =============================================================================
+
+function ConvertFrom-DotEnv {
+    <#
+    .SYNOPSIS Parse KEY=VALUE lines into an ordered hashtable.
+    .DESCRIPTION Blank lines and #-comments are ignored; an optional leading
+    `export ` is stripped; the split is on the first `=` only (values may contain
+    `=`, e.g. `?sslmode=require`); one layer of surrounding single or double quotes
+    is removed.
+    .OUTPUTS [System.Collections.Specialized.OrderedDictionary]
+    #>
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+    $result = [ordered]@{}
+    foreach ($raw in ($Text -split "`r?`n")) {
+        $line = $raw.Trim()
+        if ($line.Length -eq 0 -or $line.StartsWith('#')) { continue }
+        if ($line -match '^export\s+') { $line = $line -replace '^export\s+', '' }
+        $eq = $line.IndexOf('=')
+        if ($eq -lt 1) { continue }
+        $key = $line.Substring(0, $eq).Trim()
+        $val = $line.Substring($eq + 1).Trim()
+        if ($val.Length -ge 2) {
+            $first = $val[0]
+            if (($first -eq '"' -or $first -eq "'") -and $val[-1] -eq $first) {
+                $val = $val.Substring(1, $val.Length - 2)
+            }
+        }
+        $result[$key] = $val
+    }
+    return $result
+}
+
+function Get-SecretPushPlan {
+    <#
+    .SYNOPSIS Resolve which GitHub secret names + values to push for an environment.
+    .DESCRIPTION The mapping mirrors deploy.yml's required secrets: DATABASE_URL,
+    AZURE_SUBSCRIPTION_ID and RESOURCE_GROUP are environment-prefixed
+    (INTERIM_/PROD_); AZURE_CLIENT_ID and AZURE_TENANT_ID are shared and unprefixed.
+    Throws when a required key is absent from the parsed values.
+    .OUTPUTS Array of [pscustomobject]@{ Secret; Value }.
+    #>
+    param(
+        [Parameter(Mandatory)][ValidateSet('interim', 'prod')][string]$Environment,
+        [Parameter(Mandatory)][System.Collections.IDictionary]$Values
+    )
+    $prefix = $Environment.ToUpperInvariant()
+    $mapping = @(
+        [pscustomobject]@{ EnvKey = 'DATABASE_URL';          Secret = "${prefix}_DATABASE_URL" }
+        [pscustomobject]@{ EnvKey = 'AZURE_SUBSCRIPTION_ID'; Secret = "${prefix}_AZURE_SUBSCRIPTION_ID" }
+        [pscustomobject]@{ EnvKey = 'RESOURCE_GROUP';        Secret = "${prefix}_RESOURCE_GROUP" }
+        [pscustomobject]@{ EnvKey = 'AZURE_CLIENT_ID';       Secret = 'AZURE_CLIENT_ID' }
+        [pscustomobject]@{ EnvKey = 'AZURE_TENANT_ID';       Secret = 'AZURE_TENANT_ID' }
+    )
+    $plan = foreach ($m in $mapping) {
+        if (-not $Values.Contains($m.EnvKey) -or [string]::IsNullOrWhiteSpace($Values[$m.EnvKey])) {
+            throw "Required key '$($m.EnvKey)' is missing or empty in the env file."
+        }
+        [pscustomobject]@{ Secret = $m.Secret; Value = [string]$Values[$m.EnvKey] }
+    }
+    return @($plan)
+}
+
+# =============================================================================
+# Effectful shims - thin wrappers over the filesystem and `gh`.
+# =============================================================================
+
+function Write-BootstrapLog {
+    param([Parameter(Mandatory)][string]$Message, [string]$Level = 'INFO')
+    Write-Information "[$Level] $Message" -InformationAction Continue
+}
+
+function Set-GitHubSecret {
+    <# .SYNOPSIS Upsert one repo secret via `gh secret set` (value on stdin). #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Value,
+        [Parameter(Mandatory)][string]$Repository
+    )
+    if (-not $PSCmdlet.ShouldProcess($Name, 'gh secret set')) { return }
+    # Value on stdin so it never lands in the process arg list / shell history.
+    $Value | gh secret set $Name --repo $Repository --body -
+    if ($LASTEXITCODE -ne 0) { throw "gh secret set '$Name' failed (exit $LASTEXITCODE)." }
+}
+
+# =============================================================================
+# Orchestration
+# =============================================================================
+
+function Invoke-SecretSync {
+    param(
+        [Parameter(Mandatory)][ValidateSet('interim', 'prod')][string]$Environment,
+        [string]$EnvFile,
+        [string]$Repository = 'Gharib89/cc-otel'
+    )
+    Set-StrictMode -Version Latest
+    $ErrorActionPreference = 'Stop'
+
+    if ([string]::IsNullOrWhiteSpace($EnvFile)) {
+        $EnvFile = Join-Path (Split-Path -Parent $PSScriptRoot) ".env.$Environment"
+    }
+    if (-not (Test-Path -LiteralPath $EnvFile)) {
+        throw "Env file not found: $EnvFile"
+    }
+
+    $text = [System.IO.File]::ReadAllText($EnvFile)
+    $values = ConvertFrom-DotEnv -Text $text
+    $plan = Get-SecretPushPlan -Environment $Environment -Values $values
+
+    foreach ($p in $plan) {
+        Set-GitHubSecret -Name $p.Secret -Value $p.Value -Repository $Repository -Confirm:$false
+        Write-BootstrapLog "Synced secret $($p.Secret)."
+    }
+    Write-BootstrapLog "Synced $($plan.Count) secrets to $Repository from $EnvFile."
+    return 0
+}
+
+# Run only when executed directly; dot-sourcing (Pester) defines functions without running.
+if ($MyInvocation.InvocationName -ne '.') {
+    exit (Invoke-SecretSync -Environment $Environment -EnvFile $EnvFile -Repository $Repository)
+}
