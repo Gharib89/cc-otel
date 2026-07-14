@@ -6,17 +6,22 @@
 .DESCRIPTION
     Pushed by IS on a ~90-minute cadence (issue #26). Every run verifies real
     machine state against the baked payload and repairs drift; a clean machine
-    no-ops fast and exits 0. The four drift surfaces verified each tick:
+    no-ops fast and exits 0. The three drift surfaces verified each tick:
 
       1. Installed files    - managed-settings.json + cc-otel-wrapper.mjs match the payload.
       2. Machine env vars   - the telemetry env block mirrored at Machine scope.
-      3. Statusline wiring  - each user's settings.json statusLine points at the wrapper.
-      4. User telemetry keys - conflicting telemetry keys stripped from user settings*.json.
+      3. User telemetry keys - conflicting telemetry keys stripped from user settings*.json.
 
     Telemetry config is delivered from one baked source two ways: managed-settings.json
     (highest precedence, cannot be user-overridden - authoritative) and machine-scope
     env vars (a mirror, so telemetry still routes if a managed entry is dropped by the
     tolerant managed-settings parser). No traces exporter is set (ADR-0001).
+
+    Statusline is delivered through managed-settings.json too: its statusLine.command
+    runs the wrapper (cc-otel-wrapper.mjs, ADR-0003), which forwards to each user's own
+    statusline and pushes rate-limit gauges. The installer never mutates a user's
+    settings.json statusLine - managed settings win, and the wrapper resolves the user's
+    real command at runtime.
 
     SELF-CONTAINED: build-installer.ps1 bakes the managed-settings.json (endpoint +
     fleet token + gates) and the statusline wrapper (ADR-0003) into this one script as
@@ -24,12 +29,18 @@
     a single install.ps1. The committed source carries only placeholders (no secret).
 
 .NOTES
-    Exit codes: 0 success/no-op * 1 core failure * 2 partial (e.g. Node absent -> no
-    statusline; a WSL distro without Node skipped). Node is checked, never installed
-    (the LTS MSI is an IS prerequisite, issue #31); statusline self-heals next tick.
+    Exit codes: 0 success/no-op * 1 core failure * 2 partial (a WSL distro without
+    Node skipped). Statusline delivery is core and Node-independent: managed settings
+    carry it and the wrapper self-heals once Node appears, so Node absence on the
+    Windows host no longer yields a partial. Node is checked, never installed inside a
+    distro (the LTS MSI is an IS prerequisite, issue #31).
 #>
 param(
-    # Install target root. C:\Program Files\ClaudeCode on a real fleet machine.
+    # Install target root. C:\Program Files\ClaudeCode on a real fleet machine
+    # (SYSTEM-context 64-bit, where $env:ProgramFiles is C:\Program Files). The
+    # managed-settings statusLine path is baked to that literal at build time
+    # (build-installer.ps1), so keep this default aligned with it; overriding it
+    # (e.g. tests) does not re-point the baked statusLine command.
     [string]$InstallRoot = (Join-Path $env:ProgramFiles 'ClaudeCode')
 )
 
@@ -37,12 +48,14 @@ param(
 
 # Bumped when the wrapper contract or managed-settings shape changes; part of the
 # stamp so a schema bump forces every machine (and WSL distro) to re-converge.
-$script:InstallerSchemaVersion = 1
+# v2: managed-settings.json now carries statusLine (wrapper delivery, ADR-0003).
+$script:InstallerSchemaVersion = 2
 
-# Managed settings path inside a WSL distro (Linux system dir; verified against
-# the Claude Code settings docs). Windows uses $InstallRoot\managed-settings.json.
+# Managed settings + wrapper paths inside a WSL distro (Linux system dir; verified
+# against the Claude Code settings docs). Windows uses $InstallRoot\....
 $script:WslManagedSettingsPath = '/etc/claude-code/managed-settings.json'
 $script:WslManagedSettingsDir  = '/etc/claude-code'
+$script:WslWrapperPath         = '/etc/claude-code/cc-otel-wrapper.mjs'
 
 # --- baked payload -----------------------------------------------------------
 # This script is SELF-CONTAINED: IS distributes a single install.ps1. build-installer.ps1
@@ -85,9 +98,27 @@ function Get-DesiredTelemetryEnv {
 }
 
 function ConvertTo-ManagedSettingsJson {
-    <# .SYNOPSIS Wraps an env block into the managed-settings.json document text. #>
-    param([Parameter(Mandatory)][System.Collections.IDictionary]$TelemetryEnv)
-    return ([ordered]@{ env = $TelemetryEnv } | ConvertTo-Json -Depth 5)
+    <#
+    .SYNOPSIS Wraps an env block + wrapper statusLine into the managed-settings.json document.
+    .DESCRIPTION
+        managed-settings.json is the SOLE statusline delivery mechanism (ADR-0003):
+        its statusLine.command runs the wrapper (highest precedence, so Claude Code
+        picks it up), and the wrapper resolves each user's real statusline at runtime.
+        Both the build-time bake and the runtime materialization must produce identical
+        text, so statusLine lives here in the shared builder - never in one path only.
+    #>
+    param(
+        [Parameter(Mandatory)][System.Collections.IDictionary]$TelemetryEnv,
+        [Parameter(Mandatory)][string]$WrapperPath
+    )
+    $doc = [ordered]@{
+        env        = $TelemetryEnv
+        statusLine = [ordered]@{
+            type    = 'command'
+            command = (Get-WrapperStatusLineCommand -WrapperPath $WrapperPath)
+        }
+    }
+    return ($doc | ConvertTo-Json -Depth 5)
 }
 
 function Get-StringHash {
@@ -119,9 +150,16 @@ function Get-InstallerStamp {
 }
 
 function Get-WrapperStatusLineCommand {
-    <# .SYNOPSIS The statusLine command that runs the wrapper via Node. #>
+    <#
+    .SYNOPSIS The statusLine command that runs the wrapper via Node.
+    .DESCRIPTION
+        Forward-slash path, quoted for the space in "Program Files" (ADR-0003). Node
+        accepts forward slashes on Windows, and it keeps the baked managed-settings.json
+        portable (the same builder serves the WSL leg's Linux wrapper path).
+    #>
     param([Parameter(Mandatory)][string]$WrapperPath)
-    return "node `"$WrapperPath`""
+    $forward = $WrapperPath -replace '\\', '/'
+    return "node `"$forward`""
 }
 
 function Get-WslLegTarget {
@@ -271,30 +309,6 @@ function Backup-File {
     Copy-Item -LiteralPath $Path -Destination "$Path.bak" -Force
 }
 
-function Set-UserStatusLine {
-    <#
-    .SYNOPSIS Point a user's settings.json statusLine at the wrapper (backup first).
-    .OUTPUTS $true if the file was changed.
-    #>
-    [CmdletBinding(SupportsShouldProcess)]
-    [OutputType([bool])]
-    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Command)
-    $text = Read-Text -Path $Path
-    $settings = if ($text) { $text | ConvertFrom-Json } else { [pscustomobject]@{} }
-    $existing = if ($settings.PSObject.Properties['statusLine']) { $settings.statusLine } else { $null }
-    if ($existing -and $existing.PSObject.Properties['command'] -and $existing.command -eq $Command) {
-        return $false
-    }
-    if (-not $PSCmdlet.ShouldProcess($Path, 'Wire statusLine')) { return $false }
-    # Wiring is confirmed; backup + write are mandatory parts of it, not separately declinable.
-    if ($text) { Backup-File -Path $Path -Confirm:$false }
-    $statusLine = [ordered]@{ type = 'command'; command = $Command }
-    if ($settings.PSObject.Properties['statusLine']) { $settings.statusLine = $statusLine }
-    else { $settings | Add-Member -NotePropertyName statusLine -NotePropertyValue $statusLine }
-    Write-TextFile -Path $Path -Content ($settings | ConvertTo-Json -Depth 10) -Confirm:$false
-    return $true
-}
-
 function Clear-UserTelemetryKey {
     <#
     .SYNOPSIS Strip managed telemetry keys from a user's settings env block (backup first).
@@ -319,11 +333,6 @@ function Clear-UserTelemetryKey {
     return $true
 }
 
-function Test-NodePresent {
-    <# .SYNOPSIS Node on PATH? Checked, never installed (issue #26). #>
-    return [bool](Get-Command node -ErrorAction SilentlyContinue)
-}
-
 function Get-WslDistro {
     <# .SYNOPSIS Installed WSL distro names, or empty when WSL is absent. #>
     if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) { return @() }
@@ -339,22 +348,32 @@ function Get-WslDistro {
 
 function Invoke-WslLeg {
     <#
-    .SYNOPSIS Install managed settings inside one WSL distro; skip (warn) if it lacks Node.
+    .SYNOPSIS Install the wrapper + managed settings inside one WSL distro; skip (warn) if it lacks Node.
     .OUTPUTS $true on success, $false if skipped/failed (caller records partial).
     #>
     [CmdletBinding(SupportsShouldProcess)]
     [OutputType([bool])]
-    param([Parameter(Mandatory)][string]$Distro, [Parameter(Mandatory)][string]$ManagedSettingsJson)
+    param(
+        [Parameter(Mandatory)][string]$Distro,
+        [Parameter(Mandatory)][string]$ManagedSettingsJson,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$WrapperContent
+    )
     try {
         $hasNode = & wsl.exe -d $Distro -- sh -c 'command -v node >/dev/null 2>&1 && echo yes' 2>$null
         if (("$hasNode").Trim() -ne 'yes') {
             Write-InstallLog "WSL distro '$Distro' has no Node; skipping." 'WARN'
             return $false
         }
-        if (-not $PSCmdlet.ShouldProcess("WSL:$Distro", 'Install managed settings')) { return $false }
+        if (-not $PSCmdlet.ShouldProcess("WSL:$Distro", 'Install wrapper + managed settings')) { return $false }
         # Use the Linux dir constant, not Split-Path - on Windows PowerShell Split-Path
         # rewrites '/etc/...' to '\etc\...', which sh would treat as a bad relative path.
-        $ManagedSettingsJson | & wsl.exe -d $Distro -u root -- sh -c "mkdir -p '$script:WslManagedSettingsDir' && cat > '$script:WslManagedSettingsPath'"
+        # Materialize the wrapper first, then the managed settings that points at it.
+        $WrapperContent | & wsl.exe -d $Distro -u root -- sh -c "mkdir -p '$script:WslManagedSettingsDir' && cat > '$script:WslWrapperPath'"
+        if ($LASTEXITCODE -ne 0) {
+            Write-InstallLog "WSL distro '$Distro' wrapper write failed (exit $LASTEXITCODE)." 'WARN'
+            return $false
+        }
+        $ManagedSettingsJson | & wsl.exe -d $Distro -u root -- sh -c "cat > '$script:WslManagedSettingsPath'"
         if ($LASTEXITCODE -ne 0) {
             Write-InstallLog "WSL distro '$Distro' leg failed (exit $LASTEXITCODE)." 'WARN'
             return $false
@@ -420,34 +439,26 @@ function Invoke-Install {
         $coreOk = $false
     }
 
-    # --- 3. statusline wiring (gated on Node) ------------------------------
+    # --- 3. core: materialize the statusline wrapper -----------------------
+    # Statusline delivery is via managed-settings.json (step 1), whose statusLine
+    # already runs the wrapper (highest precedence). We only put the wrapper file
+    # on disk; Claude Code picks it up and it self-heals once Node appears - so no
+    # Node gate here, and no user settings.json is ever touched (ADR-0003).
     $userSettings = Get-UserSettingsPath
-    if (Test-NodePresent) {
-        if ($null -ne $wrapperContent) {
-            try {
-                if (Sync-InstalledFile -SourceText $wrapperContent -TargetPath $wrapperInstalledPath) {
-                    Write-InstallLog "Wrapper written to $wrapperInstalledPath."
-                }
-                $command = Get-WrapperStatusLineCommand -WrapperPath $wrapperInstalledPath
-                foreach ($path in ($userSettings | Where-Object { $_ -match 'settings\.json$' })) {
-                    if (Set-UserStatusLine -Path $path -Command $command) {
-                        Write-InstallLog "Wired statusLine in $path."
-                    }
-                }
-            }
-            catch {
-                Write-InstallLog "Statusline wiring failed: $($_.Exception.Message)" 'WARN'
-                $partial = $true
+    if ($null -ne $wrapperContent) {
+        try {
+            if (Sync-InstalledFile -SourceText $wrapperContent -TargetPath $wrapperInstalledPath) {
+                Write-InstallLog "Wrapper written to $wrapperInstalledPath."
             }
         }
-        else {
-            Write-InstallLog 'Wrapper not present in payload; statusline wiring skipped.' 'WARN'
-            $partial = $true
+        catch {
+            Write-InstallLog "Failed to write wrapper: $($_.Exception.Message)" 'ERROR'
+            $coreOk = $false
         }
     }
     else {
-        Write-InstallLog 'Node not found; core telemetry installed, statusline deferred to next tick.' 'WARN'
-        $partial = $true
+        Write-InstallLog 'Wrapper missing from payload - this install.ps1 was not built with a wrapper.' 'ERROR'
+        $coreOk = $false
     }
 
     # --- 4. sanitize user telemetry keys -----------------------------------
@@ -463,13 +474,25 @@ function Invoke-Install {
     # --- 5. WSL leg (marker-gated per distro) ------------------------------
     $state = Get-InstallState -Path $statePath
     $wslMap = $state.wsl
-    $distros = @(Get-WslDistro)   # @() guard: a bare return collapses an empty array to $null
-    foreach ($distro in (Get-WslLegTarget -Distro $distros -StampMap $wslMap -Stamp $stamp)) {
-        if (Invoke-WslLeg -Distro $distro -ManagedSettingsJson $managedJson) {
-            $wslMap[$distro] = $stamp
-            Write-InstallLog "WSL distro '$distro' converged."
+    # The WSL leg materializes the wrapper + a Linux-retargeted managed settings, so
+    # it only runs when we actually have wrapper content. A broken/unbuilt artifact
+    # (wrapper missing, core already failed) must not write an empty wrapper into a distro.
+    if ($null -ne $wrapperContent) {
+        # The baked managed JSON points statusLine at the Windows wrapper path, which
+        # is meaningless inside a distro. Rebuild it against the Linux wrapper path -
+        # same env block, retargeted statusLine (ADR-0003).
+        $wslEnv = [ordered]@{}
+        foreach ($p in (($managedJson | ConvertFrom-Json).env.PSObject.Properties)) { $wslEnv[$p.Name] = [string]$p.Value }
+        $wslManagedJson = ConvertTo-ManagedSettingsJson -TelemetryEnv $wslEnv -WrapperPath $script:WslWrapperPath
+
+        $distros = @(Get-WslDistro)   # @() guard: a bare return collapses an empty array to $null
+        foreach ($distro in (Get-WslLegTarget -Distro $distros -StampMap $wslMap -Stamp $stamp)) {
+            if (Invoke-WslLeg -Distro $distro -ManagedSettingsJson $wslManagedJson -WrapperContent $wrapperContent) {
+                $wslMap[$distro] = $stamp
+                Write-InstallLog "WSL distro '$distro' converged."
+            }
+            else { $partial = $true }
         }
-        else { $partial = $true }
     }
 
     # --- 6. persist state ---------------------------------------------------

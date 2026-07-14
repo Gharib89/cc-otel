@@ -37,6 +37,11 @@ param(
     # into the stamp. A required build input.
     [string]$WrapperPath = (Join-Path $PSScriptRoot 'cc-otel-wrapper.mjs'),
 
+    # Fleet install root the wrapper materializes to. A literal default (not host
+    # env-derived) so the baked managed-settings statusLine points at the fleet
+    # path even when the build runs on Linux CI.
+    [string]$InstallRoot = 'C:\Program Files\ClaudeCode',
+
     # Where the staged artifact is written.
     [string]$OutputPath = (Join-Path $PSScriptRoot 'dist')
 )
@@ -54,9 +59,10 @@ if ([string]::IsNullOrWhiteSpace($Token)) {
     $Token = '__FLEET_TOKEN_PLACEHOLDER__'
 }
 
-$wrapperContent = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $WrapperPath))
-$telemetryEnv   = Get-DesiredTelemetryEnv -Endpoint $Endpoint -Token $Token
-$managedJson    = ConvertTo-ManagedSettingsJson -TelemetryEnv $telemetryEnv
+$wrapperContent     = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $WrapperPath))
+$wrapperInstallPath = Join-Path $InstallRoot 'cc-otel-wrapper.mjs'
+$telemetryEnv       = Get-DesiredTelemetryEnv -Endpoint $Endpoint -Token $Token
+$managedJson        = ConvertTo-ManagedSettingsJson -TelemetryEnv $telemetryEnv -WrapperPath $wrapperInstallPath
 $stamp          = Get-InstallerStamp -WrapperContent $wrapperContent -ManagedSettingsJson $managedJson -SchemaVersion $script:InstallerSchemaVersion
 
 # Base64 so arbitrary token/JSON/JS bytes can't break the PowerShell string literal.

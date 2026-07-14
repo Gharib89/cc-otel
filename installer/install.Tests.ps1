@@ -41,11 +41,19 @@ Describe 'Get-DesiredTelemetryEnv' {
 }
 
 Describe 'ConvertTo-ManagedSettingsJson' {
+    BeforeAll {
+        $script:wrapper = 'C:\Program Files\ClaudeCode\cc-otel-wrapper.mjs'
+    }
     It 'produces a document with the env block under the managed-settings key' {
-        $json = ConvertTo-ManagedSettingsJson -TelemetryEnv (Get-DesiredTelemetryEnv -Endpoint 'https://c' -Token 't')
+        $json = ConvertTo-ManagedSettingsJson -TelemetryEnv (Get-DesiredTelemetryEnv -Endpoint 'https://c' -Token 't') -WrapperPath $wrapper
         $parsed = $json | ConvertFrom-Json
         $parsed.env.CLAUDE_CODE_ENABLE_TELEMETRY | Should -Be '1'
         $parsed.env.OTEL_EXPORTER_OTLP_HEADERS   | Should -Be 'Authorization=Bearer t'
+    }
+    It 'carries the wrapper statusLine (forward-slash path) as the delivery mechanism (ADR-0003)' {
+        $parsed = (ConvertTo-ManagedSettingsJson -TelemetryEnv (Get-DesiredTelemetryEnv -Endpoint 'https://c' -Token 't') -WrapperPath $wrapper) | ConvertFrom-Json
+        $parsed.statusLine.type    | Should -Be 'command'
+        $parsed.statusLine.command | Should -Be 'node "C:/Program Files/ClaudeCode/cc-otel-wrapper.mjs"'
     }
 }
 
@@ -72,8 +80,8 @@ Describe 'Get-InstallerStamp' {
     It 'changes when the baked token (managed settings) rotates - forces overwrite' {
         $envA = Get-DesiredTelemetryEnv -Endpoint 'https://c' -Token 'old-token'
         $envB = Get-DesiredTelemetryEnv -Endpoint 'https://c' -Token 'new-token'
-        $jsonA = ConvertTo-ManagedSettingsJson -TelemetryEnv $envA
-        $jsonB = ConvertTo-ManagedSettingsJson -TelemetryEnv $envB
+        $jsonA = ConvertTo-ManagedSettingsJson -TelemetryEnv $envA -WrapperPath 'C:\Program Files\ClaudeCode\cc-otel-wrapper.mjs'
+        $jsonB = ConvertTo-ManagedSettingsJson -TelemetryEnv $envB -WrapperPath 'C:\Program Files\ClaudeCode\cc-otel-wrapper.mjs'
         $stampA = Get-InstallerStamp -WrapperContent 'w' -ManagedSettingsJson $jsonA -SchemaVersion 1
         $stampB = Get-InstallerStamp -WrapperContent 'w' -ManagedSettingsJson $jsonB -SchemaVersion 1
         $stampA | Should -Not -Be $stampB
@@ -119,9 +127,9 @@ Describe 'Resolve-InstallExitCode' {
 }
 
 Describe 'Get-WrapperStatusLineCommand' {
-    It 'invokes the wrapper via node with a quoted path' {
+    It 'invokes the wrapper via node with a quoted forward-slash path (ADR-0003)' {
         Get-WrapperStatusLineCommand -WrapperPath 'C:\Program Files\ClaudeCode\cc-otel-wrapper.mjs' |
-            Should -Be 'node "C:\Program Files\ClaudeCode\cc-otel-wrapper.mjs"'
+            Should -Be 'node "C:/Program Files/ClaudeCode/cc-otel-wrapper.mjs"'
     }
 }
 
@@ -132,7 +140,7 @@ Describe 'Invoke-Install (orchestration)' {
     BeforeEach {
         $script:target = Join-Path ([System.IO.Path]::GetTempPath()) ("cctgt-" + [guid]::NewGuid())
         $b64 = { param($t) [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($t)) }
-        $managed = ConvertTo-ManagedSettingsJson -TelemetryEnv (Get-DesiredTelemetryEnv -Endpoint 'https://c.example.com' -Token 'tok')
+        $managed = ConvertTo-ManagedSettingsJson -TelemetryEnv (Get-DesiredTelemetryEnv -Endpoint 'https://c.example.com' -Token 'tok') -WrapperPath 'C:\Program Files\ClaudeCode\cc-otel-wrapper.mjs'
         $script:ManagedSettingsB64 = & $b64 $managed
         $script:WrapperB64         = & $b64 '// wrapper'
         Mock Set-MachineEnvVar { $false }   # pretend machine env already correct
@@ -143,22 +151,26 @@ Describe 'Invoke-Install (orchestration)' {
         Remove-Item -LiteralPath $script:target -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    It 'materializes managed settings and exits 0 when Node is present' {
-        Mock Test-NodePresent { $true }
+    It 'materializes managed settings + wrapper as core and exits 0 (no Node gate)' {
         Invoke-Install -InstallRoot $script:target | Should -Be 0
         Test-Path -LiteralPath (Join-Path $script:target 'managed-settings.json') | Should -BeTrue
+        Test-Path -LiteralPath (Join-Path $script:target 'cc-otel-wrapper.mjs')   | Should -BeTrue
     }
 
     It 'is idempotent - a clean second run also exits 0' {
-        Mock Test-NodePresent { $true }
         Invoke-Install -InstallRoot $script:target | Out-Null
         Invoke-Install -InstallRoot $script:target | Should -Be 0
     }
 
-    It 'exits 2 (partial) when Node is absent but installs core telemetry' {
-        Mock Test-NodePresent { $false }
-        Invoke-Install -InstallRoot $script:target | Should -Be 2
-        Test-Path -LiteralPath (Join-Path $script:target 'managed-settings.json') | Should -BeTrue
+    It 'never mutates a user settings.json statusLine (managed settings own delivery, ADR-0003)' {
+        $userClaude = Join-Path $script:target 'UserProfile\.claude'
+        New-Item -ItemType Directory -Path $userClaude -Force | Out-Null
+        $userSettings = Join-Path $userClaude 'settings.json'
+        $original = '{"statusLine":{"type":"command","command":"my own bar"}}'
+        [System.IO.File]::WriteAllText($userSettings, $original)
+        Mock Get-UserSettingsPath { @($userSettings) }
+        Invoke-Install -InstallRoot $script:target | Should -Be 0
+        [System.IO.File]::ReadAllText($userSettings) | Should -Be $original
     }
 
     It 'exits 1 when the payload is still the unbuilt placeholder' {

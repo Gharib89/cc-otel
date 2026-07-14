@@ -8,8 +8,10 @@ fleet token into the artifact IS pushes.
 | File | Role |
 |---|---|
 | `install.ps1` | Drift-repairing per-machine installer (Windows PowerShell 5.1 compatible) |
-| `build-installer.ps1` | Bakes endpoint + fleet token, stamps, stages the `dist/` artifact |
+| `build-installer.ps1` | Bakes endpoint + fleet token + wrapper, stamps, stages the `dist/` artifact |
+| `cc-otel-wrapper.mjs` | Statusline wrapper (ADR-0003): forwards to the user's statusline, pushes rate-limit gauges |
 | `install.Tests.ps1` | Pester unit + orchestration tests |
+| `test_wrapper.mjs` | `node --test` suite for the wrapper |
 
 ## `install.ps1`
 
@@ -20,19 +22,26 @@ machine scope (so telemetry still routes if the tolerant managed-settings parser
 drops an entry). All five PII content gates are pinned: `OTEL_LOG_TOOL_DETAILS=1`,
 the other four `=0` (issue #8). No traces exporter (ADR-0001).
 
-Each tick it repairs four drift surfaces: installed files (`managed-settings.json`
-+ `cc-otel-wrapper.mjs`), machine-scope env vars, statusline wiring in each user's
-`settings.json`, and stray telemetry keys in `C:\Users\*\.claude\settings*.json`
-(backed up before edit). A per-distro stamp map in `.install-state.json` gates the
-WSL leg — `wsl.exe -l -q` each run; a distro missing or below the current stamp
-gets the leg; a distro without Node is skipped with a warning.
+**Statusline** is delivered through `managed-settings.json` too (ADR-0003): its
+`statusLine.command` runs the wrapper (`cc-otel-wrapper.mjs`), which forwards to
+each user's own statusline and pushes rate-limit gauges. Managed settings win, so
+the installer **never mutates a user's `settings.json`** — the wrapper resolves the
+user's real command at runtime.
+
+Each tick it repairs three drift surfaces: installed files (`managed-settings.json`
++ `cc-otel-wrapper.mjs`), machine-scope env vars, and stray telemetry keys in
+`C:\Users\*\.claude\settings*.json` (backed up before edit). A per-distro stamp map
+in `.install-state.json` gates the WSL leg — `wsl.exe -l -q` each run; a distro
+missing or below the current stamp gets the leg (wrapper + Linux-retargeted managed
+settings); a distro without Node is skipped with a warning.
 
 **Node is checked, never installed** (the LTS MSI is an IS prerequisite, issue
-#31). Core telemetry installs regardless; statusline wiring is gated on Node and
-self-heals the next tick once Node is present.
+#31). Statusline delivery is core and Node-independent: managed settings carry it
+and the wrapper self-heals once Node appears, so Node absence on the Windows host no
+longer yields a partial — only the per-distro WSL Node check does.
 
-Exit codes: **0** success / no-op · **1** core failure · **2** partial (e.g. Node
-absent → statusline deferred; a WSL distro skipped).
+Exit codes: **0** success / no-op · **1** core failure · **2** partial (a WSL distro
+without Node skipped).
 
 ## `build-installer.ps1`
 
@@ -63,9 +72,13 @@ ADR-0003) is a required build input.
 # from the repo root:
 Invoke-ScriptAnalyzer -Path installer -Recurse   # must be clean (acceptance)
 Invoke-Pester -Path installer                     # unit + orchestration
+node --test installer/test_wrapper.mjs            # wrapper contract (ADR-0003)
 ```
 
-The unit tests cover the pure logic (config, stamp, drift predicates, WSL
-gating, exit codes) and the orchestration off a real machine via boundary mocks.
-The SYSTEM-context / real-WSL / MSI self-heal paths are the manual matrix in issue
-#26. CI wiring for the PSScriptAnalyzer gate is tracked in issue #43.
+The Pester tests cover the pure logic (config, stamp, drift predicates, WSL
+gating, exit codes) and the orchestration off a real machine via boundary mocks;
+`test_wrapper.mjs` covers the wrapper contract (identity, self-skip, throttle, OTLP
+body shape, endpoint/header resolution). The SYSTEM-context / real-WSL / MSI
+self-heal paths are the manual matrix in issue #26. CI wiring for the installer
+(`node --test` + Pester + PSScriptAnalyzer) is deferred to issue #43 — this
+directory is CI-less today; run the gates locally.
