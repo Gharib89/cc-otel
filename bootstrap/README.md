@@ -26,7 +26,7 @@ in **PowerShell**.
 
 ## Prerequisites
 
-- **Tools:** PowerShell 5.1+, [`az`](https://learn.microsoft.com/cli/azure/),
+- **Tools:** PowerShell 5.1+, [`az`](https://learn.microsoft.com/cli/azure/) 2.88.0+,
   [`gh`](https://cli.github.com/), `psql`, and
   [`dbmate`](https://github.com/amacneil/dbmate) on `PATH`.
 - **Sessions:** `az login` (the right tenant — see the prod tenant gate below) and
