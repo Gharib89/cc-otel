@@ -46,9 +46,10 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 
 ## Environments & deploys
 
-- Interim env: VS-benefits subscription (`rg-cc-otel-poc`, swedencentral) until IS grants the production RG; Bicep is dual-target.
+- Interim env: VS-benefits subscription (`rg-cc-otel-interim`, swedencentral) until IS grants the production RG; Bicep is dual-target.
 - Secrets: ACA secrets + GitHub repo secrets with `INTERIM_`/`PROD_` prefixes — no Key Vault.
 - Merge triggers CI only. All deploys are manual `workflow_dispatch` with an environment input; migrations run before image rollout.
+- **One-time env bring-up** (identity/RBAC, secret fan-out, first infra deploy, DB logins, gates): `bootstrap/README.md` runbook + its detect-and-skip PowerShell scripts. `sync-secrets.ps1` treats `.env.<env>` as the single source of truth for the prefixed GitHub secrets.
 - Full design: issues #11 (secrets/CI-CD) and #23 (Bicep IaC).
 
 ## Layout & standards
@@ -60,6 +61,7 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 | `collector/` | OTel Collector config |
 | `db/` | dbmate migrations + `schema.sql` |
 | `installer/` | `install.ps1` fleet setup |
+| `bootstrap/` | env bring-up runbook + PowerShell scripts (operator-run) |
 | `powerbi/` | `.pbip` report + branding |
 | `tools/` | DuckDB curation queries over the blob reservoir |
 | `tests/integration/` | end-to-end suite |

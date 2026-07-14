@@ -1,5 +1,5 @@
-// Interim target — VS-benefits subscription / rg-cc-otel-poc / Sweden Central.
-// Deploy: az deployment group create -g rg-cc-otel-poc -f iac/main.bicep -p iac/params/interim.bicepparam
+// Interim target — VS-benefits subscription / rg-cc-otel-interim / Sweden Central.
+// Deploy: az deployment group create -g rg-cc-otel-interim -f iac/main.bicep -p iac/params/interim.bicepparam
 // Secrets come from the environment (deploy workflow injects the INTERIM_* repo
 // secrets); the '' fallbacks let `az bicep`/PSRule compile without them present.
 using '../main.bicep'
