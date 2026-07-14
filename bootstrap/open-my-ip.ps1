@@ -18,7 +18,8 @@ param(
     [Parameter(Mandatory)][string]$ResourceGroup,
     # Operator initials -> stable rule name; keep it the same across runs.
     [Parameter(Mandatory)][string]$Initials,
-    # Override IP detection (e.g. offline testing); auto-detected when omitted.
+    # Allow-list a specific address instead of the detected egress IP (e.g. a
+    # corporate NAT or jump box); auto-detected when omitted.
     [string]$IpAddress
 )
 
