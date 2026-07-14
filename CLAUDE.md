@@ -31,8 +31,8 @@ az bicep build --file iac/main.bicep --stdout >/dev/null  # Bicep lint (the `iac
 Assert-PSRule -InputPath ./iac/ -Module PSRule.Rules.Azure  # Bicep static analysis (pwsh; see iac/README.md)
 uv run pre-commit run -a     # all hooks
 dbmate new <name>            # new migration in db/migrations/
-dbmate up                    # apply migrations (reads DATABASE_URL from .env)
-psql "$DATABASE_URL"         # ad-hoc DB access
+scripts/dev-migrate.sh       # apply migrations + regenerate schema.sql on throwaway Docker Postgres (the authoring loop)
+psql "$DATABASE_URL"         # ad-hoc DB access (Azure otel real data / cc_otel)
 ```
 
 - Integration tests use **testcontainers** (throwaway Docker Postgres) — never the shared dev DB.
@@ -40,7 +40,9 @@ psql "$DATABASE_URL"         # ad-hoc DB access
 
 ## Dev database
 
-_Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` holds `DATABASE_URL` pointing at the retired POC's Azure Postgres Flexible Server, where a dedicated `cc_otel` database was created for this repo. It is the target for `dbmate` and ad-hoc `psql` work. `.env` also carries the Azure identity vars (`AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_CLIENT_ID`, …) used by deploy tooling.
+**Authoring migrations:** run `scripts/dev-migrate.sh` — it spins a throwaway `postgres:16` container (matching the CI service image), applies migrations, and regenerates `db/schema.sql` via `pg_dump 17`, mirroring the CI schema-drift gate byte-for-byte. Authoring from-zero avoids drift that a persistent DB accumulates when a migration is edited after being applied. Requires `dbmate` (pin v2.34.1) + `pg_dump 17` on PATH and a running Docker daemon.
+
+_Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` holds `DATABASE_URL` pointing at the retired POC's Azure Postgres Flexible Server (a dedicated `cc_otel` database for this repo; real POC telemetry lives in the sibling `otel` database). Migrations no longer target it — `.env` `DATABASE_URL` is for ad-hoc `psql` only. `.env` also carries the Azure identity vars (`AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_CLIENT_ID`, …) used by deploy tooling.
 
 ## Environments & deploys
 
@@ -61,7 +63,7 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 | `powerbi/` | `.pbip` report + branding |
 | `tools/` | DuckDB curation queries over the blob reservoir |
 | `tests/integration/` | end-to-end suite |
-| `scripts/` | skill-sync + cloud-ship bootstrap |
+| `scripts/` | skill-sync + cloud-ship bootstrap + dev-migrate |
 | `.claude/skills/` | tracked agent skills (vendored + project-native) |
 
 - Python 3.13; ruff (line 100); sqlfluff for SQL; PSScriptAnalyzer for PowerShell.
