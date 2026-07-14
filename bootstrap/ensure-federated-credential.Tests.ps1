@@ -27,16 +27,21 @@ Describe 'Get-FederatedCredentialBody' {
     }
 }
 
-Describe 'Test-CredentialPresent' {
-    It 'is true when a credential with the name exists' {
-        $existing = @([pscustomobject]@{ name = 'other' }, [pscustomobject]@{ name = 'github-main' })
-        Test-CredentialPresent -Existing $existing -Name 'github-main' | Should -BeTrue
+Describe 'Test-SubjectPresent' {
+    BeforeAll { $script:sub = 'repo:Gharib89/cc-otel:ref:refs/heads/main' }
+    It 'is true when the subject exists under any name (e.g. gha-main)' {
+        # Real interim env: the credential is named gha-main, not the script default.
+        $existing = @(
+            [pscustomobject]@{ name = 'other'; subject = 'repo:x:ref:refs/heads/dev' },
+            [pscustomobject]@{ name = 'gha-main'; subject = $script:sub }
+        )
+        Test-SubjectPresent -Existing $existing -Subject $script:sub | Should -BeTrue
     }
-    It 'is false when the name is absent' {
-        $existing = @([pscustomobject]@{ name = 'other' })
-        Test-CredentialPresent -Existing $existing -Name 'github-main' | Should -BeFalse
+    It 'is false when the subject is absent' {
+        $existing = @([pscustomobject]@{ name = 'other'; subject = 'repo:x:ref:refs/heads/dev' })
+        Test-SubjectPresent -Existing $existing -Subject $script:sub | Should -BeFalse
     }
     It 'is false for an empty set' {
-        Test-CredentialPresent -Existing @() -Name 'github-main' | Should -BeFalse
+        Test-SubjectPresent -Existing @() -Subject $script:sub | Should -BeFalse
     }
 }

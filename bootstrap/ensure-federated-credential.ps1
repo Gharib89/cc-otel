@@ -9,9 +9,11 @@
 
     One credential is shared across interim and prod: the subject is branch-based
     (`repo:Gharib89/cc-otel:ref:refs/heads/main`), not environment-based, because
-    the free GitHub plan has no Environments. The credential name is immutable, so
-    the script detects by name with `az ad app federated-credential list` and only
-    creates when absent (re-creating an existing name errors).
+    the free GitHub plan has no Environments. Detection is by SUBJECT, not name:
+    Entra enforces (issuer, subject) uniqueness on the app, so a credential with
+    the target subject under any name blocks creation. The script lists the app's
+    credentials and no-ops if the subject is already present (re-creating would
+    error), regardless of what that credential happens to be named.
 .NOTES
     Exit codes: 0 created or already present * 1 failure.
     Requires an authenticated `az` session with rights on the app registration.
@@ -19,7 +21,7 @@
 param(
     # Object id of the app registration (not the client/application id).
     [Parameter(Mandatory)][string]$AppObjectId,
-    [string]$Name = 'github-main',
+    [string]$Name = 'gha-main',
     [string]$Repository = 'Gharib89/cc-otel',
     [string]$Ref = 'refs/heads/main'
 )
@@ -49,15 +51,20 @@ function Get-FederatedCredentialBody {
     ($obj | ConvertTo-Json -Compress -Depth 5)
 }
 
-function Test-CredentialPresent {
-    <# .SYNOPSIS $true when a credential with $Name is in the listed set. #>
+function Test-SubjectPresent {
+    <#
+    .SYNOPSIS $true when a credential with $Subject is in the listed set.
+    .DESCRIPTION Matches on subject, not name: Entra keys uniqueness on
+    (issuer, subject), so an existing credential with this subject blocks a create
+    no matter what it is named.
+    #>
     [OutputType([bool])]
     param(
         [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Existing,
-        [Parameter(Mandatory)][string]$Name
+        [Parameter(Mandatory)][string]$Subject
     )
     foreach ($c in $Existing) {
-        if ($c -and $c.name -eq $Name) { return $true }
+        if ($c -and $c.subject -eq $Subject) { return $true }
     }
     return $false
 }
@@ -113,13 +120,13 @@ function Invoke-EnsureFederatedCredential {
     Set-StrictMode -Version Latest
     $ErrorActionPreference = 'Stop'
 
+    $subject = Get-FederatedSubject -Repository $Repository -Ref $Ref
     $existing = Get-ExistingCredential -AppObjectId $AppObjectId
-    if (Test-CredentialPresent -Existing $existing -Name $Name) {
-        Write-BootstrapLog "Federated credential '$Name' already present on app $AppObjectId (no-op)."
+    if (Test-SubjectPresent -Existing $existing -Subject $subject) {
+        Write-BootstrapLog "Federated credential for subject '$subject' already present on app $AppObjectId (no-op)."
         return 0
     }
 
-    $subject = Get-FederatedSubject -Repository $Repository -Ref $Ref
     $body = Get-FederatedCredentialBody -Name $Name -Subject $subject
     New-FederatedCredential -AppObjectId $AppObjectId -Body $body -Confirm:$false
     Write-BootstrapLog "Created federated credential '$Name' (subject $subject)."
