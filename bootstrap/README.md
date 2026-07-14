@@ -36,8 +36,8 @@ final value.
 | `sync-secrets.ps1` | Fans `.env.<env>` out to the `INTERIM_`/`PROD_` GitHub secrets deploy.yml consumes | `gh secret set` upsert |
 | `open-my-ip.ps1` / `close-my-ip.ps1` | Opens/removes a Postgres firewall rule for the operator IP | Stable rule name `operator-<initials>` |
 
-Every script is `-WhatIf`-aware and prints what it changed (or that it no-op'd).
-Run any with `Get-Help .\<script>.ps1 -Full` for parameters.
+Every script detects current state first and prints what it changed (or that it
+no-op'd). Run any with `Get-Help .\<script>.ps1 -Full` for parameters.
 
 ## Human gates
 
@@ -49,7 +49,7 @@ The runbook **stops** at these — a person decides, no script assumes:
 | **G2 · GHCR classic PAT** | interim + prod | The ACA image-pull credential is a GitHub classic PAT (`read:packages`) created in the GitHub UI — a manual credential action. |
 | **G3 · Prod tenant verification** | prod only | The unprefixed-identity design assumes prod lands in tenant `a1a5384f`. A different tenant breaks it (new app + federated credential + prefixed client/tenant). **Verify before prod bootstrap — do not assume.** |
 | **G4 · IS RG grant** | prod only | Prod bootstrap cannot start until IS provisions the empty RG and grants Contributor scoped to it (ADR-0004). Prod RG name is still pending ([#23](https://github.com/Gharib89/cc-otel/issues/23)). |
-| **G5 · Fleet cutover + POC decommission** | after prod | Parallel cutover (ADR-0004): move the fleet to the new sink and retire the POC only once the new environment is proven. A judgement call, not a script.
+| **G5 · Fleet cutover + POC decommission** | after prod | Parallel cutover (ADR-0004): move the fleet to the new sink and retire the POC only once the new environment is proven. A judgement call, not a script. |
 
 For **interim** bring-up (the common case), gates **G1** and **G2** fire; **G3**
 and **G4** are prod-only; **G5** is the very end of the whole migration. That is

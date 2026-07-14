@@ -101,16 +101,21 @@ function Get-RoleAssignmentUri {
 }
 
 function Get-RoleAssignmentBody {
-    <# .SYNOPSIS JSON body for the ARM role-assignment PUT. #>
+    <#
+    .SYNOPSIS JSON body for the ARM role-assignment PUT.
+    .DESCRIPTION RoleDefinitionId is the full ARM path as returned by
+    `az role definition list` (`.id`) - role definitions are rooted at the
+    subscription (or management group), not at the assignment scope, so it is used
+    verbatim rather than rebuilt from the scope (which would be wrong for a
+    resource-group-narrower assignment).
+    #>
     param(
-        [Parameter(Mandatory)][string]$Scope,
         [Parameter(Mandatory)][string]$RoleDefinitionId,
         [Parameter(Mandatory)][string]$PrincipalId,
         [Parameter(Mandatory)][string]$PrincipalType
     )
-    $trimmed = $Scope.TrimStart('/')
     $props = [ordered]@{
-        roleDefinitionId = "/$trimmed/providers/Microsoft.Authorization/roleDefinitions/$RoleDefinitionId"
+        roleDefinitionId = $RoleDefinitionId
         principalId      = $PrincipalId
         principalType    = $PrincipalType
     }
@@ -126,14 +131,21 @@ function Write-BootstrapLog {
     Write-Information "[$Level] $Message" -InformationAction Continue
 }
 
-function Get-RoleDefinitionId {
-    <# .SYNOPSIS Look up a built-in role's definition GUID for this scope (never hardcoded). #>
+function Get-RoleDefinition {
+    <#
+    .SYNOPSIS Look up a built-in role definition for this scope (never hardcoded).
+    .OUTPUTS [pscustomobject] with .name (the GUID) and .id (the full ARM path).
+    #>
+    [OutputType([pscustomobject])]
     param([Parameter(Mandatory)][string]$RoleName, [Parameter(Mandatory)][string]$Scope)
-    $id = az role definition list --name $RoleName --scope $Scope --query "[0].name" --output tsv
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($id)) {
-        throw "Could not resolve role definition id for '$RoleName' at scope '$Scope'."
+    $json = az role definition list --name $RoleName --scope $Scope `
+        --query "[0].{name:name,id:id}" --output json
+    if ($LASTEXITCODE -ne 0) { throw "Could not resolve role definition '$RoleName' at scope '$Scope'." }
+    $def = $json | ConvertFrom-Json
+    if (-not $def -or [string]::IsNullOrWhiteSpace($def.name) -or [string]::IsNullOrWhiteSpace($def.id)) {
+        throw "Could not resolve role definition '$RoleName' at scope '$Scope'."
     }
-    $id.Trim()
+    return $def
 }
 
 function Test-RoleAssignment {
@@ -170,8 +182,9 @@ function Invoke-AssignRbac {
 
     if ([string]::IsNullOrWhiteSpace($Scope)) { $Scope = "/subscriptions/$SubscriptionId" }
 
-    $roleDefId = Get-RoleDefinitionId -RoleName $RoleName -Scope $Scope
-    $name = Get-RoleAssignmentName -Scope $Scope -PrincipalId $PrincipalId -RoleDefinitionId $roleDefId
+    $def = Get-RoleDefinition -RoleName $RoleName -Scope $Scope
+    # Name uses the role-def GUID (.name); the body uses the full ARM path (.id).
+    $name = Get-RoleAssignmentName -Scope $Scope -PrincipalId $PrincipalId -RoleDefinitionId $def.name
     $uri = Get-RoleAssignmentUri -Scope $Scope -AssignmentName $name
 
     if (Test-RoleAssignment -Uri $uri) {
@@ -179,7 +192,7 @@ function Invoke-AssignRbac {
         return 0
     }
 
-    $body = Get-RoleAssignmentBody -Scope $Scope -RoleDefinitionId $roleDefId `
+    $body = Get-RoleAssignmentBody -RoleDefinitionId $def.id `
         -PrincipalId $PrincipalId -PrincipalType $PrincipalType
     # Assign owns the decision; force so the write can't be independently declined.
     New-RoleAssignment -Uri $uri -Body $body -Confirm:$false

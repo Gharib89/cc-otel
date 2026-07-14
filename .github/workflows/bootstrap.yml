@@ -26,13 +26,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install pinned analyzer + test modules
-        shell: pwsh
+        shell: powershell
         run: |
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
           Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
           Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force
 
       - name: PSScriptAnalyzer (fails on any finding)
-        shell: pwsh
+        shell: powershell
         run: |
           $findings = Invoke-ScriptAnalyzer -Path ./bootstrap -Recurse
           if ($findings) {
@@ -41,7 +42,7 @@ jobs:
           }
 
       - name: Pester
-        shell: pwsh
+        shell: powershell
         run: |
           Import-Module Pester
           $config = New-PesterConfiguration

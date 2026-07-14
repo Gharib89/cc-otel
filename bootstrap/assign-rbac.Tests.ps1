@@ -12,8 +12,7 @@ BeforeAll {
 
 Describe 'Get-DeterministicGuid' {
     It 'matches the RFC 4122 v5 (SHA-1) test vector' {
-        # DNS namespace + "www.example.com" is the canonical published v5 vector.
-        # Cross-checked against Python uuid.uuid5(NAMESPACE_DNS, 'python.org').
+        # Canonical v5 vector: Python uuid.uuid5(NAMESPACE_DNS, 'python.org').
         $ns = [guid]'6ba7b810-9dad-11d1-80b4-00c04fd430c8'
         Get-DeterministicGuid -Namespace $ns -Name 'python.org' |
             Should -Be '886313e1-3b8a-5372-9b90-0c9aee199e5d'
@@ -50,13 +49,15 @@ Describe 'Get-RoleAssignmentUri' {
 }
 
 Describe 'Get-RoleAssignmentBody' {
-    It 'emits roleDefinitionId, principalId and principalType' {
-        $json = Get-RoleAssignmentBody -Scope '/subscriptions/s1' -RoleDefinitionId 'rd1' `
+    It 'emits principalId, principalType and the role-def id verbatim' {
+        # The id is used as-is (subscription-rooted), not rebuilt from the scope,
+        # so a resource-group-narrower assignment still points at a valid role def.
+        $fullId = '/subscriptions/s1/providers/Microsoft.Authorization/roleDefinitions/rd1'
+        $json = Get-RoleAssignmentBody -RoleDefinitionId $fullId `
             -PrincipalId 'p1' -PrincipalType 'ServicePrincipal'
         $o = $json | ConvertFrom-Json
         $o.properties.principalId | Should -Be 'p1'
         $o.properties.principalType | Should -Be 'ServicePrincipal'
-        $o.properties.roleDefinitionId |
-            Should -Be '/subscriptions/s1/providers/Microsoft.Authorization/roleDefinitions/rd1'
+        $o.properties.roleDefinitionId | Should -Be $fullId
     }
 }
