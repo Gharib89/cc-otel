@@ -161,8 +161,20 @@ the ACA image-pull credential; the deploy sets it as an ACA secret.
 
 ### 6. Deploy infrastructure (Bicep first)
 
-Bicep creates the Postgres server and the Container App with a `:latest`
-placeholder image. Secret params come from the env loaded in step 0:
+**First-time only — seed the `:latest` images.** The Bicep deploy creates the
+Container App from `ghcr.io/.../{collector,sink}:latest`, and ACA pulls the image
+at create time, so those tags must already exist. A fresh environment has none —
+`deploy.yml` only builds SHA tags and *updates* an existing app — so publish them
+once (no app needed):
+
+```powershell
+gh workflow run publish-images.yml
+gh run watch
+```
+
+Then deploy. Bicep creates the Postgres server and the Container App on those
+`:latest` images; `deploy.yml` rolls the real SHA-tagged revision later (step 11).
+Secret params come from the env loaded in step 0:
 
 ```powershell
 az deployment group create `

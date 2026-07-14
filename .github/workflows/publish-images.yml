@@ -1,0 +1,42 @@
+name: publish-images
+
+# Manual seed, run once before the first infra deploy of a fresh environment.
+# The Bicep deploy (bootstrap step 6) creates the Container App from the
+# ghcr.io/.../{collector,sink}:latest images, and ACA validates/pulls the image
+# at create time — so those tags must exist first. deploy.yml (#25) only builds
+# SHA-tagged images and *updates* an already-created app, so it cannot seed them.
+# This builds and pushes the :latest tags; running revisions always run the
+# SHA tags deploy.yml rolls, so a stale :latest is only ever the create-time seed.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: publish-images
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [collector, sink]
+    steps:
+      - uses: actions/checkout@v4
+
+      # Zero-setup push credential (#11) — the built-in token has packages:write.
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build context matches each Dockerfile's COPY paths (as docker.yml / deploy.yml).
+      - name: Build and push ${{ matrix.image }}:latest
+        run: |
+          docker build -t ghcr.io/gharib89/cc-otel-${{ matrix.image }}:latest ${{ matrix.image }}/
+          docker push ghcr.io/gharib89/cc-otel-${{ matrix.image }}:latest
