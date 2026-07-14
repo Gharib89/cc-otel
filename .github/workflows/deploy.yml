@@ -73,8 +73,8 @@ jobs:
         run: |
           az postgres flexible-server firewall-rule create \
             --resource-group "$RESOURCE_GROUP" \
-            --server-name ccotel-pg-${{ inputs.environment }} \
-            --name gha-${{ github.run_id }} \
+            --name ccotel-pg-${{ inputs.environment }} \
+            --rule-name gha-${{ github.run_id }} \
             --start-ip-address ${{ steps.ip.outputs.address }} \
             --end-ip-address ${{ steps.ip.outputs.address }}
 
@@ -97,8 +97,8 @@ jobs:
         run: |
           az postgres flexible-server firewall-rule delete \
             --resource-group "$RESOURCE_GROUP" \
-            --server-name ccotel-pg-${{ inputs.environment }} \
-            --name gha-${{ github.run_id }} \
+            --name ccotel-pg-${{ inputs.environment }} \
+            --rule-name gha-${{ github.run_id }} \
             --yes
 
   deploy:
