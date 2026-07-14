@@ -51,7 +51,7 @@ function Test-FirewallRule {
         [Parameter(Mandatory)][string]$RuleName
     )
     az postgres flexible-server firewall-rule show --resource-group $ResourceGroup `
-        --name $ServerName --rule-name $RuleName --output none 2>$null
+        --server-name $ServerName --name $RuleName --output none 2>$null
     return ($LASTEXITCODE -eq 0)
 }
 
@@ -65,7 +65,7 @@ function Remove-FirewallRule {
     )
     if (-not $PSCmdlet.ShouldProcess("$ServerName/$RuleName", 'delete firewall rule')) { return }
     az postgres flexible-server firewall-rule delete --resource-group $ResourceGroup `
-        --name $ServerName --rule-name $RuleName --yes --output none
+        --server-name $ServerName --name $RuleName --yes --output none
     if ($LASTEXITCODE -ne 0) { throw "Firewall rule delete failed (az exit $LASTEXITCODE)." }
 }
 
