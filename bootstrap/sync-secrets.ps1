@@ -109,8 +109,21 @@ function Set-GitHubSecret {
     )
     if (-not $PSCmdlet.ShouldProcess($Name, 'gh secret set')) { return }
     # Value on stdin so it never lands in the process arg list / shell history.
-    $Value | gh secret set $Name --repo $Repository --body -
-    if ($LASTEXITCODE -ne 0) { throw "gh secret set '$Name' failed (exit $LASTEXITCODE)." }
+    # Write the exact bytes: a piped PowerShell string appends a trailing CRLF,
+    # which gh stores verbatim and corrupts the secret (a trailing newline on a
+    # tenant GUID makes Azure login fail with AADSTS90002 "tenant not found").
+    $psi = [System.Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = 'gh'
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardInput = $true
+    foreach ($a in @('secret', 'set', $Name, '--repo', $Repository, '--body', '-')) {
+        $psi.ArgumentList.Add($a)
+    }
+    $proc = [System.Diagnostics.Process]::Start($psi)
+    $proc.StandardInput.Write($Value)
+    $proc.StandardInput.Close()
+    $proc.WaitForExit()
+    if ($proc.ExitCode -ne 0) { throw "gh secret set '$Name' failed (exit $($proc.ExitCode))." }
 }
 
 # =============================================================================
