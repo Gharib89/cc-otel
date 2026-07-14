@@ -9,13 +9,20 @@ gates*. The deterministic, error-prone clusters are PowerShell scripts in this
 directory (same tested-shim shape as `installer/`). Everything else is an inline,
 copy-pasteable command.
 
+**Copy-paste, no substitution.** Every value a command needs lives in `.env.<env>`.
+Step 0 loads that file into the process environment; from then on the commands
+reference `$env:...` and you paste them verbatim — no `<PLACEHOLDER>` editing.
+
 **Converge, don't fear re-runs.** Every script and every `az`/`dbmate`/`gh`
 command here is detect-and-skip or idempotent-by-name: a re-run no-ops on
 already-correct state. If a bring-up half-fails, fix the cause and run it again
 from the top — it picks up where it left off. This is how the chicken-and-egg
-ordering below is resolved: you deploy with a placeholder `DATABASE_URL`, create
-the DB login at its gate, then re-run the secret/deploy steps to converge on the
-final value.
+ordering below is resolved: you deploy first, create the DB logins at gate G1,
+then re-run the secret/deploy steps to converge on the final `DATABASE_URL`.
+
+**Run from the repo root.** All commands below assume the current directory is the
+repo root (so `iac\`, `db\`, `bootstrap\`, and `.env.interim` are all relative),
+in **PowerShell**.
 
 ## Prerequisites
 
@@ -32,12 +39,13 @@ final value.
 | Script | Does | Idempotency |
 |---|---|---|
 | `assign-rbac.ps1` | Grants a principal a role via ARM REST PUT (bypasses the broken `az role assignment create`; looks the role-def up per-sub) | Deterministic GUID assignment name |
-| `ensure-federated-credential.ps1` | Creates the GitHub-OIDC federated credential on the app | Detect-by-name, create-if-absent |
+| `ensure-federated-credential.ps1` | Creates the GitHub-OIDC federated credential on the app | Detect-by-subject, create-if-absent |
 | `sync-secrets.ps1` | Fans `.env.<env>` out to the `INTERIM_`/`PROD_` GitHub secrets deploy.yml consumes | `gh secret set` upsert |
 | `open-my-ip.ps1` / `close-my-ip.ps1` | Opens/removes a Postgres firewall rule for the operator IP | Stable rule name `operator-<initials>` |
+| `create-db-logins.sql` | Creates the ingest + read LOGIN users and joins them to the group roles (gate G1) | Create-if-absent + idempotent `GRANT` |
 
 Every script detects current state first and prints what it changed (or that it
-no-op'd). Run any with `Get-Help .\<script>.ps1 -Full` for parameters.
+no-op'd). Run any with `Get-Help .\bootstrap\<script>.ps1 -Full` for parameters.
 
 ## Human gates
 
@@ -45,41 +53,50 @@ The runbook **stops** at these — a person decides, no script assumes:
 
 | Gate | When | Why it is gated |
 |---|---|---|
-| **G1 · DB login users + passwords** | interim + prod | `cc_otel_read`/`cc_otel_ingest` are `NOLOGIN` group roles (migration `…170001`). The LOGIN users + passwords are created by hand and `GRANT`-joined; there is no secret home by design (no Key Vault, #11). |
+| **G1 · DB login users + passwords** | interim + prod | `cc_otel_read`/`cc_otel_ingest` are `NOLOGIN` group roles (migration `…170001`). The LOGIN users + passwords are created by hand and `GRANT`-joined; there is no secret home by design (no Key Vault, #11). Covers both the sink (ingest) and Power BI (read) logins. |
 | **G2 · GHCR classic PAT** | interim + prod | The ACA image-pull credential is a GitHub classic PAT (`read:packages`) created in the GitHub UI — a manual credential action. |
 | **G3 · Prod tenant verification** | prod only | The unprefixed-identity design assumes prod lands in tenant `a1a5384f`. A different tenant breaks it (new app + federated credential + prefixed client/tenant). **Verify before prod bootstrap — do not assume.** |
 | **G4 · IS RG grant** | prod only | Prod bootstrap cannot start until IS provisions the empty RG and grants Contributor scoped to it (ADR-0004). Prod RG name is still pending ([#23](https://github.com/Gharib89/cc-otel/issues/23)). |
 | **G5 · Fleet cutover + POC decommission** | after prod | Parallel cutover (ADR-0004): move the fleet to the new sink and retire the POC only once the new environment is proven. A judgement call, not a script. |
 
 For **interim** bring-up (the common case), gates **G1** and **G2** fire; **G3**
-and **G4** are prod-only; **G5** is the very end of the whole migration. That is
-the "four gates" the interim walkthrough calls out (G1, G2, and — at the prod
-boundary — G3 and G4).
+and **G4** are prod-only; **G5** is the very end of the whole migration.
 
 ## `.env.<env>` — the one source of truth
 
 `sync-secrets.ps1` reads `.env.<env>` (e.g. `.env.interim`, gitignored) and pushes
-the deploy.yml-consumed values to GitHub. The same file's `DATABASE_URL` also
-feeds the Bicep deploy below, so the value is byte-identical across the Bicep
-input, the sink runtime secret, and the CI migration target. Keys it must carry:
+the deploy.yml-consumed values to GitHub. The same file also feeds the Bicep
+deploy and every command below (via step 0). Keys it must carry:
 
 ```sh
-# --- fanned out to GitHub secrets by sync-secrets.ps1 ---
-DATABASE_URL="postgres://<login>:<pw>@ccotel-pg-interim.postgres.database.azure.com:5432/cc_otel?sslmode=require"
-AZURE_SUBSCRIPTION_ID="..."      # -> INTERIM_AZURE_SUBSCRIPTION_ID
-RESOURCE_GROUP="rg-cc-otel-interim"  # -> INTERIM_RESOURCE_GROUP
-AZURE_CLIENT_ID="..."            # -> AZURE_CLIENT_ID   (shared, unprefixed)
-AZURE_TENANT_ID="a1a5384f-..."   # -> AZURE_TENANT_ID   (shared, unprefixed)
+# --- shared OIDC app identity ---
+AZURE_TENANT_ID="a1a5384f-..."         # -> AZURE_TENANT_ID   GitHub secret (shared, unprefixed)
+AZURE_SUBSCRIPTION_ID="58b41413-..."   # -> INTERIM_AZURE_SUBSCRIPTION_ID
+AZURE_CLIENT_ID="..."                  # -> AZURE_CLIENT_ID    GitHub secret (shared, unprefixed)
+AZURE_APP_OBJECT_ID="..."              # app registration object id (federated credential)
+AZURE_SP_OBJECT_ID="..."               # service principal object id (RBAC)
 
-# --- consumed locally by the Bicep deploy (NOT pushed to GitHub) ---
-PG_ADMIN_PASSWORD="..."
+# --- target + operator ---
+RESOURCE_GROUP="rg-cc-otel-interim"    # -> INTERIM_RESOURCE_GROUP
+OPERATOR_INITIALS="ag"                 # operator firewall rule name: operator-ag
+
+# --- database ---
+DATABASE_URL="postgres://ccotel_admin:<pw>@ccotel-pg-interim.postgres.database.azure.com:5432/cc_otel?sslmode=require"
+PG_ADMIN_PASSWORD="..."                # Postgres admin password (Bicep input)
+CC_OTEL_INGEST_PASSWORD="..."          # sink login password (gate G1)
+CC_OTEL_READ_PASSWORD="..."            # Power BI login password (gate G1)
+
+# --- image pull / fleet (Bicep inputs, NOT pushed to GitHub) ---
 FLEET_TOKENS='["<bearer-token>"]'
 GHCR_USERNAME="<github-username>"
-GHCR_TOKEN="<ghcr-classic-pat>"  # from gate G2
+GHCR_TOKEN="<ghcr-classic-pat>"        # from gate G2
 ```
 
-`DATABASE_URL` is finalised at gate **G1** (its login/password do not exist until
-then). Populate the rest first; re-run `sync-secrets.ps1` after G1 to converge.
+`DATABASE_URL` starts as the `ccotel_admin` connection (admin has the DDL rights
+`dbmate` needs and works as the sink's runtime login for bring-up). Splitting the
+sink onto the least-privilege `cc_otel_ingest_user` is a decision at gate G1 (see
+there) — it trades the single byte-identical `DATABASE_URL` (#4) for least
+privilege, so confirm with Ahmed before adopting it.
 
 ---
 
@@ -88,123 +105,134 @@ then). Populate the rest first; re-run `sync-secrets.ps1` after G1 to converge.
 Interim target: subscription = VS-benefits, RG = `rg-cc-otel-interim`, region
 `swedencentral`. Run the steps in order; re-run any step freely.
 
+### 0. Load `.env.interim` into the process environment
+
+Everything below reads `$env:...`. Re-run this whenever you open a new shell or
+edit `.env.interim`:
+
+```powershell
+Get-Content .\.env.interim | Where-Object { $_ -match '^\s*[^#].+=' } | ForEach-Object {
+    $k, $v = $_ -split '=', 2
+    Set-Item "env:$($k.Trim())" ($v.Trim().Trim('"').Trim("'"))
+}
+```
+
 ### 1. Sign in and select the subscription
 
-```sh
-az login
-az account set --subscription "<INTERIM_SUBSCRIPTION_ID>"
+```powershell
+az login --tenant $env:AZURE_TENANT_ID
+az account set --subscription $env:AZURE_SUBSCRIPTION_ID
 gh auth status
 ```
 
-### 2. Locate (or create) the OIDC app registration
+> The app registration, its service principal, and (for interim) the Contributor
+> role assignment are one-time identity setup. If they do not exist yet, see
+> *Appendix — first-time identity setup* at the bottom, then fill the
+> `AZURE_*_OBJECT_ID` / `AZURE_CLIENT_ID` keys before continuing.
 
-One app registration is shared across interim and prod. If it already exists, just
-grab its ids:
-
-```sh
-az ad app list --display-name cc-otel-deploy --query "[0].{appId:appId,objectId:id}" -o table
-az ad sp show --id <APP_ID> --query id -o tsv   # the service principal object id
-```
-
-If it does not exist yet, create it once:
-
-```sh
-az ad app create --display-name cc-otel-deploy
-az ad sp create --id <APP_ID>
-```
-
-Record the **app object id**, **app (client) id**, and **SP object id** for the
-next steps and for `.env.interim` (`AZURE_CLIENT_ID` = the app/client id).
-
-### 3. Federated credential (OIDC login)
+### 2. Federated credential (OIDC login)
 
 ```powershell
-.\ensure-federated-credential.ps1 -AppObjectId <APP_OBJECT_ID>
+.\bootstrap\ensure-federated-credential.ps1 -AppObjectId $env:AZURE_APP_OBJECT_ID
 ```
 
-Subject is `repo:Gharib89/cc-otel:ref:refs/heads/main` — one branch-based
-credential, shared by both environments.
+One branch-based credential (subject `repo:Gharib89/cc-otel:ref:refs/heads/main`),
+shared by both environments. No-ops if already present.
 
-### 4. Grant the deploy principal Contributor
+### 3. Grant the deploy principal Contributor on the RG
 
 ```powershell
-.\assign-rbac.ps1 -PrincipalId <SP_OBJECT_ID> -SubscriptionId <INTERIM_SUBSCRIPTION_ID>
+.\bootstrap\assign-rbac.ps1 -PrincipalId $env:AZURE_SP_OBJECT_ID `
+  -SubscriptionId $env:AZURE_SUBSCRIPTION_ID `
+  -Scope "/subscriptions/$($env:AZURE_SUBSCRIPTION_ID)/resourceGroups/$($env:RESOURCE_GROUP)"
 ```
 
-### 5. GATE G2 — create the GHCR pull PAT
+### 4. GATE G2 — GHCR pull PAT
 
-In the GitHub UI, create a **classic** PAT with `read:packages`. Put it in
-`.env.interim` as `GHCR_TOKEN` (and set `GHCR_USERNAME`). This is the ACA
-image-pull credential; the deploy sets it as an ACA secret.
+Create a **classic** PAT with `read:packages` in the GitHub UI and set it in
+`.env.interim` as `GHCR_TOKEN` (with `GHCR_USERNAME`), then re-run step 0. This is
+the ACA image-pull credential; the deploy sets it as an ACA secret.
 
-### 6. Sync secrets to GitHub
-
-Populate `.env.interim` (all keys above except the final `DATABASE_URL`, which
-comes at G1), then:
+### 5. Sync secrets to GitHub
 
 ```powershell
-.\sync-secrets.ps1 -Environment interim
+.\bootstrap\sync-secrets.ps1 -Environment interim
 ```
 
-### 7. Deploy infrastructure (Bicep first)
+### 6. Deploy infrastructure (Bicep first)
 
 Bicep creates the Postgres server and the Container App with a `:latest`
-placeholder image. Secrets come from `.env.interim` as environment variables:
-
-```sh
-set -a; . ./.env.interim; set +a     # export the .env.interim keys
-az deployment group create -g rg-cc-otel-interim \
-  -f iac/main.bicep -p iac/params/interim.bicepparam
-```
-
-(In PowerShell, load `.env.interim` into the process env before the `az` call;
-the plain values above are what `iac/params/interim.bicepparam` reads.)
-
-### 8. Open the operator IP, then migrate
+placeholder image. Secret params come from the env loaded in step 0:
 
 ```powershell
-.\open-my-ip.ps1 -Environment interim -ResourceGroup rg-cc-otel-interim -Initials <yours>
+az deployment group create `
+  --resource-group $env:RESOURCE_GROUP `
+  --template-file iac\main.bicep `
+  --parameters iac\params\interim.bicepparam `
+  --query "properties.provisioningState" -o tsv
 ```
 
-```sh
-dbmate up     # DATABASE_URL from .env — use the admin connection for DDL
+Expect `Succeeded` (~5–10 min; the Postgres flexible server is the slow part).
+
+### 7. Open the operator IP, then migrate
+
+```powershell
+.\bootstrap\open-my-ip.ps1 -Environment interim -ResourceGroup $env:RESOURCE_GROUP -Initials $env:OPERATOR_INITIALS
+dbmate --url $env:DATABASE_URL up
 ```
 
 Migrations create the schemas and the `cc_otel_read`/`cc_otel_ingest` **NOLOGIN
 group roles** (migration `…170001`). They do **not** create logins.
 
-### 9. GATE G1 — DB login users + passwords
+### 8. GATE G1 — DB login users + passwords
 
-Connect as admin and create the LOGIN user(s) by hand, then join to the group
-role. There is no secret home by design — you hold the password:
-
-```sql
-CREATE ROLE cc_otel_ingest_user LOGIN PASSWORD '<choose-a-strong-password>';
-GRANT cc_otel_ingest TO cc_otel_ingest_user;
--- optionally a read-only login joined to cc_otel_read
-```
-
-Now build the real `DATABASE_URL` from this login and write it into
-`.env.interim`.
-
-### 10. Converge the final DATABASE_URL
-
-Re-run the secret fan-out and re-apply the deploy so the sink secret and the CI
-migration target match the finalised `DATABASE_URL` (both upsert / converge):
+Create the sink (ingest) and Power BI (read) LOGIN users and join them to the
+group roles. Idempotent; passwords come from `.env.interim`:
 
 ```powershell
-.\sync-secrets.ps1 -Environment interim
-```
-```sh
-set -a; . ./.env.interim; set +a
-az deployment group create -g rg-cc-otel-interim \
-  -f iac/main.bicep -p iac/params/interim.bicepparam
+psql $env:DATABASE_URL -v ON_ERROR_STOP=1 `
+  -v ingest_pw="$env:CC_OTEL_INGEST_PASSWORD" `
+  -v read_pw="$env:CC_OTEL_READ_PASSWORD" `
+  -f bootstrap\create-db-logins.sql
 ```
 
-Close the operator firewall rule when you are done with direct DB work:
+**Sink `DATABASE_URL` decision (confirm with Ahmed):** keep the single
+`ccotel_admin` `DATABASE_URL` (byte-identical across migrate + sink, #4, but the
+sink is over-privileged), **or** repoint the sink to `cc_otel_ingest_user` for
+least privilege (then migrate keeps using an admin URL and the single-URL
+byte-identity no longer holds — #4 to be revisited). Interim bring-up keeps the
+admin URL unless decided otherwise.
+
+### 9. Configure the Power BI data source (read login)
+
+Power BI refreshes from Postgres as the **read** login. In Power BI Desktop, open
+the `.pbip` and set the PostgreSQL data-source credentials to:
+
+- **Server:** `ccotel-pg-interim.postgres.database.azure.com` **Database:** `cc_otel`
+- **User:** `cc_otel_read_user` **Password:** value of `CC_OTEL_READ_PASSWORD`
+- SSL required.
+
+Refresh to confirm the read login sees data, then publish (publishing is manual
+via Desktop — CLAUDE.md).
+
+### 10. Converge (only if you changed `DATABASE_URL` at G1)
+
+If you repointed the sink `DATABASE_URL`, re-apply so the GitHub secret and the ACA
+sink secret match (both upsert / converge):
 
 ```powershell
-.\close-my-ip.ps1 -Environment interim -ResourceGroup rg-cc-otel-interim -Initials <yours>
+.\bootstrap\sync-secrets.ps1 -Environment interim
+az deployment group create `
+  --resource-group $env:RESOURCE_GROUP `
+  --template-file iac\main.bicep `
+  --parameters iac\params\interim.bicepparam `
+  --query "properties.provisioningState" -o tsv
+```
+
+Close the operator firewall rule when done with direct DB work:
+
+```powershell
+.\bootstrap\close-my-ip.ps1 -Environment interim -ResourceGroup $env:RESOURCE_GROUP -Initials $env:OPERATOR_INITIALS
 ```
 
 ### 11. Push a real image and roll the revision
@@ -212,7 +240,7 @@ Close the operator firewall rule when you are done with direct DB work:
 Bicep left ACA on `:latest`; dispatch `deploy.yml` once to build a SHA-tagged
 image and roll the revision (closes the image chicken-and-egg):
 
-```sh
+```powershell
 gh workflow run deploy.yml -f environment=interim
 gh run watch
 ```
@@ -242,13 +270,30 @@ gates **first**:
   the shared one this runbook assumes. Do not proceed until verified.
 - **GATE G4 — IS RG grant.** Wait for IS to provision the prod RG and grant
   Contributor scoped to it (ADR-0004). The prod RG name is pending ([#23](https://github.com/Gharib89/cc-otel/issues/23)).
-- Then run the interim steps with `-Environment prod`, `-ResourceGroup <PROD_RG>`,
-  `.env.prod`, and `iac/params/prod.bicepparam`. The shared federated credential
-  (step 3) is already in place from interim — `ensure-federated-credential.ps1`
-  no-ops.
+- Then make a `.env.prod` with the prod values and run the interim steps with
+  `-Environment prod`, `iac/params/prod.bicepparam`, and the prod `RESOURCE_GROUP`.
+  The shared federated credential (step 2) is already in place from interim —
+  `ensure-federated-credential.ps1` no-ops.
 
 ## GATE G5 — fleet cutover + POC decommission
 
 Once prod is proven, cut the fleet over to the prod sink and retire the POC
 (parallel cutover, ADR-0004). A judgement call made with Ahmed — not part of any
 script.
+
+---
+
+## Appendix — first-time identity setup
+
+Only needed once, if the shared app registration does not exist yet:
+
+```powershell
+az ad app create --display-name cc-otel-deploy
+$appId = az ad app list --display-name cc-otel-deploy --query "[0].appId" -o tsv
+az ad sp create --id $appId
+# Record for .env.interim:
+az ad app list --display-name cc-otel-deploy --query "[0].{AZURE_CLIENT_ID:appId, AZURE_APP_OBJECT_ID:id}" -o json
+az ad sp show --id $appId --query "{AZURE_SP_OBJECT_ID:id}" -o json
+```
+
+Then run steps 2–3 to add the federated credential and the RG role assignment.
