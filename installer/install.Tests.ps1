@@ -22,6 +22,10 @@ Describe 'Get-DesiredTelemetryEnv' {
         $env['OTEL_EXPORTER_OTLP_PROTOCOL']  | Should -Be 'http/protobuf'
     }
 
+    It 'shortens the metric export interval so short sessions flush (default 60s is too long)' {
+        $env['OTEL_METRIC_EXPORT_INTERVAL'] | Should -Be '10000'
+    }
+
     It 'bakes the endpoint and the bearer token' {
         $env['OTEL_EXPORTER_OTLP_ENDPOINT'] | Should -Be 'https://collector.example.com'
         $env['OTEL_EXPORTER_OTLP_HEADERS']  | Should -Be 'Authorization=Bearer tok-123'

@@ -86,6 +86,11 @@ function Get-DesiredTelemetryEnv {
         CLAUDE_CODE_ENABLE_TELEMETRY  = '1'
         OTEL_METRICS_EXPORTER         = 'otlp'
         OTEL_LOGS_EXPORTER            = 'otlp'
+        # Metrics export only on this interval and are NOT force-flushed on exit,
+        # so at the 60000ms default a short session ends before any tick and emits
+        # no metrics (logs flush eagerly, which is why logs land but metrics don't).
+        # 10s reliably flushes real sessions; latency is irrelevant to the daily report.
+        OTEL_METRIC_EXPORT_INTERVAL   = '10000'
         OTEL_EXPORTER_OTLP_PROTOCOL   = 'http/protobuf'
         OTEL_EXPORTER_OTLP_ENDPOINT   = $Endpoint
         OTEL_EXPORTER_OTLP_HEADERS    = "Authorization=Bearer $Token"
