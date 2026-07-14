@@ -163,13 +163,22 @@ the ACA image-pull credential; the deploy sets it as an ACA secret.
 
 **First-time only — seed the `:latest` images.** The Bicep deploy creates the
 Container App from `ghcr.io/.../{collector,sink}:latest`, and ACA pulls the image
-at create time, so those tags must already exist. A fresh environment has none —
-`deploy.yml` only builds SHA tags and *updates* an existing app — so publish them
-once (no app needed):
+at create time, so those tags must already exist. A fresh environment has none
+(`deploy.yml` only builds SHA tags and *updates* an existing app). Seed them once,
+no app needed:
 
 ```powershell
-gh workflow run publish-images.yml
-gh run watch
+gh workflow run publish-images.yml   # then: gh run watch
+```
+
+`workflow_dispatch` only fires for workflows already on the **default branch**, so
+on the very first bring-up — before `publish-images.yml` lands on `main` — build and
+push the seed locally instead (needs Docker + the `GHCR_*` values from step 0):
+
+```powershell
+$env:GHCR_TOKEN | docker login ghcr.io -u $env:GHCR_USERNAME --password-stdin
+docker build -t ghcr.io/gharib89/cc-otel-collector:latest collector/ ; docker push ghcr.io/gharib89/cc-otel-collector:latest
+docker build -t ghcr.io/gharib89/cc-otel-sink:latest      sink/      ; docker push ghcr.io/gharib89/cc-otel-sink:latest
 ```
 
 Then deploy. Bicep creates the Postgres server and the Container App on those
