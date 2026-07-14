@@ -177,8 +177,9 @@ Expect `Succeeded` (~5–10 min; the Postgres flexible server is the slow part).
 > **`CapacityNotAvailable` on the Postgres server?** The Burstable SKU has no
 > availability zone pinned, so `swedencentral` occasionally rejects the create with
 > `Capacity is not available in this region/zone. Please retry after some time.`
-> This is transient infra, not a config error — re-run this step (it converges). If
-> it persists, deploy to a nearby region by appending a second
+> This is transient infra, not a config error — re-run this step until capacity frees
+> up (it converges). Prefer waiting: region choice is a cost/SKU-availability decision,
+> so treat moving regions as a last resort. If you must, append a second
 > `--parameters location=<region>` flag to the command above (e.g. `westeurope`): an
 > inline value overrides the `swedencentral` set in `interim.bicepparam` (needs az
 > ≥ 2.53), and every resource honours it.
