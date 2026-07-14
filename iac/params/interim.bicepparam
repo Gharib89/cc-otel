@@ -11,6 +11,9 @@ param location = 'swedencentral'
 param postgresSkuName = 'Standard_B2s'
 param postgresStorageGB = 32
 param postgresBackupRetentionDays = 7
+// "" lets Azure pick the zone. If a deploy hits CapacityNotAvailable, cycle this
+// through "1"/"2"/"3" (all supported for B2s in swedencentral) to stay in-region.
+param postgresAvailabilityZone = ''
 param postgresAdminUser = 'ccotel_admin'
 param postgresAdminPassword = readEnvironmentVariable('PG_ADMIN_PASSWORD', '')
 param postgresFirewallRules = [

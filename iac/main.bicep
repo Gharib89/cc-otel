@@ -25,6 +25,9 @@ param postgresStorageGB int
 @description('PostgreSQL PITR backup retention in days.')
 param postgresBackupRetentionDays int
 
+@description('PostgreSQL availability zone ("1"/"2"/"3", or "" to let Azure pick). Cycle this to work around a zone-level CapacityNotAvailable without changing region.')
+param postgresAvailabilityZone string = ''
+
 @description('PostgreSQL administrator login.')
 param postgresAdminUser string
 
@@ -96,6 +99,7 @@ module postgres 'modules/postgres.bicep' = {
     skuName: postgresSkuName
     storageSizeGB: postgresStorageGB
     backupRetentionDays: postgresBackupRetentionDays
+    availabilityZone: postgresAvailabilityZone
     administratorLogin: postgresAdminUser
     administratorLoginPassword: postgresAdminPassword
     databaseName: postgresDatabaseName
