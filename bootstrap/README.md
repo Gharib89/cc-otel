@@ -181,6 +181,16 @@ docker build -t ghcr.io/gharib89/cc-otel-collector:latest collector/ ; docker pu
 docker build -t ghcr.io/gharib89/cc-otel-sink:latest      sink/      ; docker push ghcr.io/gharib89/cc-otel-sink:latest
 ```
 
+**If you seeded locally, grant the repo Actions access to each package** — a
+package first pushed by a local PAT is owned by your user and *unlinked* from the
+repo, so `deploy.yml`'s built-in `GITHUB_TOKEN` push later fails with `denied:
+permission_denied: write_package`. (Packages seeded via `publish-images.yml` link
+automatically and need no action.) One-time, in the GitHub UI, for **both**
+`cc-otel-collector` and `cc-otel-sink`:
+
+> `github.com/users/<owner>/packages/container/<name>/settings` → **Manage Actions
+> access** → **Add repository** → `<owner>/cc-otel` → role **Write**.
+
 Then deploy. Bicep creates the Postgres server and the Container App on those
 `:latest` images; `deploy.yml` rolls the real SHA-tagged revision later (step 11).
 Secret params come from the env loaded in step 0:
