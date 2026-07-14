@@ -108,15 +108,15 @@ function Set-GitHubSecret {
         [Parameter(Mandatory)][string]$Repository
     )
     if (-not $PSCmdlet.ShouldProcess($Name, 'gh secret set')) { return }
-    # Value on stdin so it never lands in the process arg list / shell history.
-    # Write the exact bytes: a piped PowerShell string appends a trailing CRLF,
-    # which gh stores verbatim and corrupts the secret (a trailing newline on a
-    # tenant GUID makes Azure login fail with AADSTS90002 "tenant not found").
+    # gh reads the value from stdin only when --body is omitted; `--body -` would
+    # store the literal string "-". Feed the value on stdin so it never lands in
+    # the process arg list / shell history, and write the exact bytes (a piped
+    # PowerShell string would append a trailing CRLF that gh stores verbatim).
     $psi = [System.Diagnostics.ProcessStartInfo]::new()
     $psi.FileName = 'gh'
     $psi.UseShellExecute = $false
     $psi.RedirectStandardInput = $true
-    foreach ($a in @('secret', 'set', $Name, '--repo', $Repository, '--body', '-')) {
+    foreach ($a in @('secret', 'set', $Name, '--repo', $Repository)) {
         $psi.ArgumentList.Add($a)
     }
     $proc = [System.Diagnostics.Process]::Start($psi)
