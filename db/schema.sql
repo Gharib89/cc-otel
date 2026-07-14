@@ -1,6 +1,6 @@
 \restrict dbmate
 
--- Dumped from database version 16.14 (Debian 16.14-1.pgdg13+1)
+-- Dumped from database version 16.14
 -- Dumped by pg_dump version 17.10
 
 SET statement_timeout = 0;
@@ -27,6 +27,13 @@ CREATE SCHEMA marts;
 --
 
 CREATE SCHEMA meta;
+
+
+--
+-- Name: public; Type: SCHEMA; Schema: -; Owner: -
+--
+
+-- *not* creating schema, since initdb creates it
 
 
 --
