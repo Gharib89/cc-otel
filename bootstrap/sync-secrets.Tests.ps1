@@ -40,7 +40,7 @@ Describe 'Get-SecretPushPlan' {
         $script:full = [ordered]@{
             DATABASE_URL          = 'postgres://x'
             AZURE_SUBSCRIPTION_ID = 'sub-1'
-            RESOURCE_GROUP        = 'rg-cc-otel-poc'
+            RESOURCE_GROUP        = 'rg-cc-otel-interim'
             AZURE_CLIENT_ID       = 'client-1'
             AZURE_TENANT_ID       = 'tenant-1'
         }
@@ -48,7 +48,7 @@ Describe 'Get-SecretPushPlan' {
     It 'prefixes per-environment secrets for interim' {
         $plan = Get-SecretPushPlan -Environment 'interim' -Values $script:full
         ($plan | Where-Object Secret -eq 'INTERIM_DATABASE_URL').Value | Should -Be 'postgres://x'
-        ($plan | Where-Object Secret -eq 'INTERIM_RESOURCE_GROUP').Value | Should -Be 'rg-cc-otel-poc'
+        ($plan | Where-Object Secret -eq 'INTERIM_RESOURCE_GROUP').Value | Should -Be 'rg-cc-otel-interim'
     }
     It 'prefixes with PROD_ for prod' {
         $plan = Get-SecretPushPlan -Environment 'prod' -Values $script:full

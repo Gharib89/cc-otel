@@ -67,7 +67,7 @@ input, the sink runtime secret, and the CI migration target. Keys it must carry:
 # --- fanned out to GitHub secrets by sync-secrets.ps1 ---
 DATABASE_URL="postgres://<login>:<pw>@ccotel-pg-interim.postgres.database.azure.com:5432/cc_otel?sslmode=require"
 AZURE_SUBSCRIPTION_ID="..."      # -> INTERIM_AZURE_SUBSCRIPTION_ID
-RESOURCE_GROUP="rg-cc-otel-poc"  # -> INTERIM_RESOURCE_GROUP
+RESOURCE_GROUP="rg-cc-otel-interim"  # -> INTERIM_RESOURCE_GROUP
 AZURE_CLIENT_ID="..."            # -> AZURE_CLIENT_ID   (shared, unprefixed)
 AZURE_TENANT_ID="a1a5384f-..."   # -> AZURE_TENANT_ID   (shared, unprefixed)
 
@@ -85,7 +85,7 @@ then). Populate the rest first; re-run `sync-secrets.ps1` after G1 to converge.
 
 ## Interim bring-up
 
-Interim target: subscription = VS-benefits, RG = `rg-cc-otel-poc`, region
+Interim target: subscription = VS-benefits, RG = `rg-cc-otel-interim`, region
 `swedencentral`. Run the steps in order; re-run any step freely.
 
 ### 1. Sign in and select the subscription
@@ -153,7 +153,7 @@ placeholder image. Secrets come from `.env.interim` as environment variables:
 
 ```sh
 set -a; . ./.env.interim; set +a     # export the .env.interim keys
-az deployment group create -g rg-cc-otel-poc \
+az deployment group create -g rg-cc-otel-interim \
   -f iac/main.bicep -p iac/params/interim.bicepparam
 ```
 
@@ -163,7 +163,7 @@ the plain values above are what `iac/params/interim.bicepparam` reads.)
 ### 8. Open the operator IP, then migrate
 
 ```powershell
-.\open-my-ip.ps1 -Environment interim -ResourceGroup rg-cc-otel-poc -Initials <yours>
+.\open-my-ip.ps1 -Environment interim -ResourceGroup rg-cc-otel-interim -Initials <yours>
 ```
 
 ```sh
@@ -197,14 +197,14 @@ migration target match the finalised `DATABASE_URL` (both upsert / converge):
 ```
 ```sh
 set -a; . ./.env.interim; set +a
-az deployment group create -g rg-cc-otel-poc \
+az deployment group create -g rg-cc-otel-interim \
   -f iac/main.bicep -p iac/params/interim.bicepparam
 ```
 
 Close the operator firewall rule when you are done with direct DB work:
 
 ```powershell
-.\close-my-ip.ps1 -Environment interim -ResourceGroup rg-cc-otel-poc -Initials <yours>
+.\close-my-ip.ps1 -Environment interim -ResourceGroup rg-cc-otel-interim -Initials <yours>
 ```
 
 ### 11. Push a real image and roll the revision

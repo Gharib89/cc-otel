@@ -23,7 +23,7 @@ reservoir account (managed-identity blob auth — no keys, ADR-0005).
 
 | | Subscription | Resource group | Postgres |
 |---|---|---|---|
-| **interim** | VS-benefits | `rg-cc-otel-poc` | `Standard_B2s`, 32 GB, 7-day PITR |
+| **interim** | VS-benefits | `rg-cc-otel-interim` | `Standard_B2s`, 32 GB, 7-day PITR |
 | **prod** | `d01c33ab-2bae-4797-ae80-2fc802a26d3d` (Data & Analytics) | _pending IS_ | `Standard_B2ms`, 128 GB, 7-day PITR (ADR-0004) |
 
 Both regions are Sweden Central. The production RG name is still pending IS — pass
@@ -39,7 +39,7 @@ export PG_ADMIN_PASSWORD=... FLEET_TOKENS='["token"]' DATABASE_URL=... \
        GHCR_USERNAME=... GHCR_TOKEN=...
 
 # interim
-az deployment group create -g rg-cc-otel-poc \
+az deployment group create -g rg-cc-otel-interim \
   -f iac/main.bicep -p iac/params/interim.bicepparam
 
 # prod (once IS grants the RG)

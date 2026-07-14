@@ -161,8 +161,18 @@ function New-RoleAssignment {
     [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory)][string]$Uri, [Parameter(Mandatory)][string]$Body)
     if (-not $PSCmdlet.ShouldProcess($Uri, 'PUT role assignment')) { return }
-    az rest --method PUT --uri $Uri --body $Body --headers 'Content-Type=application/json' --output none
-    if ($LASTEXITCODE -ne 0) { throw "Role assignment PUT failed (az exit $LASTEXITCODE)." }
+    # Via a temp file (az --body @file): inline JSON is mangled by PowerShell/az
+    # quote-stripping on Windows, which drops the value quotes so the server reads
+    # the roleDefinitionId's leading "/s" as a comment and rejects the request.
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("ra-" + [guid]::NewGuid().ToString() + ".json")
+    try {
+        [System.IO.File]::WriteAllText($tmp, $Body)
+        az rest --method PUT --uri $Uri --body "@$tmp" --headers 'Content-Type=application/json' --output none
+        if ($LASTEXITCODE -ne 0) { throw "Role assignment PUT failed (az exit $LASTEXITCODE)." }
+    }
+    finally {
+        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # =============================================================================
