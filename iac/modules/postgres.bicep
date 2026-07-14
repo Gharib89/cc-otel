@@ -51,7 +51,9 @@ resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   }
   properties: {
     version: version
-    availabilityZone: availabilityZone
+    // Omit entirely when unset so Azure picks a zone (empty string is the "no
+    // preference" sentinel; sending nothing is the unambiguous form).
+    availabilityZone: empty(availabilityZone) ? null : availabilityZone
     administratorLogin: administratorLogin
     administratorLoginPassword: administratorLoginPassword
     storage: {
