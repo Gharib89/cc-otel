@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import gzip
+import json
+
 import pytest
 from cc_otel_sink import counters
 from cc_otel_sink.app import create_app, get_blob, get_store
@@ -95,6 +98,17 @@ def test_metrics_write_returns_200_and_passes_rows_to_store():
     assert len(metrics) == 1
     assert events == []
     assert len(batch_hash) == 64  # sha256 hex
+
+
+def test_gzip_encoded_body_is_decompressed():
+    store = FakeStore()
+    body = gzip.compress(json.dumps(METRICS_BODY).encode())
+    with _client(store) as client:
+        resp = client.post(
+            "/v1/metrics", content=body, headers={"Content-Encoding": "gzip"}
+        )
+    assert resp.status_code == 200
+    assert len(store.calls) == 1
 
 
 def test_redaction_runs_before_store_and_counts_drift():

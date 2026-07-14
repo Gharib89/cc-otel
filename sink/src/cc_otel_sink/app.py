@@ -7,6 +7,7 @@ write before the 200 (#7) → best-effort blob write after (ADR-0005).
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import logging
@@ -49,9 +50,11 @@ async def _ingest(
     blob: BlobReservoir | None,
 ) -> dict[str, Any]:
     raw = await request.body()
+    if "gzip" in request.headers.get("content-encoding", "").lower():
+        raw = gzip.decompress(raw)
     try:
         payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
         raise HTTPException(400, "invalid OTLP/JSON body") from exc
 
     result = redact(payload)
