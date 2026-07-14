@@ -79,6 +79,9 @@ var blobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 module storage 'modules/storage.bicep' = {
   name: 'storage'
   params: {
+    // storageName is always ≥ 15 chars (uniqueString() alone is 13); take() only caps
+    // the upper bound, so it can never fall below the account name's 3-char minimum.
+    #disable-next-line BCP334
     name: storageName
     location: location
     tags: tags
@@ -134,6 +137,8 @@ module containerApp 'modules/containerapp.bicep' = {
 // strings. Declared here because it needs both the storage scope and the app's
 // principal ID.
 resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
+  // Same guaranteed-length name as the storage module above (BCP334 is a false positive).
+  #disable-next-line BCP334
   name: storageName
 }
 
@@ -145,9 +150,10 @@ resource blobRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01'
     principalId: containerApp.outputs.principalId
     principalType: 'ServicePrincipal'
   }
-  // The scope is an `existing` reference (no implicit dependency), so pin the
-  // assignment behind the storage module that actually creates the account.
-  dependsOn: [storage]
+  // storageAccount is an `existing` ref (no implicit dependency), but this assignment
+  // is already ordered after the storage module transitively: principalId pulls in the
+  // containerApp module, which itself consumes storage.outputs.blobEndpoint. So an
+  // explicit dependsOn: [storage] would be redundant (no-unnecessary-dependson).
 }
 
 @description('Public HTTPS ingress FQDN of the collector — the fleet OTLP endpoint.')
