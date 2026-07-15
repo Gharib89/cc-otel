@@ -6,8 +6,8 @@
     Bootstrap step for issue #52 (friction item #4 on map #48). The one source of
     truth is `.env.<env>` (e.g. .env.interim); this script upserts the values
     deploy.yml consumes into GitHub Actions secrets with `gh secret set`, so
-    DATABASE_URL is byte-identical across the Bicep input, the sink runtime secret,
-    and the CI migration target.
+    MIGRATION_DATABASE_URL is the admin connection used by deploy.yml migrations, while
+    DATABASE_URL is the least-privilege sink runtime connection passed only to Bicep.
 
     Per-environment values are pushed prefixed (INTERIM_/PROD_); the shared OIDC
     app identity (AZURE_CLIENT_ID/AZURE_TENANT_ID) is pushed unprefixed. The set of
@@ -63,7 +63,7 @@ function ConvertFrom-DotEnv {
 function Get-SecretPushPlan {
     <#
     .SYNOPSIS Resolve which GitHub secret names + values to push for an environment.
-    .DESCRIPTION The mapping mirrors deploy.yml's required secrets: DATABASE_URL,
+    .DESCRIPTION The mapping mirrors deploy.yml's required secrets: MIGRATION_DATABASE_URL,
     AZURE_SUBSCRIPTION_ID and RESOURCE_GROUP are environment-prefixed
     (INTERIM_/PROD_); AZURE_CLIENT_ID and AZURE_TENANT_ID are shared and unprefixed.
     Throws when a required key is absent from the parsed values.
@@ -75,7 +75,7 @@ function Get-SecretPushPlan {
     )
     $prefix = $Environment.ToUpperInvariant()
     $mapping = @(
-        [pscustomobject]@{ EnvKey = 'DATABASE_URL';          Secret = "${prefix}_DATABASE_URL" }
+        [pscustomobject]@{ EnvKey = 'MIGRATION_DATABASE_URL';          Secret = "${prefix}_DATABASE_URL" }
         [pscustomobject]@{ EnvKey = 'AZURE_SUBSCRIPTION_ID'; Secret = "${prefix}_AZURE_SUBSCRIPTION_ID" }
         [pscustomobject]@{ EnvKey = 'RESOURCE_GROUP';        Secret = "${prefix}_RESOURCE_GROUP" }
         [pscustomobject]@{ EnvKey = 'AZURE_CLIENT_ID';       Secret = 'AZURE_CLIENT_ID' }

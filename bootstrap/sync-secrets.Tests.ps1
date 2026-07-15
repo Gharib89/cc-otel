@@ -38,7 +38,8 @@ Describe 'ConvertFrom-DotEnv' {
 Describe 'Get-SecretPushPlan' {
     BeforeAll {
         $script:full = [ordered]@{
-            DATABASE_URL          = 'postgres://x'
+            DATABASE_URL          = 'postgres://ingest'
+            MIGRATION_DATABASE_URL = 'postgres://admin'
             AZURE_SUBSCRIPTION_ID = 'sub-1'
             RESOURCE_GROUP        = 'rg-cc-otel-interim'
             AZURE_CLIENT_ID       = 'client-1'
@@ -47,7 +48,7 @@ Describe 'Get-SecretPushPlan' {
     }
     It 'prefixes per-environment secrets for interim' {
         $plan = Get-SecretPushPlan -Environment 'interim' -Values $script:full
-        ($plan | Where-Object Secret -eq 'INTERIM_DATABASE_URL').Value | Should -Be 'postgres://x'
+        ($plan | Where-Object Secret -eq 'INTERIM_DATABASE_URL').Value | Should -Be 'postgres://admin'
         ($plan | Where-Object Secret -eq 'INTERIM_RESOURCE_GROUP').Value | Should -Be 'rg-cc-otel-interim'
     }
     It 'prefixes with PROD_ for prod' {
@@ -60,13 +61,13 @@ Describe 'Get-SecretPushPlan' {
         ($plan | Where-Object Secret -eq 'AZURE_TENANT_ID').Value | Should -Be 'tenant-1'
     }
     It 'throws when a required key is missing' {
-        $partial = [ordered]@{ DATABASE_URL = 'x' }
+        $partial = [ordered]@{ MIGRATION_DATABASE_URL = 'x' }
         { Get-SecretPushPlan -Environment 'interim' -Values $partial } |
             Should -Throw -ExpectedMessage '*AZURE_SUBSCRIPTION_ID*'
     }
     It 'throws when a required key is empty' {
         $empty = [ordered]@{
-            DATABASE_URL = 'x'; AZURE_SUBSCRIPTION_ID = ''; RESOURCE_GROUP = 'rg'
+            MIGRATION_DATABASE_URL = 'x'; AZURE_SUBSCRIPTION_ID = ''; RESOURCE_GROUP = 'rg'
             AZURE_CLIENT_ID = 'c'; AZURE_TENANT_ID = 't'
         }
         { Get-SecretPushPlan -Environment 'interim' -Values $empty } | Should -Throw

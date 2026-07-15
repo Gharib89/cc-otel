@@ -1,0 +1,3 @@
+# Separate migration and runtime database credentials
+
+The bootstrap contract uses `MIGRATION_DATABASE_URL` for the privileged `ccotel_admin` dbmate connection and `DATABASE_URL` for the sink's least-privilege `cc_otel_ingest_user` connection. The existing `<ENV>_DATABASE_URL` GitHub secret remains the deploy workflow's migration input but is sourced from `MIGRATION_DATABASE_URL`; Bicep reads the runtime `DATABASE_URL` locally. This deliberately replaces the earlier byte-identical single-URL contract: one extra secret value is accepted so a compromised sink cannot perform DDL or bypass the ingest role's grants.
