@@ -58,9 +58,7 @@ jobs:
 
       - name: Install pinned Pester
         shell: pwsh
-        run: |
-          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-          Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force
+        run: Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force
 
       - name: Pester
         shell: pwsh
