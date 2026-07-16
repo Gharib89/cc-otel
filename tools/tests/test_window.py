@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 
-from tools._window import date_range, globs, prefixes
+from tools._window import date_range, globs, prefixes, resolve_window
 
 
 def test_date_range_is_inclusive():
@@ -16,6 +16,23 @@ def test_date_range_is_inclusive():
 def test_date_range_rejects_reversed_window():
     with pytest.raises(ValueError):
         date_range(date(2026, 7, 12), date(2026, 7, 10))
+
+
+def test_resolve_window_defaults_days_back_from_today():
+    today = date(2026, 7, 16)
+    assert resolve_window(3, None, None, today) == [
+        date(2026, 7, 14),
+        date(2026, 7, 15),
+        date(2026, 7, 16),
+    ]
+
+
+def test_resolve_window_explicit_dates_override_days():
+    today = date(2026, 7, 16)
+    assert resolve_window(30, date(2026, 7, 1), date(2026, 7, 2), today) == [
+        date(2026, 7, 1),
+        date(2026, 7, 2),
+    ]
 
 
 def test_prefixes_and_globs_cover_signal_x_day():

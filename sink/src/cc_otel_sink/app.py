@@ -17,6 +17,7 @@ from typing import Annotated, Any
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 
 from .blob import BlobReservoir
+from .canonical import canonical_bytes
 from .config import Settings, load_settings
 from .counters import gate_leak_count, record_gate_leaks
 from .parser import parse_events, parse_metrics
@@ -68,7 +69,7 @@ async def _ingest(
 
     # Canonical serialization: the hash key AND the blob content. Redacted, so a
     # replayed batch is byte-identical and hash-matches (#7/#8).
-    redacted_bytes = json.dumps(result.payload, separators=(",", ":"), sort_keys=True).encode()
+    redacted_bytes = canonical_bytes(result.payload)
     batch_hash = hashlib.sha256(redacted_bytes).hexdigest()
 
     if signal == "metrics":

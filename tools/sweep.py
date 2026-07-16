@@ -21,7 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 
 import duckdb
 import psycopg
@@ -30,7 +30,7 @@ from cc_otel_sink.config import load_settings
 from ._keypaths import KeyPath, extract_key_paths
 from ._registry import Diff, load_registry
 from ._reservoir import configure_duckdb
-from ._window import SIGNALS, date_range, globs
+from ._window import SIGNALS, globs, resolve_window
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -51,10 +51,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 
 def _window(args: argparse.Namespace) -> list[date]:
-    today = datetime.now(UTC).date()
-    until = args.until or today
-    since = args.since or (until - timedelta(days=args.days - 1))
-    return date_range(since, until)
+    return resolve_window(args.days, args.since, args.until, datetime.now(UTC).date())
 
 
 def _read_blob_keys(con: duckdb.DuckDBPyConnection, targets: list[str]) -> tuple[set[KeyPath], int]:

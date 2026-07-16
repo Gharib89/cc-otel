@@ -20,19 +20,14 @@ import argparse
 import gzip
 import json
 import sys
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 
+from cc_otel_sink.canonical import canonical_bytes
 from cc_otel_sink.config import load_settings
 from cc_otel_sink.redaction import redact
 
 from ._reservoir import CurationReservoir
-from ._window import SIGNALS, date_range, prefixes
-
-
-def canonical_bytes(payload: dict) -> bytes:
-    """Canonical redacted-payload bytes — must match the sink's ingest serialization
-    (``cc_otel_sink.app._ingest``) so a scrubbed blob is byte-identical to a fresh one."""
-    return json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+from ._window import SIGNALS, prefixes, resolve_window
 
 
 def rescrub(blob_bytes: bytes) -> tuple[bytes, int]:
@@ -65,10 +60,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    today = datetime.now(UTC).date()
-    until = args.until or today
-    since = args.since or (until - timedelta(days=args.days - 1))
-    days = date_range(since, until)
+    days = resolve_window(args.days, args.since, args.until, datetime.now(UTC).date())
     signals = (args.signal,) if args.signal else SIGNALS
 
     reservoir = CurationReservoir.from_settings(load_settings())
@@ -90,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
 
     verb = "rewrote" if args.execute else "would rewrite"
     print(
-        f"Scrub {since:%Y-%m-%d}..{until:%Y-%m-%d} signals={','.join(signals)}: "
+        f"Scrub {days[0]:%Y-%m-%d}..{days[-1]:%Y-%m-%d} signals={','.join(signals)}: "
         f"scanned {scanned} blobs, {verb} {rewritten} ({leaks} defense-in-depth leaks seen)"
         + ("" if args.execute else " — dry-run, pass --execute to write")
     )

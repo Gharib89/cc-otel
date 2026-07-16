@@ -18,6 +18,16 @@ def date_range(since: date, until: date) -> list[date]:
     return [since + timedelta(days=n) for n in range((until - since).days + 1)]
 
 
+def resolve_window(days: int, since: date | None, until: date | None, today: date) -> list[date]:
+    """Resolve the ``--days`` / ``--since`` / ``--until`` triad (sweep, scrub) to dates.
+
+    ``until`` defaults to ``today``; ``since`` defaults to ``days`` back inclusive.
+    """
+    until = until or today
+    since = since or (until - timedelta(days=days - 1))
+    return date_range(since, until)
+
+
 def prefixes(signals: tuple[str, ...], days: list[date]) -> list[str]:
     """Blob-name prefixes for ``ContainerClient.list_blobs`` (scrub / replay)."""
     return [f"signal={s}/dt={d:%Y-%m-%d}/" for s in signals for d in days]
