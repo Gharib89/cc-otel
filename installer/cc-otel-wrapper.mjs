@@ -213,15 +213,24 @@ export function readManagedSettingsEnv(dir = WRAPPER_DIR) {
 // does not change under a running install.
 const MANAGED_SETTINGS_ENV = readManagedSettingsEnv();
 
+// First trimmed non-blank string among the candidates, else undefined. A
+// present-but-blank value (whitespace, or a non-string from a malformed managed
+// file) counts as unset, so precedence falls through to the next source instead
+// of a truthy blank shadowing it — and nothing non-string reaches .trim()/.split().
+function firstNonBlank(...vals) {
+  for (const v of vals) if (typeof v === "string" && v.trim()) return v.trim();
+  return undefined;
+}
+
 // OTLP endpoint. STATUSLINE_OTLP_ENDPOINT (a full /v1/metrics URL) wins when set.
 // Otherwise use the base OTEL_EXPORTER_OTLP_ENDPOINT — from process env if Claude
 // Code passed it through, else from managed-settings.json — and append the
 // metrics signal path. Last resort is the local default.
 export function resolveEndpoint(env = process.env, managed = MANAGED_SETTINGS_ENV) {
-  const override = env.STATUSLINE_OTLP_ENDPOINT;
-  if (override && override.trim()) return override.trim();
-  const base = env.OTEL_EXPORTER_OTLP_ENDPOINT || managed.OTEL_EXPORTER_OTLP_ENDPOINT;
-  if (base && base.trim()) return base.trim().replace(/\/+$/, "") + "/v1/metrics";
+  const override = firstNonBlank(env.STATUSLINE_OTLP_ENDPOINT);
+  if (override) return override;
+  const base = firstNonBlank(env.OTEL_EXPORTER_OTLP_ENDPOINT, managed.OTEL_EXPORTER_OTLP_ENDPOINT);
+  if (base) return base.replace(/\/+$/, "") + "/v1/metrics";
   return "http://localhost:4318/v1/metrics";
 }
 
@@ -229,11 +238,11 @@ export function resolveEndpoint(env = process.env, managed = MANAGED_SETTINGS_EN
 // wins; otherwise OTEL_EXPORTER_OTLP_HEADERS from process env, else from
 // managed-settings.json.
 export function resolveHeaders(env = process.env, managed = MANAGED_SETTINGS_ENV) {
-  const override = env.STATUSLINE_OTLP_HEADERS;
-  const raw =
-    override && override.trim()
-      ? override
-      : env.OTEL_EXPORTER_OTLP_HEADERS || managed.OTEL_EXPORTER_OTLP_HEADERS;
+  const raw = firstNonBlank(
+    env.STATUSLINE_OTLP_HEADERS,
+    env.OTEL_EXPORTER_OTLP_HEADERS,
+    managed.OTEL_EXPORTER_OTLP_HEADERS,
+  );
   return parseKv(raw);
 }
 

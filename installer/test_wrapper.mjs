@@ -374,6 +374,14 @@ test("resolveEndpoint: reads the base from managed-settings.json when OTEL_*/STA
   assert.equal(resolveEndpoint({}, managed), "https://collector.example.com/v1/metrics");
 });
 
+test("resolveEndpoint: a whitespace-only OTEL_* env is treated as unset (managed wins, not localhost)", () => {
+  const managed = { OTEL_EXPORTER_OTLP_ENDPOINT: "https://collector.example.com" };
+  assert.equal(
+    resolveEndpoint({ OTEL_EXPORTER_OTLP_ENDPOINT: "   " }, managed),
+    "https://collector.example.com/v1/metrics",
+  );
+});
+
 test("resolveEndpoint: inherited OTEL_* env beats managed-settings.json", () => {
   const managed = { OTEL_EXPORTER_OTLP_ENDPOINT: "https://from-file.example.com" };
   assert.equal(
@@ -402,6 +410,14 @@ test("resolveHeaders: empty when neither header env is set", () => {
 test("resolveHeaders: reads the bearer from managed-settings.json when env is unset", () => {
   const managed = { OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Bearer from-file" };
   assert.equal(resolveHeaders({}, managed).Authorization, "Bearer from-file");
+});
+
+test("resolveHeaders: a whitespace-only OTEL_* header env is treated as unset (managed wins, not dropped)", () => {
+  const managed = { OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Bearer from-file" };
+  assert.equal(
+    resolveHeaders({ OTEL_EXPORTER_OTLP_HEADERS: "   " }, managed).Authorization,
+    "Bearer from-file",
+  );
 });
 
 test("readManagedSettingsEnv: returns the env block from managed-settings.json beside the wrapper", () => {
