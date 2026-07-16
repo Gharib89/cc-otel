@@ -303,4 +303,3 @@ az ad sp show --id $appId --query "{AZURE_SP_OBJECT_ID:id}" -o json
 
 Then run `-Step federated-cred` and `-Step rbac` to add the federated credential
 and the RG role assignment.
-```
