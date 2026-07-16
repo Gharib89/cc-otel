@@ -6,7 +6,7 @@
 BeforeAll {
     # Dummy mandatory arg satisfies param binding at load; the dot-source guard
     # inside the script skips the body, so only the functions are defined.
-    . (Join-Path $PSScriptRoot 'ensure-federated-credential.ps1') -AppObjectId 'x'
+    . (Join-Path $PSScriptRoot 'ensure-federated-credential.ps1') -Environment 'interim'
 }
 
 Describe 'Get-FederatedSubject' {

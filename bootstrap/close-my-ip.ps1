@@ -12,26 +12,10 @@
     Requires an authenticated `az` session.
 #>
 param(
-    [Parameter(Mandatory)][ValidateSet('interim', 'prod')][string]$Environment,
-    [Parameter(Mandatory)][string]$ResourceGroup,
-    [Parameter(Mandatory)][string]$Initials
+    [Parameter(Mandatory)][ValidateSet('interim', 'prod')][string]$Environment
 )
 
-# =============================================================================
-# Pure functions (no side effects) - the tested seam.
-# =============================================================================
-
-function Get-OperatorRuleName {
-    <# .SYNOPSIS Stable operator firewall-rule name from initials. #>
-    param([Parameter(Mandatory)][string]$Initials)
-    "operator-$($Initials.ToLowerInvariant())"
-}
-
-function Get-PostgresServerName {
-    <# .SYNOPSIS Flexible-server name for an environment (ccotel-pg-<env>). #>
-    param([Parameter(Mandatory)][string]$Environment)
-    "ccotel-pg-$Environment"
-}
+. (Join-Path (Join-Path $PSScriptRoot 'lib') 'Get-BootstrapConfig.ps1') -Environment $Environment
 
 # =============================================================================
 # Effectful shims - thin wrappers over `az`, kept small on purpose.
@@ -75,28 +59,25 @@ function Remove-FirewallRule {
 
 function Invoke-CloseMyIp {
     param(
-        [Parameter(Mandatory)][string]$Environment,
-        [Parameter(Mandatory)][string]$ResourceGroup,
-        [Parameter(Mandatory)][string]$Initials
+        [Parameter(Mandatory)][string]$Environment
     )
     Set-StrictMode -Version Latest
     $ErrorActionPreference = 'Stop'
 
-    $server = Get-PostgresServerName -Environment $Environment
-    $rule = Get-OperatorRuleName -Initials $Initials
+    $cfg = Get-BootstrapConfig -Environment $Environment
 
-    if (-not (Test-FirewallRule -ResourceGroup $ResourceGroup -ServerName $server -RuleName $rule)) {
-        Write-BootstrapLog "Rule '$rule' on $server already absent (no-op)."
+    if (-not (Test-FirewallRule -ResourceGroup $cfg.ResourceGroup -ServerName $cfg.ServerName -RuleName $cfg.RuleName)) {
+        Write-BootstrapLog "Rule '$($cfg.RuleName)' on $($cfg.ServerName) already absent (no-op)."
         return 0
     }
 
     # Close owns the decision; force so the delete can't be independently declined.
-    Remove-FirewallRule -ResourceGroup $ResourceGroup -ServerName $server -RuleName $rule -Confirm:$false
-    Write-BootstrapLog "Removed '$rule' from $server."
+    Remove-FirewallRule -ResourceGroup $cfg.ResourceGroup -ServerName $cfg.ServerName -RuleName $cfg.RuleName -Confirm:$false
+    Write-BootstrapLog "Removed '$($cfg.RuleName)' from $($cfg.ServerName)."
     return 0
 }
 
 # Run only when executed directly; dot-sourcing (Pester) defines functions without running.
 if ($MyInvocation.InvocationName -ne '.') {
-    exit (Invoke-CloseMyIp -Environment $Environment -ResourceGroup $ResourceGroup -Initials $Initials)
+    exit (Invoke-CloseMyIp -Environment $Environment)
 }

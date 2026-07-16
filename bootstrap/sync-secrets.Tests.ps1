@@ -1,38 +1,14 @@
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 <#
-    Unit tests for the pure logic in sync-secrets.ps1 (dot-sourced). The effectful
-    `gh secret set` shim is exercised by the live interim bring-up, not here.
+    Unit tests for the pure logic in sync-secrets.ps1 (dot-sourced). ConvertFrom-
+    DotEnv is now the shared copy from lib/Get-BootstrapConfig.ps1 and is tested
+    there. The effectful `gh secret set` shim is exercised by the live interim
+    bring-up, not here.
 #>
 BeforeAll {
     # Dummy mandatory arg satisfies param binding at load; the dot-source guard
     # inside the script skips the body, so only the functions are defined.
     . (Join-Path $PSScriptRoot 'sync-secrets.ps1') -Environment 'interim'
-}
-
-Describe 'ConvertFrom-DotEnv' {
-    It 'parses simple key=value pairs' {
-        $v = ConvertFrom-DotEnv -Text "A=1`nB=2"
-        $v['A'] | Should -Be '1'
-        $v['B'] | Should -Be '2'
-    }
-    It 'strips one layer of surrounding quotes' {
-        $v = ConvertFrom-DotEnv -Text ('A="quoted"' + "`n" + "B='single'")
-        $v['A'] | Should -Be 'quoted'
-        $v['B'] | Should -Be 'single'
-    }
-    It 'keeps = signs inside the value (splits on first = only)' {
-        $v = ConvertFrom-DotEnv -Text 'DATABASE_URL=postgres://u:p@h:5432/db?sslmode=require'
-        $v['DATABASE_URL'] | Should -Be 'postgres://u:p@h:5432/db?sslmode=require'
-    }
-    It 'ignores blank lines and # comments' {
-        $v = ConvertFrom-DotEnv -Text "# comment`n`nA=1"
-        $v.Keys.Count | Should -Be 1
-        $v['A'] | Should -Be '1'
-    }
-    It 'strips a leading export' {
-        $v = ConvertFrom-DotEnv -Text 'export A=1'
-        $v['A'] | Should -Be '1'
-    }
 }
 
 Describe 'Get-SecretPushPlan' {
