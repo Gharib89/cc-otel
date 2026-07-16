@@ -100,32 +100,38 @@ Describe 'Test-PgCronPreloaded' {
 Describe 'Get-PgCronJobReport' {
     BeforeAll {
         $script:expected = @('trim-processed-batches', 'refresh-marts', 'trim-mart-refresh-log')
-        function New-Job { param($n, $a, $d) [pscustomobject]@{ JobName = $n; Active = $a; Database = $d } }
+        function Get-JobRow {
+            param([string]$Name, [bool]$Active, [string]$Database)
+            [pscustomobject]@{ JobName = $Name; Active = $Active; Database = $Database }
+        }
     }
     It 'is clean when all three jobs are active on cc_otel' {
-        $jobs = $script:expected | ForEach-Object { New-Job $_ $true 'cc_otel' }
+        $jobs = $script:expected | ForEach-Object { Get-JobRow -Name $_ -Active $true -Database 'cc_otel' }
         Get-PgCronJobReport -Job $jobs -ExpectedName $script:expected -Database 'cc_otel' |
             Should -BeNullOrEmpty
     }
     It 'reports a missing job' {
-        $jobs = @(New-Job 'refresh-marts' $true 'cc_otel'; New-Job 'trim-mart-refresh-log' $true 'cc_otel')
+        $jobs = @(
+            Get-JobRow -Name 'refresh-marts' -Active $true -Database 'cc_otel'
+            Get-JobRow -Name 'trim-mart-refresh-log' -Active $true -Database 'cc_otel'
+        )
         (Get-PgCronJobReport -Job $jobs -ExpectedName $script:expected -Database 'cc_otel') -join '|' |
             Should -Match 'trim-processed-batches'
     }
     It 'reports an inactive job (the owner-comment refinement)' {
         $jobs = @(
-            New-Job 'trim-processed-batches' $false 'cc_otel'
-            New-Job 'refresh-marts' $true 'cc_otel'
-            New-Job 'trim-mart-refresh-log' $true 'cc_otel'
+            Get-JobRow -Name 'trim-processed-batches' -Active $false -Database 'cc_otel'
+            Get-JobRow -Name 'refresh-marts' -Active $true -Database 'cc_otel'
+            Get-JobRow -Name 'trim-mart-refresh-log' -Active $true -Database 'cc_otel'
         )
         (Get-PgCronJobReport -Job $jobs -ExpectedName $script:expected -Database 'cc_otel') -join '|' |
             Should -Match 'inactive'
     }
     It 'reports a job scheduled against the wrong database' {
         $jobs = @(
-            New-Job 'trim-processed-batches' $true 'postgres'
-            New-Job 'refresh-marts' $true 'cc_otel'
-            New-Job 'trim-mart-refresh-log' $true 'cc_otel'
+            Get-JobRow -Name 'trim-processed-batches' -Active $true -Database 'postgres'
+            Get-JobRow -Name 'refresh-marts' -Active $true -Database 'cc_otel'
+            Get-JobRow -Name 'trim-mart-refresh-log' -Active $true -Database 'cc_otel'
         )
         (Get-PgCronJobReport -Job $jobs -ExpectedName $script:expected -Database 'cc_otel') -join '|' |
             Should -Match 'postgres'

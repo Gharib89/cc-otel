@@ -15,29 +15,12 @@
 #>
 param(
     [Parameter(Mandatory)][ValidateSet('interim', 'prod')][string]$Environment,
-    [Parameter(Mandatory)][string]$ResourceGroup,
-    # Operator initials -> stable rule name; keep it the same across runs.
-    [Parameter(Mandatory)][string]$Initials,
     # Allow-list a specific address instead of the detected egress IP (e.g. a
     # corporate NAT or jump box); auto-detected when omitted.
     [string]$IpAddress
 )
 
-# =============================================================================
-# Pure functions (no side effects) - the tested seam.
-# =============================================================================
-
-function Get-OperatorRuleName {
-    <# .SYNOPSIS Stable operator firewall-rule name from initials. #>
-    param([Parameter(Mandatory)][string]$Initials)
-    "operator-$($Initials.ToLowerInvariant())"
-}
-
-function Get-PostgresServerName {
-    <# .SYNOPSIS Flexible-server name for an environment (ccotel-pg-<env>). #>
-    param([Parameter(Mandatory)][string]$Environment)
-    "ccotel-pg-$Environment"
-}
+. (Join-Path (Join-Path $PSScriptRoot 'lib') 'Get-BootstrapConfig.ps1') -Environment $Environment
 
 # =============================================================================
 # Effectful shims - thin wrappers over `az` and the IP-echo service.
@@ -94,32 +77,28 @@ function Set-FirewallRule {
 function Invoke-OpenMyIp {
     param(
         [Parameter(Mandatory)][string]$Environment,
-        [Parameter(Mandatory)][string]$ResourceGroup,
-        [Parameter(Mandatory)][string]$Initials,
         [string]$IpAddress
     )
     Set-StrictMode -Version Latest
     $ErrorActionPreference = 'Stop'
 
-    $server = Get-PostgresServerName -Environment $Environment
-    $rule = Get-OperatorRuleName -Initials $Initials
+    $cfg = Get-BootstrapConfig -Environment $Environment
     if ([string]::IsNullOrWhiteSpace($IpAddress)) { $IpAddress = Get-MyPublicIp }
 
-    $current = Get-FirewallRuleStartIp -ResourceGroup $ResourceGroup -ServerName $server -RuleName $rule
+    $current = Get-FirewallRuleStartIp -ResourceGroup $cfg.ResourceGroup -ServerName $cfg.ServerName -RuleName $cfg.RuleName
     if ($current -eq $IpAddress) {
-        Write-BootstrapLog "Rule '$rule' on $server already allows $IpAddress (no-op)."
+        Write-BootstrapLog "Rule '$($cfg.RuleName)' on $($cfg.ServerName) already allows $IpAddress (no-op)."
         return 0
     }
 
     # Open owns the decision; force so the write can't be independently declined.
-    Set-FirewallRule -ResourceGroup $ResourceGroup -ServerName $server -RuleName $rule `
+    Set-FirewallRule -ResourceGroup $cfg.ResourceGroup -ServerName $cfg.ServerName -RuleName $cfg.RuleName `
         -IpAddress $IpAddress -Confirm:$false
-    Write-BootstrapLog "Opened '$rule' on $server for $IpAddress."
+    Write-BootstrapLog "Opened '$($cfg.RuleName)' on $($cfg.ServerName) for $IpAddress."
     return 0
 }
 
 # Run only when executed directly; dot-sourcing (Pester) defines functions without running.
 if ($MyInvocation.InvocationName -ne '.') {
-    exit (Invoke-OpenMyIp -Environment $Environment -ResourceGroup $ResourceGroup `
-            -Initials $Initials -IpAddress $IpAddress)
+    exit (Invoke-OpenMyIp -Environment $Environment -IpAddress $IpAddress)
 }

@@ -26,16 +26,12 @@
     Requires an authenticated `az` session with rights to assign roles at the scope.
 #>
 param(
-    # Object id of the principal to grant (the OIDC app's service principal).
-    [Parameter(Mandatory)][string]$PrincipalId,
-    # Target subscription id; also the default assignment scope.
-    [Parameter(Mandatory)][string]$SubscriptionId,
+    [Parameter(Mandatory)][ValidateSet('interim', 'prod')][string]$Environment,
     # Built-in role to grant; looked up per-subscription, never hardcoded.
-    [string]$RoleName = 'Contributor',
-    # Assignment scope; defaults to the whole subscription.
-    [string]$Scope,
-    [ValidateSet('ServicePrincipal', 'User', 'Group')][string]$PrincipalType = 'ServicePrincipal'
+    [string]$RoleName = 'Contributor'
 )
+
+. (Join-Path (Join-Path $PSScriptRoot 'lib') 'Get-BootstrapConfig.ps1') -Environment $Environment
 
 # =============================================================================
 # Pure functions (no side effects) - the tested seam.
@@ -181,37 +177,39 @@ function New-RoleAssignment {
 
 function Invoke-AssignRbac {
     param(
-        [Parameter(Mandatory)][string]$PrincipalId,
-        [Parameter(Mandatory)][string]$SubscriptionId,
-        [string]$RoleName = 'Contributor',
-        [string]$Scope,
-        [string]$PrincipalType = 'ServicePrincipal'
+        [Parameter(Mandatory)][string]$Environment,
+        [string]$RoleName = 'Contributor'
     )
     Set-StrictMode -Version Latest
     $ErrorActionPreference = 'Stop'
 
-    if ([string]::IsNullOrWhiteSpace($Scope)) { $Scope = "/subscriptions/$SubscriptionId" }
+    # The role definitions/az rest surface always want a ServicePrincipal here;
+    # the deploy principal is never a User/Group, so this is not exposed as a param.
+    $principalType = 'ServicePrincipal'
 
-    $def = Get-RoleDefinition -RoleName $RoleName -Scope $Scope
+    $cfg = Get-BootstrapConfig -Environment $Environment
+    $principalId = $cfg.SpObjectId
+    $scope = $cfg.Scope
+
+    $def = Get-RoleDefinition -RoleName $RoleName -Scope $scope
     # Name uses the role-def GUID (.name); the body uses the full ARM path (.id).
-    $name = Get-RoleAssignmentName -Scope $Scope -PrincipalId $PrincipalId -RoleDefinitionId $def.name
-    $uri = Get-RoleAssignmentUri -Scope $Scope -AssignmentName $name
+    $name = Get-RoleAssignmentName -Scope $scope -PrincipalId $principalId -RoleDefinitionId $def.name
+    $uri = Get-RoleAssignmentUri -Scope $scope -AssignmentName $name
 
     if (Test-RoleAssignment -Uri $uri) {
-        Write-BootstrapLog "Role '$RoleName' already assigned to $PrincipalId at $Scope (no-op)."
+        Write-BootstrapLog "Role '$RoleName' already assigned to $principalId at $scope (no-op)."
         return 0
     }
 
     $body = Get-RoleAssignmentBody -RoleDefinitionId $def.id `
-        -PrincipalId $PrincipalId -PrincipalType $PrincipalType
+        -PrincipalId $principalId -PrincipalType $principalType
     # Assign owns the decision; force so the write can't be independently declined.
     New-RoleAssignment -Uri $uri -Body $body -Confirm:$false
-    Write-BootstrapLog "Assigned '$RoleName' to $PrincipalId at $Scope."
+    Write-BootstrapLog "Assigned '$RoleName' to $principalId at $scope."
     return 0
 }
 
 # Run only when executed directly; dot-sourcing (Pester) defines functions without running.
 if ($MyInvocation.InvocationName -ne '.') {
-    exit (Invoke-AssignRbac -PrincipalId $PrincipalId -SubscriptionId $SubscriptionId `
-            -RoleName $RoleName -Scope $Scope -PrincipalType $PrincipalType)
+    exit (Invoke-AssignRbac -Environment $Environment -RoleName $RoleName)
 }

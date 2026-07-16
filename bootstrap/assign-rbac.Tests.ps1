@@ -5,9 +5,9 @@
     by the live interim bring-up (issue #52 runbook), not here.
 #>
 BeforeAll {
-    # Dummy mandatory args satisfy param binding at load; the dot-source guard
+    # Dummy mandatory arg satisfies param binding at load; the dot-source guard
     # inside the script skips the body, so only the functions are defined.
-    . (Join-Path $PSScriptRoot 'assign-rbac.ps1') -PrincipalId 'x' -SubscriptionId 'x'
+    . (Join-Path $PSScriptRoot 'assign-rbac.ps1') -Environment 'interim'
 }
 
 Describe 'Get-DeterministicGuid' {

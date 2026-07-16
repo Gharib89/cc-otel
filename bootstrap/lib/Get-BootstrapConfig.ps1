@@ -64,7 +64,7 @@ function ConvertFrom-DotEnv {
         if ($raw -match '^\s*(#|$)') { continue }
         $idx = $raw.IndexOf('=')
         if ($idx -lt 1) { continue }
-        $key = $raw.Substring(0, $idx).Trim()
+        $key = ($raw.Substring(0, $idx).Trim()) -replace '^export\s+', ''
         $value = $raw.Substring($idx + 1).Trim()
         if ($value.Length -ge 2 -and
             (($value[0] -eq '"' -and $value[-1] -eq '"') -or

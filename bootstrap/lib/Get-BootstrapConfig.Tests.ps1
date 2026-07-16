@@ -44,6 +44,10 @@ Describe 'ConvertFrom-DotEnv' {
         $h = ConvertFrom-DotEnv -Line @('DATABASE_URL=postgres://u:p@h/db?sslmode=require')
         $h['DATABASE_URL'] | Should -Be 'postgres://u:p@h/db?sslmode=require'
     }
+    It 'strips a leading export prefix (shell-style env files)' {
+        $h = ConvertFrom-DotEnv -Line @('export FOO=bar')
+        $h['FOO'] | Should -Be 'bar'
+    }
 }
 
 Describe 'Get-BootstrapRequiredKey' {

@@ -26,39 +26,11 @@ param(
     [string]$Repository = 'Gharib89/cc-otel'
 )
 
+. (Join-Path (Join-Path $PSScriptRoot 'lib') 'Get-BootstrapConfig.ps1') -Environment $Environment
+
 # =============================================================================
 # Pure functions (no side effects) - the tested seam.
 # =============================================================================
-
-function ConvertFrom-DotEnv {
-    <#
-    .SYNOPSIS Parse KEY=VALUE lines into an ordered hashtable.
-    .DESCRIPTION Blank lines and #-comments are ignored; an optional leading
-    `export ` is stripped; the split is on the first `=` only (values may contain
-    `=`, e.g. `?sslmode=require`); one layer of surrounding single or double quotes
-    is removed.
-    .OUTPUTS [System.Collections.Specialized.OrderedDictionary]
-    #>
-    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
-    $result = [ordered]@{}
-    foreach ($raw in ($Text -split "`r?`n")) {
-        $line = $raw.Trim()
-        if ($line.Length -eq 0 -or $line.StartsWith('#')) { continue }
-        if ($line -match '^export\s+') { $line = $line -replace '^export\s+', '' }
-        $eq = $line.IndexOf('=')
-        if ($eq -lt 1) { continue }
-        $key = $line.Substring(0, $eq).Trim()
-        $val = $line.Substring($eq + 1).Trim()
-        if ($val.Length -ge 2) {
-            $first = $val[0]
-            if (($first -eq '"' -or $first -eq "'") -and $val[-1] -eq $first) {
-                $val = $val.Substring(1, $val.Length - 2)
-            }
-        }
-        $result[$key] = $val
-    }
-    return $result
-}
 
 function Get-SecretPushPlan {
     <#
@@ -146,8 +118,7 @@ function Invoke-SecretSync {
         throw "Env file not found: $EnvFile"
     }
 
-    $text = [System.IO.File]::ReadAllText($EnvFile)
-    $values = ConvertFrom-DotEnv -Text $text
+    $values = ConvertFrom-DotEnv -Line (Get-Content -LiteralPath $EnvFile)
     $plan = Get-SecretPushPlan -Environment $Environment -Values $values
 
     foreach ($p in $plan) {

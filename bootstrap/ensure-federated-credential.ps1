@@ -19,12 +19,13 @@
     Requires an authenticated `az` session with rights on the app registration.
 #>
 param(
-    # Object id of the app registration (not the client/application id).
-    [Parameter(Mandatory)][string]$AppObjectId,
+    [Parameter(Mandatory)][ValidateSet('interim', 'prod')][string]$Environment,
     [string]$Name = 'gha-main',
     [string]$Repository = 'Gharib89/cc-otel',
     [string]$Ref = 'refs/heads/main'
 )
+
+. (Join-Path (Join-Path $PSScriptRoot 'lib') 'Get-BootstrapConfig.ps1') -Environment $Environment
 
 # =============================================================================
 # Pure functions (no side effects) - the tested seam.
@@ -112,29 +113,32 @@ function New-FederatedCredential {
 
 function Invoke-EnsureFederatedCredential {
     param(
-        [Parameter(Mandatory)][string]$AppObjectId,
-        [string]$Name = 'github-main',
+        [Parameter(Mandatory)][string]$Environment,
+        [string]$Name = 'gha-main',
         [string]$Repository = 'Gharib89/cc-otel',
         [string]$Ref = 'refs/heads/main'
     )
     Set-StrictMode -Version Latest
     $ErrorActionPreference = 'Stop'
 
+    $cfg = Get-BootstrapConfig -Environment $Environment
+    $appObjectId = $cfg.AppObjectId
+
     $subject = Get-FederatedSubject -Repository $Repository -Ref $Ref
-    $existing = Get-ExistingCredential -AppObjectId $AppObjectId
+    $existing = Get-ExistingCredential -AppObjectId $appObjectId
     if (Test-SubjectPresent -Existing $existing -Subject $subject) {
-        Write-BootstrapLog "Federated credential for subject '$subject' already present on app $AppObjectId (no-op)."
+        Write-BootstrapLog "Federated credential for subject '$subject' already present on app $appObjectId (no-op)."
         return 0
     }
 
     $body = Get-FederatedCredentialBody -Name $Name -Subject $subject
-    New-FederatedCredential -AppObjectId $AppObjectId -Body $body -Confirm:$false
+    New-FederatedCredential -AppObjectId $appObjectId -Body $body -Confirm:$false
     Write-BootstrapLog "Created federated credential '$Name' (subject $subject)."
     return 0
 }
 
 # Run only when executed directly; dot-sourcing (Pester) defines functions without running.
 if ($MyInvocation.InvocationName -ne '.') {
-    exit (Invoke-EnsureFederatedCredential -AppObjectId $AppObjectId -Name $Name `
+    exit (Invoke-EnsureFederatedCredential -Environment $Environment -Name $Name `
             -Repository $Repository -Ref $Ref)
 }
