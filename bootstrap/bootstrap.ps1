@@ -247,7 +247,8 @@ function Get-PgCronJob {
     param([Parameter(Mandatory)][string]$DatabaseUrl)
     $lines = psql $DatabaseUrl -t -A -F '|' -c 'SELECT jobname, active, database FROM cron.job' 2>$null
     if ($LASTEXITCODE -ne 0) { throw 'Could not query cron.job (is pg_cron installed and the server reachable?).' }
-    $rows = foreach ($line in $lines) {
+    # Force array semantics so a single returned row is one line, not iterated.
+    $rows = foreach ($line in @($lines)) {
         if ([string]::IsNullOrWhiteSpace($line)) { continue }
         $f = $line -split '\|'
         [pscustomobject]@{ JobName = $f[0]; Active = ($f[1] -eq 't'); Database = $f[2] }
@@ -314,19 +315,25 @@ function Invoke-Precheck {
     $missing = @()
     $tenantMatch = $true
     $subMatch = $true
+
+    # Probe the az/gh sessions only when the binary is actually on PATH; calling
+    # them when absent would throw command-not-found and abort precheck before it
+    # can build the one consolidated report of every missing tool/session/key.
+    $acct = if ($tools['az']) { Get-AzAccountInfo } else { $null }
+    $ghAuthed = if ($tools['gh']) { Test-GhAuth } else { $false }
+
     if (-not (Test-Path -LiteralPath $envFile)) {
         $missing = @(".env.$Environment (file not found)")
     }
     else {
         $raw = ConvertFrom-DotEnv -Line (Get-Content -LiteralPath $envFile)
         $missing = Get-MissingConfigKey -Raw $raw -Required (Get-BootstrapRequiredKey)
-        $acct = Get-AzAccountInfo
         if ($acct) {
             $tenantMatch = ($acct.tenantId -eq $raw['AZURE_TENANT_ID'])
             $subMatch = ($acct.id -eq $raw['AZURE_SUBSCRIPTION_ID'])
         }
     }
-    $sessions = @{ az = ($null -ne (Get-AzAccountInfo)); gh = (Test-GhAuth) }
+    $sessions = @{ az = ($null -ne $acct); gh = $ghAuthed }
 
     $report = Get-PrecheckReport -Tool $tools -Session $sessions -TenantMatch $tenantMatch `
         -SubMatch $subMatch -MissingEnvKey $missing
