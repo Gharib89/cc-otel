@@ -9,6 +9,7 @@ from __future__ import annotations
 from _helpers import ins_event, ins_metric
 
 S1 = "11111111-1111-1111-1111-111111111111"
+S2 = "22222222-2222-2222-2222-222222222222"
 
 
 def refresh(conn):
@@ -182,6 +183,44 @@ def test_fact_session_daily_counts_deltas_and_prompts(conn):
         "SELECT commits, loc_added, active_time_user_s, active_time_total_s, prompts "
         f"FROM marts.fact_session_daily WHERE session_id='{S1}'",
     ) == (2, 40, 30, 30, 1)
+
+
+def test_fact_session_daily_multi_email_collapses_and_flags(conn):
+    """A session-day logged under a corp + a personal account must not break
+    REFRESH CONCURRENTLY (the duplicate-key incident on 2026-07-16): the fact keeps
+    one corp-preferred row and the split is captured as a multi_email_session finding."""
+    for email in ("dev@itworx.com", "dev.personal@gmail.com"):
+        ins_event(
+            conn,
+            event_time="2026-07-01T10:00:00Z",
+            event_name="user_prompt",
+            session_id=S2,
+            user_email=email,
+        )
+    # Cross-source disagreement: metrics carry only the personal email, prompts the corp
+    # one — the fact must still prefer corp across the m/p join, not just within a source.
+    ins_metric(
+        conn,
+        ts="2026-07-01T10:00:00Z",
+        metric_name="claude_code.commit.count",
+        metric_type="sum",
+        value=1,
+        value_kind="sum_delta",
+        session_id=S2,
+        user_email="dev.personal@gmail.com",
+    )
+    refresh(conn)  # must not raise on the duplicate (session_id, activity_date) key
+    assert all_(
+        conn,
+        "SELECT user_email, prompts, commits FROM marts.fact_session_daily "
+        f"WHERE session_id='{S2}' AND activity_date='2026-07-01'",
+    ) == [("dev@itworx.com", 2, 1)]
+    assert one(
+        conn,
+        "SELECT details->>'corp_emails', details->>'personal_emails' FROM marts.dq_finding "
+        f"WHERE finding_type='multi_email_session' AND details->>'session_id'='{S2}' "
+        "AND details->>'activity_date'='2026-07-01'",
+    ) == ('["dev@itworx.com"]', '["dev.personal@gmail.com"]')
 
 
 def test_fact_api_usage_grain_and_last_event_ts(conn):
