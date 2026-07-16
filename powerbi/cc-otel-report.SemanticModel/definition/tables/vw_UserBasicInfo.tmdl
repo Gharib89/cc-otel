@@ -81,6 +81,15 @@ table vw_UserBasicInfo
 
 		annotation SummarizationSetBy = Automatic
 
+	/// Root-to-node management chain (each node = a normalized Email), used by the OrgScope RLS role.
+	column ManagementPath = PATH(vw_UserBasicInfo[Email], vw_UserBasicInfo[ManagerEmailClean])
+		dataType: string
+		isHidden
+		lineageTag: c43f554a-55db-4fc7-9e21-29da58b0b345
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
 	/// ManagerEmail cleaned so PATH() (which needs a bare column and rejects cycles + dangling parents)
 	/// always resolves. Blank when: the row is a service/shared account that must not sit in the people
 	/// hierarchy (they create management cycles — see the exclusion list; extend it as more surface), or
@@ -90,15 +99,7 @@ table vw_UserBasicInfo
 	column ManagerEmailClean = IF(NOT(vw_UserBasicInfo[Email] IN {"internal.application@itworx.com"}) && vw_UserBasicInfo[ManagerEmail] IN VALUES(vw_UserBasicInfo[Email]), vw_UserBasicInfo[ManagerEmail])
 		dataType: string
 		isHidden
-		summarizeBy: none
-
-		annotation SummarizationSetBy = Automatic
-
-	/// Root-to-node management chain (each node = a normalized Email), used by the OrgScope RLS role.
-	column ManagementPath = PATH(vw_UserBasicInfo[Email], vw_UserBasicInfo[ManagerEmailClean])
-		dataType: string
-		isHidden
-		lineageTag: c43f554a-55db-4fc7-9e21-29da58b0b345
+		lineageTag: 8d883cde-4859-464b-85f7-1979618f8a3d
 		summarizeBy: none
 
 		annotation SummarizationSetBy = Automatic
