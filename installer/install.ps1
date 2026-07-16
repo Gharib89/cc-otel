@@ -29,11 +29,13 @@
     a single install.ps1. The committed source carries only placeholders (no secret).
 
 .NOTES
-    Exit codes: 0 success/no-op * 1 core failure * 2 partial (a WSL distro without
-    Node skipped). Statusline delivery is core and Node-independent: managed settings
-    carry it and the wrapper self-heals once Node appears, so Node absence on the
-    Windows host no longer yields a partial. Node is checked, never installed inside a
-    distro (the LTS MSI is an IS prerequisite, issue #31).
+    Exit codes: 0 success/no-op * 1 core failure * 2 partial (core succeeded but the
+    stamp could not be persisted, so the next run repeats work). The WSL leg is
+    best-effort - Windows is the deliverable - so a distro that is unreachable (SYSTEM
+    context, where wsl.exe refuses to run) or lacks Node is logged and skipped, never
+    degrading the exit code. Statusline delivery is core and Node-independent: managed
+    settings carry it and the wrapper self-heals once Node appears. Node is checked,
+    never installed inside a distro (the LTS MSI is an IS prerequisite, issue #31).
 #>
 param(
     # Install target root. C:\Program Files\ClaudeCode on a real fleet machine
@@ -344,6 +346,10 @@ function Get-WslDistro {
     try {
         # wsl.exe emits UTF-16LE; normalize and drop the "docker-desktop*" helpers.
         $raw = & wsl.exe -l -q 2>$null
+        # Under SYSTEM context (the IS push) wsl.exe cannot run: it exits non-zero and
+        # prints its refusal ("...WSL_E_LOCAL_SYSTEM_NOT_SUPPORTED") to stdout. Treat any
+        # non-zero exit as "no distros" so that error text is never parsed as distro names.
+        if ($LASTEXITCODE -ne 0) { return @() }
         return @($raw |
             ForEach-Object { ($_ -replace '\0', '').Trim() } |
             Where-Object { $_ -and $_ -notmatch '^docker-desktop' })
@@ -496,7 +502,8 @@ function Invoke-Install {
                 $wslMap[$distro] = $stamp
                 Write-InstallLog "WSL distro '$distro' converged."
             }
-            else { $partial = $true }
+            # WSL is best-effort - Windows is the deliverable. Invoke-WslLeg already logs
+            # any skip/failure (e.g. no Node) as WARN; it must not degrade the exit code.
         }
     }
 
