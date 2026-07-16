@@ -27,7 +27,7 @@ future-parser replay (ADR-0005); the report reads only the Postgres marts.
 | `iac/` | Bicep for the Azure stack |
 | `installer/` | `install.ps1` fleet setup |
 | `powerbi/` | `.pbip` report + branding (publishing is manual via Desktop) |
-| `tools/` | DuckDB curation queries over the raw reservoir |
+| `tools/` | Curation + ops tooling over the blob reservoir (sweep, data dictionary, replay, scrub) |
 | `tests/integration/` | end-to-end suite (testcontainers) |
 | `docs/adr/` | architecture decision records |
 
