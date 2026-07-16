@@ -224,22 +224,26 @@ Expect `Succeeded` (~5–10 min; the Postgres flexible server is the slow part).
 # NOT auto-restart for it (unlike shared_preload_libraries, which it does). Bicep
 # (step 6) set the value but cannot restart, so on this fresh server pg_cron still
 # loads against the default `postgres` DB — every cron.schedule() in the migrations
-# below would silently no-op (#65). Restart if pending, then confirm it applied
-# before migrating.
+# below would silently no-op (#65). Restart if pending, then assert it applied and
+# migrate only on success (mirrors deploy.yml's pre-migrate gate).
 $server = "ccotel-pg-interim"
 if ((az postgres flexible-server parameter show --resource-group $env:RESOURCE_GROUP --server-name $server --name cron.database_name --query isConfigPendingRestart -o tsv) -eq "true") {
   az postgres flexible-server restart --resource-group $env:RESOURCE_GROUP --name $server
 }
-az postgres flexible-server parameter show --resource-group $env:RESOURCE_GROUP --server-name $server --name cron.database_name --query "{value:value, pendingRestart:isConfigPendingRestart}" -o table
-
-dbmate --url $env:DATABASE_URL up
+$value   = az postgres flexible-server parameter show --resource-group $env:RESOURCE_GROUP --server-name $server --name cron.database_name --query value -o tsv
+$pending = az postgres flexible-server parameter show --resource-group $env:RESOURCE_GROUP --server-name $server --name cron.database_name --query isConfigPendingRestart -o tsv
+"cron.database_name value=$value pendingRestart=$pending"
+if ($value -ne "cc_otel" -or $pending -eq "true") {
+  throw "cron.database_name is '$value' (pendingRestart=$pending); expected 'cc_otel' applied. pg_cron jobs will not schedule — do NOT migrate."
+} else {
+  dbmate --url $env:DATABASE_URL up
+}
 ```
 
-Confirm the table shows `value=cc_otel` and `pendingRestart=False` **before**
-`dbmate up` runs — otherwise pg_cron is not live and the refresh jobs will not
-schedule. Migrations then create the schemas and the
-`cc_otel_read`/`cc_otel_ingest` **NOLOGIN group roles** (migration `…170001`).
-They do **not** create logins.
+The `throw` fails the step loudly if pg_cron did not become live, so `dbmate up`
+never runs against a server where the refresh jobs would silently not schedule.
+Migrations then create the schemas and the `cc_otel_read`/`cc_otel_ingest`
+**NOLOGIN group roles** (migration `…170001`). They do **not** create logins.
 
 ### 8. GATE G1 — DB login users + passwords
 
