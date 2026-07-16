@@ -1,7 +1,9 @@
 table fact_session_daily
+	lineageTag: c99d2fd0-189c-4d83-94a5-91a5ec15b7b6
 
 	column session_id
 		dataType: string
+		lineageTag: 8b0cac45-c983-4d3b-a264-6a16b97c3962
 		summarizeBy: none
 		sourceColumn: session_id
 
@@ -9,6 +11,7 @@ table fact_session_daily
 
 	column user_email
 		dataType: string
+		lineageTag: 18614ef2-f0d2-47cf-b46e-67d864601f1f
 		summarizeBy: none
 		sourceColumn: user_email
 
@@ -17,6 +20,7 @@ table fact_session_daily
 	column activity_date
 		dataType: dateTime
 		formatString: Short Date
+		lineageTag: c697ee6e-0a99-4dcc-bada-a32e28c810fc
 		summarizeBy: none
 		sourceColumn: activity_date
 
@@ -25,6 +29,7 @@ table fact_session_daily
 	column prompts
 		dataType: int64
 		formatString: 0
+		lineageTag: 270bd216-137b-4ea6-82a4-e20f0d5feb95
 		summarizeBy: sum
 		sourceColumn: prompts
 
@@ -32,6 +37,7 @@ table fact_session_daily
 
 	column commits
 		dataType: double
+		lineageTag: 38193402-6d6d-4cc2-a796-f660cba2ef4a
 		summarizeBy: sum
 		sourceColumn: commits
 
@@ -39,6 +45,7 @@ table fact_session_daily
 
 	column prs
 		dataType: double
+		lineageTag: f381e39d-bc84-4437-bca9-4cbe3ac3eeb6
 		summarizeBy: sum
 		sourceColumn: prs
 
@@ -46,6 +53,7 @@ table fact_session_daily
 
 	column loc_added
 		dataType: double
+		lineageTag: 2b0353d0-b448-402d-b764-c49193c60b7f
 		summarizeBy: sum
 		sourceColumn: loc_added
 
@@ -53,6 +61,7 @@ table fact_session_daily
 
 	column loc_removed
 		dataType: double
+		lineageTag: af78c6fb-92bc-4b84-b411-54d522fe8e94
 		summarizeBy: sum
 		sourceColumn: loc_removed
 
@@ -60,6 +69,7 @@ table fact_session_daily
 
 	column active_time_user_s
 		dataType: double
+		lineageTag: ea3b1101-80d8-470a-b149-f7148d29fd4f
 		summarizeBy: sum
 		sourceColumn: active_time_user_s
 
@@ -67,6 +77,7 @@ table fact_session_daily
 
 	column active_time_cli_s
 		dataType: double
+		lineageTag: 2ae659e7-7e31-44c6-9824-e97ef5fe4f39
 		summarizeBy: sum
 		sourceColumn: active_time_cli_s
 
@@ -74,6 +85,7 @@ table fact_session_daily
 
 	column active_time_total_s
 		dataType: double
+		lineageTag: 86af78b4-15f8-45c5-bc3b-5813e4994686
 		summarizeBy: sum
 		sourceColumn: active_time_total_s
 

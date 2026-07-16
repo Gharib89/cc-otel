@@ -1,7 +1,9 @@
 table bridge_session_mcp
+	lineageTag: 4901d079-0bf2-476e-bb3d-5f250cc5c3bb
 
 	column session_id
 		dataType: string
+		lineageTag: 83ee6990-0ced-4929-a334-c9b768a7daf2
 		summarizeBy: none
 		sourceColumn: session_id
 
@@ -9,6 +11,7 @@ table bridge_session_mcp
 
 	column mcp_name
 		dataType: string
+		lineageTag: afc38cb5-d263-4b15-b360-ce338e2586d7
 		summarizeBy: none
 		sourceColumn: mcp_name
 
@@ -17,6 +20,7 @@ table bridge_session_mcp
 	column tool_calls
 		dataType: int64
 		formatString: 0
+		lineageTag: 3ffa5696-2305-4c18-a41d-8c74eda83db6
 		summarizeBy: sum
 		sourceColumn: tool_calls
 

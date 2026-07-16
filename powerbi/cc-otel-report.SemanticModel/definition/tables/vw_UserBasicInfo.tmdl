@@ -82,9 +82,12 @@ table vw_UserBasicInfo
 		annotation SummarizationSetBy = Automatic
 
 	/// Root-to-node management chain (each node = a normalized Email), used by the OrgScope RLS role.
-	column ManagementPath = PATH(vw_UserBasicInfo[Email], vw_UserBasicInfo[ManagerEmail])
+	/// A ManagerEmail that isn't itself an Email in this table (org top / external manager) is treated
+	/// as a root (blank parent) so PATH() never fails on a dangling link.
+	column ManagementPath = PATH(vw_UserBasicInfo[Email], IF(vw_UserBasicInfo[ManagerEmail] IN VALUES(vw_UserBasicInfo[Email]), vw_UserBasicInfo[ManagerEmail]))
 		dataType: string
 		isHidden
+		lineageTag: c43f554a-55db-4fc7-9e21-29da58b0b345
 		summarizeBy: none
 
 		annotation SummarizationSetBy = Automatic

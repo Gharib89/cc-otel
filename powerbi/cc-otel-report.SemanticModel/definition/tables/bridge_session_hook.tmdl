@@ -1,7 +1,9 @@
 table bridge_session_hook
+	lineageTag: 225ca49c-b606-4415-b0cd-36be88d7d4aa
 
 	column session_id
 		dataType: string
+		lineageTag: 08e606df-ea45-40fa-b830-4f3aa4351696
 		summarizeBy: none
 		sourceColumn: session_id
 
@@ -9,6 +11,7 @@ table bridge_session_hook
 
 	column hook_name
 		dataType: string
+		lineageTag: 8c1378ed-a5b1-4c5e-a5e8-7ff9d77eb798
 		summarizeBy: none
 		sourceColumn: hook_name
 
@@ -17,6 +20,7 @@ table bridge_session_hook
 	column executions
 		dataType: int64
 		formatString: 0
+		lineageTag: bb5f0c20-8a44-4dad-8b8c-5372a5c41e4a
 		summarizeBy: sum
 		sourceColumn: executions
 

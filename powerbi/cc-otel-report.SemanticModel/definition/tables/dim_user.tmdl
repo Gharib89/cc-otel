@@ -1,7 +1,9 @@
 table dim_user
+	lineageTag: 74634b80-0d0a-4f2e-b38d-8c66c4645d9b
 
 	column user_email
 		dataType: string
+		lineageTag: a5031feb-f257-42fe-8cca-9fd95f4d81ce
 		summarizeBy: none
 		sourceColumn: user_email
 
@@ -9,6 +11,7 @@ table dim_user
 
 	column is_unknown
 		dataType: boolean
+		lineageTag: bd8c6e00-30d8-4adb-b766-0eb3ecbc55bc
 		summarizeBy: none
 		sourceColumn: is_unknown
 
@@ -17,6 +20,7 @@ table dim_user
 	column first_seen
 		dataType: dateTime
 		formatString: General Date
+		lineageTag: 596c6b5c-babd-4508-9655-317405c47447
 		summarizeBy: none
 		sourceColumn: first_seen
 
@@ -25,6 +29,7 @@ table dim_user
 	column last_seen
 		dataType: dateTime
 		formatString: General Date
+		lineageTag: b2faf7ce-3a9e-4686-b972-b5a902e2b22f
 		summarizeBy: none
 		sourceColumn: last_seen
 
@@ -32,6 +37,7 @@ table dim_user
 
 	column user_account_id
 		dataType: string
+		lineageTag: a9c0789a-b89e-4178-af84-e41f1ae40d63
 		summarizeBy: none
 		sourceColumn: user_account_id
 
@@ -39,6 +45,7 @@ table dim_user
 
 	column organization_id
 		dataType: string
+		lineageTag: 8fcf644d-f319-499c-bfa3-2b14bd45d633
 		summarizeBy: none
 		sourceColumn: organization_id
 
@@ -46,6 +53,7 @@ table dim_user
 
 	column last_cc_version
 		dataType: string
+		lineageTag: 4f1bfdd2-26fc-415f-b79c-bb327eee3131
 		summarizeBy: none
 		sourceColumn: last_cc_version
 

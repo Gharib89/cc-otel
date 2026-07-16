@@ -88,3 +88,4 @@ relationship fact_edit_decision_to_fact_session
 relationship dim_user_to_vw_UserBasicInfo
 	fromColumn: dim_user.user_email
 	toColumn: vw_UserBasicInfo.Email
+

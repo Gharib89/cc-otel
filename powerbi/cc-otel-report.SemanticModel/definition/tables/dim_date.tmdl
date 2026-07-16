@@ -1,9 +1,11 @@
 table dim_date
+	lineageTag: c539c9e2-de5b-4050-81e7-87dfccef8b1c
 	dataCategory: Time
 
 	column date_day
 		dataType: dateTime
 		formatString: Short Date
+		lineageTag: dddd719d-ab3f-4517-b733-e62165de55aa
 		summarizeBy: none
 		sourceColumn: date_day
 
@@ -12,6 +14,7 @@ table dim_date
 	column year
 		dataType: int64
 		formatString: 0
+		lineageTag: 2405a4d0-fc01-4dbb-adaf-a5761758cb18
 		summarizeBy: none
 		sourceColumn: year
 
@@ -20,6 +23,7 @@ table dim_date
 	column quarter
 		dataType: int64
 		formatString: 0
+		lineageTag: fe6bd367-79af-462f-b1ad-f088632018dc
 		summarizeBy: none
 		sourceColumn: quarter
 
@@ -28,6 +32,7 @@ table dim_date
 	column month
 		dataType: int64
 		formatString: 0
+		lineageTag: 77c30e3e-af36-4bd8-9a34-9235eb4a9d54
 		summarizeBy: none
 		sourceColumn: month
 
@@ -35,6 +40,7 @@ table dim_date
 
 	column month_name
 		dataType: string
+		lineageTag: 3c922f59-f3ec-4660-95be-803a991553f4
 		summarizeBy: none
 		sourceColumn: month_name
 
@@ -43,6 +49,7 @@ table dim_date
 	column day_of_month
 		dataType: int64
 		formatString: 0
+		lineageTag: 9de16db0-e953-4cf0-93f1-1c19a786761c
 		summarizeBy: none
 		sourceColumn: day_of_month
 
@@ -51,6 +58,7 @@ table dim_date
 	column iso_dow
 		dataType: int64
 		formatString: 0
+		lineageTag: 5a4b1a10-fe5f-438d-8407-9527585a3148
 		summarizeBy: none
 		sourceColumn: iso_dow
 
@@ -58,6 +66,7 @@ table dim_date
 
 	column day_name
 		dataType: string
+		lineageTag: 402a074d-33fc-4a62-86b2-71e0a71e9ea1
 		summarizeBy: none
 		sourceColumn: day_name
 
@@ -65,6 +74,7 @@ table dim_date
 
 	column is_weekend
 		dataType: boolean
+		lineageTag: a8ee62c3-3b11-4c8a-a75b-a2dcca518f5c
 		summarizeBy: none
 		sourceColumn: is_weekend
 
@@ -73,6 +83,7 @@ table dim_date
 	column iso_week
 		dataType: int64
 		formatString: 0
+		lineageTag: 6e0005e0-5f6f-45d6-a478-352961f2b5be
 		summarizeBy: none
 		sourceColumn: iso_week
 

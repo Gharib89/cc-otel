@@ -1,7 +1,9 @@
 table fact_session
+	lineageTag: 9a39792c-5954-4a3c-9426-4a3dc0de7e43
 
 	column session_id
 		dataType: string
+		lineageTag: b8201407-2792-4556-950c-d15feb1aaf76
 		summarizeBy: none
 		sourceColumn: session_id
 
@@ -9,6 +11,7 @@ table fact_session
 
 	column start_type
 		dataType: string
+		lineageTag: d79492af-c550-4ddb-926b-c79ace5426d3
 		summarizeBy: none
 		sourceColumn: start_type
 
@@ -16,6 +19,7 @@ table fact_session
 
 	column user_email
 		dataType: string
+		lineageTag: c31011de-62c0-43db-96a1-36aa2bc2d20d
 		summarizeBy: none
 		sourceColumn: user_email
 
@@ -24,6 +28,7 @@ table fact_session
 	column started_at
 		dataType: dateTime
 		formatString: General Date
+		lineageTag: 380acde0-084c-41a3-b9c9-1b19739c5f12
 		summarizeBy: none
 		sourceColumn: started_at
 
@@ -31,6 +36,7 @@ table fact_session
 
 	column cc_version
 		dataType: string
+		lineageTag: 40c185fc-aa40-49fe-be97-48551c7bc7c7
 		summarizeBy: none
 		sourceColumn: cc_version
 
@@ -39,6 +45,7 @@ table fact_session
 	column duration_s
 		dataType: int64
 		formatString: 0
+		lineageTag: 8d17ae72-05c0-4967-9c79-474b50c987d5
 		summarizeBy: sum
 		sourceColumn: duration_s
 
@@ -47,6 +54,7 @@ table fact_session
 	column activity_date
 		dataType: dateTime
 		formatString: Short Date
+		lineageTag: e278edde-1cdc-4ce0-b3c4-92c17156636e
 		summarizeBy: none
 		sourceColumn: activity_date
 

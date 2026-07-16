@@ -6,3 +6,6 @@ role OrgScope
 	modelPermission: read
 
 	tablePermission vw_UserBasicInfo = vw_UserBasicInfo[Email] = USERPRINCIPALNAME() || PATHCONTAINS(vw_UserBasicInfo[ManagementPath], USERPRINCIPALNAME())
+
+	annotation PBI_Id = 6989c039aaf549d78edd30d991fc66cd
+

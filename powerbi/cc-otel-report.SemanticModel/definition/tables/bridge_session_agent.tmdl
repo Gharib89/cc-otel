@@ -1,7 +1,9 @@
 table bridge_session_agent
+	lineageTag: dc1ca9f7-7ec5-48a8-bec9-cf60619fec50
 
 	column session_id
 		dataType: string
+		lineageTag: 6b039467-ffb7-4846-837e-c7ef33855362
 		summarizeBy: none
 		sourceColumn: session_id
 
@@ -9,6 +11,7 @@ table bridge_session_agent
 
 	column agent_name
 		dataType: string
+		lineageTag: 2991e763-363f-469e-86ad-6477a2ef3839
 		summarizeBy: none
 		sourceColumn: agent_name
 
@@ -17,6 +20,7 @@ table bridge_session_agent
 	column invocations
 		dataType: int64
 		formatString: 0
+		lineageTag: 08743c34-0563-4187-99cf-f87a0337db6b
 		summarizeBy: sum
 		sourceColumn: invocations
 
