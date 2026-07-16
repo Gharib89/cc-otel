@@ -84,6 +84,9 @@ The Pester tests cover the pure logic (config, stamp, drift predicates, WSL
 gating, exit codes) and the orchestration off a real machine via boundary mocks;
 `test_wrapper.mjs` covers the wrapper contract (identity, self-skip, throttle, OTLP
 body shape, endpoint/header resolution). The SYSTEM-context / real-WSL / MSI
-self-heal paths are the manual matrix in issue #26. CI wiring for the installer
-(`node --test` + Pester + PSScriptAnalyzer) is deferred to issue #43 — this
-directory is CI-less today; run the gates locally.
+self-heal paths are the manual matrix in issue #26.
+
+CI runs these three gates on every `installer/**` change (`.github/workflows/installer.yml`):
+PSScriptAnalyzer and `node --test` on `ubuntu-latest`, and Pester on `windows-latest`
+under `pwsh` (the suite dot-sources the Windows-only `install.ps1`). Run them locally
+before pushing to keep CI green on the first try.
