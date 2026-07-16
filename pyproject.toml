@@ -39,6 +39,9 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Repo root on sys.path so tests import the uninstalled `tools` package (the sink is
+# found via its installed workspace member; `tools/` is source-only).
+pythonpath = ["."]
 testpaths = ["sink/tests", "tools/tests", "tests/integration"]
 markers = [
     "integration: end-to-end test requiring Docker (testcontainers Postgres or docker compose); run with `-m integration`",
