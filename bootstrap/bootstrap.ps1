@@ -295,8 +295,12 @@ function Invoke-StepSeedImage {
     [OutputType([int])]
     param()
     if (-not (Test-CommandPresent -Name 'docker')) {
-        Write-BootstrapLog 'docker not on PATH; cannot check the :latest images. Install Docker or seed manually (README seed-images notes), then re-run.' 'HALT'
-        return 1
+        # Docker is only needed to seed a virgin registry. Without it we can't
+        # verify the tags, but a Docker-less operator can't seed anyway - so
+        # proceed rather than block; a genuinely missing image surfaces as a
+        # clear ACA pull failure at the deploy step.
+        Write-BootstrapLog 'docker not on PATH; skipping the :latest image check. If deploy fails to pull, seed the images (README seed-images notes) on a machine with Docker.' 'WARN'
+        return 0
     }
     $collector = Test-ContainerImage -Reference 'ghcr.io/gharib89/cc-otel-collector:latest'
     $sink = Test-ContainerImage -Reference 'ghcr.io/gharib89/cc-otel-sink:latest'
@@ -444,7 +448,16 @@ function Invoke-Bootstrap {
     $selected = Select-BootstrapStep -All (Get-BootstrapStepList) -Step $Step
     foreach ($s in $selected) {
         Write-BootstrapLog "=== $($s.Slug) [$($s.Mode)]: $($s.Description) ==="
-        $rc = Invoke-BootstrapStep -Slug $s.Slug -Environment $Environment
+        try {
+            $rc = Invoke-BootstrapStep -Slug $s.Slug -Environment $Environment
+        }
+        catch {
+            # An unexpected throw (e.g. a bad/partial .env on a standalone -Step,
+            # or an unreachable server) becomes a clean non-zero halt rather than
+            # a raw stack trace, keeping the orchestrator's halt UX consistent.
+            Write-BootstrapLog "Halted at '$($s.Slug)': $($_.Exception.Message)" 'HALT'
+            return 1
+        }
         if ($rc -ne 0) {
             Write-BootstrapLog "Halted at '$($s.Slug)'. Resolve the above, then re-run (completed steps no-op) or run the rest by -Step." 'HALT'
             return $rc
