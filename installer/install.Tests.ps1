@@ -137,6 +137,21 @@ Describe 'Resolve-InstallExitCode' {
     }
 }
 
+Describe 'Select-StaleTelemetryVar' {
+    It 'prunes a stale OTEL_ var absent from the desired block (the metrics-endpoint hijacker)' {
+        Select-StaleTelemetryVar `
+            -Existing @('OTEL_EXPORTER_OTLP_METRICS_ENDPOINT', 'OTEL_METRICS_EXPORTER', 'CLAUDE_CODE_ENABLE_TELEMETRY', 'Path') `
+            -Desired  @('OTEL_METRICS_EXPORTER', 'CLAUDE_CODE_ENABLE_TELEMETRY') |
+            Should -Be 'OTEL_EXPORTER_OTLP_METRICS_ENDPOINT'
+    }
+    It 'keeps OTEL_ vars that are in the desired block' {
+        (Select-StaleTelemetryVar -Existing @('OTEL_METRICS_EXPORTER') -Desired @('OTEL_METRICS_EXPORTER')).Count | Should -Be 0
+    }
+    It 'never touches non-OTEL vars, even when absent from the desired block' {
+        (Select-StaleTelemetryVar -Existing @('Path', 'CLAUDE_CODE_ENHANCED_TELEMETRY_BETA') -Desired @()).Count | Should -Be 0
+    }
+}
+
 Describe 'Get-WrapperStatusLineCommand' {
     It 'invokes the wrapper via node with a quoted forward-slash path (ADR-0003)' {
         Get-WrapperStatusLineCommand -WrapperPath 'C:\Program Files\ClaudeCode\cc-otel-wrapper.mjs' |
@@ -155,6 +170,8 @@ Describe 'Invoke-Install (orchestration)' {
         $script:ManagedSettingsB64 = & $b64 $managed
         $script:WrapperB64         = & $b64 '// wrapper'
         Mock Set-MachineEnvVar { $false }   # pretend machine env already correct
+        Mock Get-MachineEnvName { @() }     # no stale machine vars unless a test says so
+        Mock Remove-MachineEnvVar { $false }
         Mock Get-WslDistro { @() }
         Mock Get-UserSettingsPath { @() }
     }
@@ -193,6 +210,13 @@ Describe 'Invoke-Install (orchestration)' {
         Mock Get-WslDistro { @('Ubuntu') }
         Mock Invoke-WslLeg { $false }   # e.g. distro has no Node, or SYSTEM-context refusal
         Invoke-Install -InstallRoot $script:target | Should -Be 0
+    }
+
+    It 'prunes a stale machine-scope OTEL_ var not in the managed block' {
+        Mock Get-MachineEnvName { @('OTEL_EXPORTER_OTLP_METRICS_ENDPOINT', 'OTEL_METRICS_EXPORTER', 'Path') }
+        Invoke-Install -InstallRoot $script:target | Out-Null
+        Should -Invoke Remove-MachineEnvVar -Times 1 -Exactly -ParameterFilter { $Name -eq 'OTEL_EXPORTER_OTLP_METRICS_ENDPOINT' }
+        Should -Invoke Remove-MachineEnvVar -Times 0 -Exactly -ParameterFilter { $Name -eq 'OTEL_METRICS_EXPORTER' }
     }
 }
 
