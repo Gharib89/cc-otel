@@ -33,3 +33,8 @@ param fleetTokens = readEnvironmentVariable('FLEET_TOKENS', '')
 param databaseUrl = readEnvironmentVariable('DATABASE_URL', '')
 param ghcrUsername = readEnvironmentVariable('GHCR_USERNAME', '')
 param ghcrPassword = readEnvironmentVariable('GHCR_TOKEN', '')
+
+// Cost budget — 150 USD/mo hard cap (ADR-0004). Add more recipients as needed.
+param budgetAmount = 150
+param budgetContactEmails = ['Ahmed.Gharib@itworx.com']
+param budgetStartDate = '2026-07-01'
