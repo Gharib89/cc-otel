@@ -103,14 +103,6 @@ Describe 'Get-BootstrapConfig - missing-key validation' {
         { Get-BootstrapConfig -Environment 'interim' -EnvFile $envFile } |
             Should -Throw -ExpectedMessage '*GHCR_TOKEN*'
     }
-    It 'validates only the requested subset when -RequiredKeys is given' {
-        $partial = "RESOURCE_GROUP=rg`nOPERATOR_INITIALS=ag"
-        $envFile = Join-Path $TestDrive '.env.subset'
-        Set-Content -Path $envFile -Value $partial
-        $cfg = Get-BootstrapConfig -Environment 'interim' -EnvFile $envFile `
-            -RequiredKeys @('RESOURCE_GROUP', 'OPERATOR_INITIALS')
-        $cfg.RuleName | Should -Be 'operator-ag'
-    }
     It 'errors when the env file does not exist' {
         { Get-BootstrapConfig -Environment 'interim' -EnvFile (Join-Path $TestDrive 'nope.env') } |
             Should -Throw -ExpectedMessage '*nope.env*'

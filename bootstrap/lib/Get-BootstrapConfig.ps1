@@ -20,11 +20,7 @@
 param(
     [Parameter(Mandatory)][ValidateSet('interim', 'prod')][string]$Environment,
     # Defaults to .env.<environment> at the repo root (two levels above lib/).
-    [string]$EnvFile,
-    # The keys that must be present and non-empty; defaults to the full core set
-    # a whole bring-up needs. A single step passes its own smaller subset so it
-    # can run against an env that only carries what that step touches.
-    [string[]]$RequiredKeys
+    [string]$EnvFile
 )
 
 # =============================================================================
@@ -144,8 +140,7 @@ function Get-BootstrapConfig {
     #>
     param(
         [Parameter(Mandatory)][ValidateSet('interim', 'prod')][string]$Environment,
-        [string]$EnvFile,
-        [string[]]$RequiredKeys
+        [string]$EnvFile
     )
     if ([string]::IsNullOrWhiteSpace($EnvFile)) {
         $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -154,10 +149,9 @@ function Get-BootstrapConfig {
     if (-not (Test-Path -LiteralPath $EnvFile)) {
         throw "Env file not found: $EnvFile (expected .env.$Environment). Create it from the key list in bootstrap/README.md."
     }
-    if ($null -eq $RequiredKeys) { $RequiredKeys = $script:CoreRequiredKeys }
 
     $raw = ConvertFrom-DotEnv -Line (Get-Content -LiteralPath $EnvFile)
-    $missing = Get-MissingConfigKey -Raw $raw -Required $RequiredKeys
+    $missing = Get-MissingConfigKey -Raw $raw -Required $script:CoreRequiredKeys
     if ($missing.Count -gt 0) {
         throw "Missing required .env.$Environment keys: $($missing -join ', ')."
     }
@@ -167,5 +161,5 @@ function Get-BootstrapConfig {
 # Run only when executed directly; dot-sourcing (tests, orchestrator) defines
 # functions without loading a file or emitting output.
 if ($MyInvocation.InvocationName -ne '.') {
-    Get-BootstrapConfig -Environment $Environment -EnvFile $EnvFile -RequiredKeys $RequiredKeys
+    Get-BootstrapConfig -Environment $Environment -EnvFile $EnvFile
 }

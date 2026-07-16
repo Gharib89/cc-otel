@@ -173,7 +173,7 @@ function Get-SeedImagesDecision {
     if (-not $CollectorPresent) { $missing += 'collector' }
     if (-not $SinkPresent) { $missing += 'sink' }
     $msg = "Missing :latest image(s): $($missing -join ', '). A fresh registry has none; " +
-    'seed them once (see README step 6 - `gh workflow run publish-images.yml`, or a ' +
+    'seed them once (see the README seed-images notes - `gh workflow run publish-images.yml`, or a ' +
     'local docker build+push before the workflow is on main), then re-run.'
     return [pscustomobject]@{ Halt = $true; Message = $msg }
 }
@@ -295,7 +295,7 @@ function Invoke-StepSeedImage {
     [OutputType([int])]
     param()
     if (-not (Test-CommandPresent -Name 'docker')) {
-        Write-BootstrapLog 'docker not on PATH; cannot check the :latest images. Install Docker or seed manually (README step 6), then re-run.' 'HALT'
+        Write-BootstrapLog 'docker not on PATH; cannot check the :latest images. Install Docker or seed manually (README seed-images notes), then re-run.' 'HALT'
         return 1
     }
     $collector = Test-ContainerImage -Reference 'ghcr.io/gharib89/cc-otel-collector:latest'
@@ -319,7 +319,7 @@ function Invoke-StepDeploy {
         --template-file $template --parameters $params `
         --query 'properties.provisioningState' -o tsv
     if ($LASTEXITCODE -ne 0) {
-        Write-BootstrapLog 'Bicep deploy failed. On `CapacityNotAvailable` in swedencentral, re-run (fresh zone) or pin postgresAvailabilityZone=1|2|3 (README step 6).' 'FAIL'
+        Write-BootstrapLog 'Bicep deploy failed. On `CapacityNotAvailable` in swedencentral, re-run (fresh zone) or pin postgresAvailabilityZone=1|2|3 (README deploy / CapacityNotAvailable note).' 'FAIL'
         return 1
     }
     Write-BootstrapLog "Deploy provisioningState: $state"
@@ -415,12 +415,12 @@ function Invoke-BootstrapStep {
         'powerbi' {
             return (Show-ManualStep -Message ('Configure the Power BI Desktop data source as the read login: ' +
                     "server ccotel-pg-$Environment.postgres.database.azure.com, database cc_otel, user cc_otel_read_user, " +
-                    'password CC_OTEL_READ_PASSWORD, SSL required. Refresh to confirm, then publish (README step 9). ' +
+                    'password CC_OTEL_READ_PASSWORD, SSL required. Refresh to confirm, then publish (README powerbi step). ' +
                     'Then run the remaining steps (e.g. -Step roll-image).'))
         }
         'roll-image' { return (Invoke-StepRollImage -Config (Get-BootstrapConfig -Environment $Environment)) }
         'verify' {
-            return (Show-ManualStep -Message ('Run the installer end-to-end acceptance (README step 13): install on a ' +
+            return (Show-ManualStep -Message ('Run the installer end-to-end acceptance (README verify step): install on a ' +
                     'machine and confirm the sink /healthz is green, rows land in raw, and the Power BI refresh has data.'))
         }
         'close-ip' { return (Invoke-StepScript -Name 'close-my-ip.ps1' -Environment $Environment) }
@@ -443,7 +443,7 @@ function Invoke-Bootstrap {
 
     $selected = Select-BootstrapStep -All (Get-BootstrapStepList) -Step $Step
     foreach ($s in $selected) {
-        Write-BootstrapLog "=== $($s.Slug): $($s.Description) ==="
+        Write-BootstrapLog "=== $($s.Slug) [$($s.Mode)]: $($s.Description) ==="
         $rc = Invoke-BootstrapStep -Slug $s.Slug -Environment $Environment
         if ($rc -ne 0) {
             Write-BootstrapLog "Halted at '$($s.Slug)'. Resolve the above, then re-run (completed steps no-op) or run the rest by -Step." 'HALT'
