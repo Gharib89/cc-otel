@@ -117,6 +117,13 @@ Describe 'Get-WslLegTarget' {
     }
 }
 
+Describe 'Get-WslDistro' {
+    It 'returns empty when wsl.exe exits non-zero (SYSTEM context) rather than parsing its error text as distro names' {
+        Mock wsl.exe { $global:LASTEXITCODE = -1; 'Running WSL as local system is not supported.'; 'Error code: Wsl/WSL_E_LOCAL_SYSTEM_NOT_SUPPORTED' }
+        (Get-WslDistro).Count | Should -Be 0
+    }
+}
+
 Describe 'Resolve-InstallExitCode' {
     It 'returns 0 on full success' {
         Resolve-InstallExitCode -CoreOk $true -Partial $false | Should -Be 0
@@ -180,6 +187,12 @@ Describe 'Invoke-Install (orchestration)' {
     It 'exits 1 when the payload is still the unbuilt placeholder' {
         $script:ManagedSettingsB64 = '__CC_OTEL_MANAGED_B64__'   # as committed, not built
         Invoke-Install -InstallRoot $script:target | Should -Be 1
+    }
+
+    It 'still exits 0 when a WSL distro does not converge (WSL is best-effort)' {
+        Mock Get-WslDistro { @('Ubuntu') }
+        Mock Invoke-WslLeg { $false }   # e.g. distro has no Node, or SYSTEM-context refusal
+        Invoke-Install -InstallRoot $script:target | Should -Be 0
     }
 }
 
