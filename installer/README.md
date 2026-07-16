@@ -74,11 +74,14 @@ statusline wrapper (`cc-otel-wrapper.mjs`, ADR-0003) is a required build input.
 ## Testing
 
 ```powershell
-# from the repo root:
+# from the repo root, in pwsh (PowerShell 7) — not Windows PowerShell 5.1:
 Invoke-ScriptAnalyzer -Path installer -Recurse   # must be clean (acceptance)
 Invoke-Pester -Path installer                     # unit + orchestration
 node --test installer/test_wrapper.mjs            # wrapper contract (ADR-0003)
 ```
+
+Run Pester under **pwsh**, matching CI: under Windows PowerShell 5.1 one
+`build-installer` test fails on a JSON-array parsing difference (see #91).
 
 The Pester tests cover the pure logic (config, stamp, drift predicates, WSL
 gating, exit codes) and the orchestration off a real machine via boundary mocks;
