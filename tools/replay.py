@@ -103,7 +103,8 @@ def _delete_window(
                 f'DELETE FROM raw."{table}" WHERE "{ts_col}" >= %s AND "{ts_col}" < %s',
                 (start, end),
             )  # noqa: S608
-        cur.execute("DELETE FROM meta.processed_batches WHERE batch_hash = ANY(%s)", (hashes,))
+        if hashes:  # empty list would send an untyped array param; skip when no blobs
+            cur.execute("DELETE FROM meta.processed_batches WHERE batch_hash = ANY(%s)", (hashes,))
     conn.commit()
 
 
@@ -115,18 +116,19 @@ def main(argv: list[str] | None = None) -> int:
     settings = load_settings()
 
     reservoir = CurationReservoir.from_settings(settings)
-    blobs: list[tuple[str, bytes]] = []
     try:
-        for prefix in prefixes(signals, days):
-            for name in reservoir.list_names(prefix):
-                blobs.append((name, reservoir.download(name)))
+        # Names only in memory; hash by downloading each blob then discarding the bytes,
+        # and re-download per POST — a large window must not hold every blob in RAM.
+        names = [
+            name for prefix in prefixes(signals, days) for name in reservoir.list_names(prefix)
+        ]
+        hashes = [blob_hash(reservoir.download(name)) for name in names]
 
-        hashes = [blob_hash(b) for _, b in blobs]
         with psycopg.connect(settings.database_url) as conn:
             row_counts = _count_rows(conn, signals, start, end)
             print(
                 f"Replay {args.since:%Y-%m-%d}..{args.until:%Y-%m-%d} signals={','.join(signals)}: "
-                f"{len(blobs)} blobs / {len(set(hashes))} hashes; "
+                f"{len(names)} blobs / {len(set(hashes))} hashes; "
                 f"raw rows in window: {row_counts}"
             )
             if not args.execute:
@@ -136,14 +138,14 @@ def main(argv: list[str] | None = None) -> int:
             _delete_window(conn, signals, start, end, hashes)
 
         with httpx.Client(base_url=args.sink_url, timeout=30) as client:
-            for name, data in blobs:
+            for name in names:
                 resp = client.post(
                     endpoint_for(name),
-                    content=data,
+                    content=reservoir.download(name),
                     headers={"content-type": "application/json", "content-encoding": "gzip"},
                 )
                 resp.raise_for_status()
-        print(f"re-POSTed {len(blobs)} blobs to {args.sink_url}")
+        print(f"re-POSTed {len(names)} blobs to {args.sink_url}")
     finally:
         reservoir.close()
     return 0

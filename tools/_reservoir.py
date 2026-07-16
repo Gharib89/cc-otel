@@ -24,6 +24,11 @@ if TYPE_CHECKING:
 class ReservoirUnconfigured(RuntimeError):
     """Neither CC_OTEL_BLOB_CONNECTION_STRING nor CC_OTEL_BLOB_ACCOUNT_URL is set."""
 
+    def __init__(
+        self, msg: str = "set CC_OTEL_BLOB_CONNECTION_STRING or CC_OTEL_BLOB_ACCOUNT_URL"
+    ) -> None:
+        super().__init__(msg)
+
 
 def _account_name(account_url: str) -> str:
     # https://<account>.blob.core.windows.net -> <account>
