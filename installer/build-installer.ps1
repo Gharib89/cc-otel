@@ -50,7 +50,8 @@ $ErrorActionPreference = 'Stop'
 # Reuse install.ps1's builders; its dot-source guard keeps Main from running.
 . (Join-Path $PSScriptRoot 'install.ps1')
 # The shared .env.<env> loader (bootstrap/lib) - its guard defines functions only.
-. (Join-Path (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'bootstrap') 'lib') 'Get-BootstrapConfig.ps1') -Environment $Environment
+$bootstrapLib = Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'bootstrap') 'lib'
+. (Join-Path $bootstrapLib 'Get-BootstrapConfig.ps1') -Environment $Environment
 
 # =============================================================================
 # Pure functions (no side effects) - the tested seam.
@@ -105,7 +106,15 @@ function Get-CollectorFqdn {
 # Orchestration
 # =============================================================================
 
-if ($MyInvocation.InvocationName -ne '.') {
+function Invoke-BuildInstaller {
+    <# .SYNOPSIS Resolve inputs from .env.<env> + az, bake, and stage dist/install.ps1; emit the stamp. #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)][string]$Environment,
+        [Parameter(Mandatory)][string]$WrapperPath,
+        [Parameter(Mandatory)][string]$InstallRoot,
+        [Parameter(Mandatory)][string]$OutputPath
+    )
     if (-not (Test-Path -LiteralPath $WrapperPath)) {
         throw "Wrapper not found at '$WrapperPath'. Build the wrapper (cc-otel-wrapper.mjs, ADR-0003) or pass -WrapperPath."
     }
@@ -129,7 +138,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     if ($baked -eq $source) { throw 'Payload placeholders not found in install.ps1 - cannot bake a self-contained artifact.' }
 
     if ($PSCmdlet.ShouldProcess($OutputPath, 'Stage self-contained install.ps1')) {
-        # Outer ShouldProcess is authoritative; force the nested write.
+        # This ShouldProcess is authoritative; force the nested writes.
         if (Test-Path -LiteralPath $OutputPath) { Remove-Item -LiteralPath $OutputPath -Recurse -Force -Confirm:$false }
         [System.IO.Directory]::CreateDirectory($OutputPath) | Out-Null
         Write-TextFile -Path (Join-Path $OutputPath 'install.ps1') -Content $baked -Confirm:$false
@@ -138,4 +147,9 @@ if ($MyInvocation.InvocationName -ne '.') {
 
     # Stamp on stdout so callers/CI can diff builds.
     Write-Output $stamp
+}
+
+# Run only when executed directly; dot-sourcing (Pester) defines functions without building.
+if ($MyInvocation.InvocationName -ne '.') {
+    Invoke-BuildInstaller -Environment $Environment -WrapperPath $WrapperPath -InstallRoot $InstallRoot -OutputPath $OutputPath
 }
