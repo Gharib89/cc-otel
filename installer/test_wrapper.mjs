@@ -419,6 +419,25 @@ test("readManagedSettingsEnv: {} when the file is absent (never throws)", () => 
   assert.deepEqual(readManagedSettingsEnv(tmpDir("cc-otel-empty-")), {});
 });
 
+test("readManagedSettingsEnv: drops non-string values so downstream trim/split never throw", () => {
+  const dir = tmpDir("cc-otel-managed-bad-");
+  fs.writeFileSync(
+    path.join(dir, "managed-settings.json"),
+    JSON.stringify({
+      env: {
+        OTEL_EXPORTER_OTLP_ENDPOINT: 4318, // malformed: number, not string
+        OTEL_EXPORTER_OTLP_HEADERS: { Authorization: "x" }, // malformed: object
+        CLAUDE_CODE_ENABLE_TELEMETRY: "1", // valid string is kept
+      },
+    }),
+  );
+  const managed = readManagedSettingsEnv(dir);
+  assert.deepEqual(managed, { CLAUDE_CODE_ENABLE_TELEMETRY: "1" });
+  // The malformed values are gone, so resolution stays on the safe path.
+  assert.equal(resolveEndpoint({}, managed), "http://localhost:4318/v1/metrics");
+  assert.deepEqual(resolveHeaders({}, managed), {});
+});
+
 // ---------------------------------------------------------------------------
 // End-to-end stdin/spawn tests (real wrapper invocation)
 // ---------------------------------------------------------------------------

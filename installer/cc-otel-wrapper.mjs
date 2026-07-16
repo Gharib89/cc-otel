@@ -196,11 +196,14 @@ const WRAPPER_DIR = path.dirname(fileURLToPath(import.meta.url));
 // Claude Code strips OTEL_* from the statusLine subprocess (v2.1.128+), so the
 // inherited-env path is unreliable; this file is the fallback source of the
 // endpoint/token. Tolerant by design (statusline must never throw): a missing /
-// unreadable / non-JSON file, or one with no `env` object, yields {}.
+// unreadable / non-JSON file, or one with no `env` object, yields {}. Only
+// string-valued entries are kept — the values feed .trim()/.split() downstream,
+// so a malformed file (a numeric or object value) must not crash the wrapper.
 export function readManagedSettingsEnv(dir = WRAPPER_DIR) {
   try {
     const env = JSON.parse(fs.readFileSync(path.join(dir, "managed-settings.json"), "utf8"))?.env;
-    return env && typeof env === "object" ? env : {};
+    if (!env || typeof env !== "object") return {};
+    return Object.fromEntries(Object.entries(env).filter(([, v]) => typeof v === "string"));
   } catch {
     return {};
   }
