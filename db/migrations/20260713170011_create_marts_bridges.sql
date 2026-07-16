@@ -60,9 +60,12 @@ GROUP BY session_id, plugin_name;
 CREATE UNIQUE INDEX bridge_session_plugin_pk
 ON marts.bridge_session_plugin (session_id, plugin_name);
 
--- bridge_session_agent: subagent invocations — from api_request agent attribution. (The
--- Task/Agent subagent_type fallback named in #9 has no promoted raw column to source
--- from, so it is not implemented here — see the PR notes.)
+-- bridge_session_agent: subagent invocations, attributed from api_request agent.name.
+-- This is the sole source: the Task/Agent subagent_type fallback named in #9 is
+-- intentionally dropped (#36). Claude Code tags each subagent's own api_request rows
+-- with agent.name, so subagent types (general-purpose, Explore, …) already flow here;
+-- interim data shows zero subagent sessions left unattributed by agent.name alone, so
+-- promoting subagent_type to a raw column would fill no measured gap.
 CREATE MATERIALIZED VIEW marts.bridge_session_agent AS
 SELECT
     session_id,
