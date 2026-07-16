@@ -566,7 +566,7 @@ CREATE MATERIALIZED VIEW marts.fact_session_daily AS
  WITH m AS (
          SELECT stg_counter_delta.session_id,
             (stg_counter_delta.ts)::date AS activity_date,
-            (array_agg(stg_counter_delta.user_email ORDER BY (stg_counter_delta.user_email ~~ '%@itworx.com'::text) DESC NULLS LAST) FILTER (WHERE (stg_counter_delta.user_email IS NOT NULL)))[1] AS user_email,
+            (array_agg(stg_counter_delta.user_email ORDER BY (stg_counter_delta.user_email ~~ '%@itworx.com'::text) DESC NULLS LAST, stg_counter_delta.user_email) FILTER (WHERE (stg_counter_delta.user_email IS NOT NULL)))[1] AS user_email,
             sum(stg_counter_delta.value) FILTER (WHERE (stg_counter_delta.metric_name = 'claude_code.commit.count'::text)) AS commits,
             sum(stg_counter_delta.value) FILTER (WHERE (stg_counter_delta.metric_name = 'claude_code.pull_request.count'::text)) AS prs,
             sum(stg_counter_delta.value) FILTER (WHERE ((stg_counter_delta.metric_name = 'claude_code.lines_of_code.count'::text) AND (stg_counter_delta.type_label = 'added'::text))) AS loc_added,
@@ -579,7 +579,7 @@ CREATE MATERIALIZED VIEW marts.fact_session_daily AS
         ), p AS (
          SELECT events.session_id,
             (events.event_time)::date AS activity_date,
-            (array_agg(events.user_email ORDER BY (events.user_email ~~ '%@itworx.com'::text) DESC NULLS LAST) FILTER (WHERE (events.user_email IS NOT NULL)))[1] AS user_email,
+            (array_agg(events.user_email ORDER BY (events.user_email ~~ '%@itworx.com'::text) DESC NULLS LAST, events.user_email) FILTER (WHERE (events.user_email IS NOT NULL)))[1] AS user_email,
             count(*) AS prompts
            FROM raw.events
           WHERE ((events.event_name = 'user_prompt'::text) AND (events.session_id IS NOT NULL))

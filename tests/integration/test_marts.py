@@ -212,12 +212,14 @@ def test_fact_session_daily_multi_email_collapses_and_flags(conn):
     refresh(conn)  # must not raise on the duplicate (session_id, activity_date) key
     assert all_(
         conn,
-        f"SELECT user_email, prompts, commits FROM marts.fact_session_daily WHERE session_id='{S2}'",
+        "SELECT user_email, prompts, commits FROM marts.fact_session_daily "
+        f"WHERE session_id='{S2}' AND activity_date='2026-07-01'",
     ) == [("dev@itworx.com", 2, 1)]
     assert one(
         conn,
         "SELECT details->>'corp_emails', details->>'personal_emails' FROM marts.dq_finding "
-        f"WHERE finding_type='multi_email_session' AND details->>'session_id'='{S2}'",
+        f"WHERE finding_type='multi_email_session' AND details->>'session_id'='{S2}' "
+        "AND details->>'activity_date'='2026-07-01'",
     ) == ('["dev@itworx.com"]', '["dev.personal@gmail.com"]')
 
 

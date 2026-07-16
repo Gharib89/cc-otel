@@ -17,8 +17,10 @@ WITH m AS (
         session_id,
         ts::date AS activity_date,
         (
-            ARRAY_AGG(user_email ORDER BY (user_email LIKE '%@itworx.com') DESC NULLS LAST)
-            FILTER (WHERE user_email IS NOT NULL)
+            ARRAY_AGG(
+                user_email
+                ORDER BY (user_email LIKE '%@itworx.com') DESC NULLS LAST, user_email
+            ) FILTER (WHERE user_email IS NOT NULL)
         )[1] AS user_email,
         SUM(value) FILTER (WHERE metric_name = 'claude_code.commit.count') AS commits,
         SUM(value) FILTER (WHERE metric_name = 'claude_code.pull_request.count') AS prs,
@@ -44,8 +46,10 @@ p AS (
         session_id,
         event_time::date AS activity_date,
         (
-            ARRAY_AGG(user_email ORDER BY (user_email LIKE '%@itworx.com') DESC NULLS LAST)
-            FILTER (WHERE user_email IS NOT NULL)
+            ARRAY_AGG(
+                user_email
+                ORDER BY (user_email LIKE '%@itworx.com') DESC NULLS LAST, user_email
+            ) FILTER (WHERE user_email IS NOT NULL)
         )[1] AS user_email,
         COUNT(*) AS prompts
     FROM raw.events
