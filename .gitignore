@@ -5,6 +5,9 @@
 # Installer build output — dist/managed-settings.json carries the baked fleet token
 installer/dist/
 
+# Ad-hoc secret-bearing scratch files (e.g. cloud-routine telemetry env)
+*.ignored
+
 # Python
 __pycache__/
 *.pyc
