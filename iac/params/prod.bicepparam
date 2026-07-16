@@ -1,8 +1,8 @@
 // Production target — Data & Analytics subscription
 // (d01c33ab-2bae-4797-ae80-2fc802a26d3d) / Sweden Central.
-// The production RG name is still pending IS (tracked in the IS-asks issue); set it
-// on the deploy command once granted:
-//   az deployment group create -g <PROD_RG> -f iac/main.bicep -p iac/params/prod.bicepparam
+// The production RG name lives in .env.prod (RESOURCE_GROUP, uncommitted); pass it
+// on the deploy command:
+//   az deployment group create -g "$RESOURCE_GROUP" -f iac/main.bicep -p iac/params/prod.bicepparam
 // Secrets come from the environment (deploy workflow injects the PROD_* repo secrets).
 using '../main.bicep'
 
