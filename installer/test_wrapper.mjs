@@ -28,6 +28,7 @@ import {
   throttleAllows,
   resolveEndpoint,
   resolveHeaders,
+  readManagedSettingsEnv,
 } from "./cc-otel-wrapper.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -368,6 +369,19 @@ test("resolveEndpoint: falls back to localhost when no env is set", () => {
   assert.equal(resolveEndpoint({}), "http://localhost:4318/v1/metrics");
 });
 
+test("resolveEndpoint: reads the base from managed-settings.json when OTEL_*/STATUSLINE_* are unset", () => {
+  const managed = { OTEL_EXPORTER_OTLP_ENDPOINT: "https://collector.example.com" };
+  assert.equal(resolveEndpoint({}, managed), "https://collector.example.com/v1/metrics");
+});
+
+test("resolveEndpoint: inherited OTEL_* env beats managed-settings.json", () => {
+  const managed = { OTEL_EXPORTER_OTLP_ENDPOINT: "https://from-file.example.com" };
+  assert.equal(
+    resolveEndpoint({ OTEL_EXPORTER_OTLP_ENDPOINT: "https://from-env.example.com" }, managed),
+    "https://from-env.example.com/v1/metrics",
+  );
+});
+
 test("resolveHeaders: parses the bearer out of OTEL_EXPORTER_OTLP_HEADERS", () => {
   const h = resolveHeaders({ OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Bearer tok-123" });
   assert.equal(h.Authorization, "Bearer tok-123");
@@ -385,6 +399,26 @@ test("resolveHeaders: empty when neither header env is set", () => {
   assert.deepEqual(resolveHeaders({}), {});
 });
 
+test("resolveHeaders: reads the bearer from managed-settings.json when env is unset", () => {
+  const managed = { OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Bearer from-file" };
+  assert.equal(resolveHeaders({}, managed).Authorization, "Bearer from-file");
+});
+
+test("readManagedSettingsEnv: returns the env block from managed-settings.json beside the wrapper", () => {
+  const dir = tmpDir("cc-otel-managed-");
+  fs.writeFileSync(
+    path.join(dir, "managed-settings.json"),
+    JSON.stringify({ env: { OTEL_EXPORTER_OTLP_ENDPOINT: "https://c.example.com" } }),
+  );
+  assert.deepEqual(readManagedSettingsEnv(dir), {
+    OTEL_EXPORTER_OTLP_ENDPOINT: "https://c.example.com",
+  });
+});
+
+test("readManagedSettingsEnv: {} when the file is absent (never throws)", () => {
+  assert.deepEqual(readManagedSettingsEnv(tmpDir("cc-otel-empty-")), {});
+});
+
 // ---------------------------------------------------------------------------
 // End-to-end stdin/spawn tests (real wrapper invocation)
 // ---------------------------------------------------------------------------
@@ -395,10 +429,11 @@ function startFakeCollector() {
     let buf = "";
     req.on("data", (c) => (buf += c));
     req.on("end", () => {
+      const auth = req.headers.authorization;
       try {
-        received.push({ url: req.url, body: JSON.parse(buf) });
+        received.push({ url: req.url, auth, body: JSON.parse(buf) });
       } catch {
-        received.push({ url: req.url, body: null, raw: buf });
+        received.push({ url: req.url, auth, body: null, raw: buf });
       }
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end("{}");
@@ -488,6 +523,51 @@ test("end-to-end: resolves the endpoint from OTEL_EXPORTER_OTLP_* env (no STATUS
   assert.equal(code, 0);
   assert.equal(received.length, 1);
   assert.equal(received[0].url, "/v1/metrics");
+});
+
+test("end-to-end: with OTEL_*/STATUSLINE_* unset, resolves endpoint+bearer from a co-located managed-settings.json (the statusLine-subprocess case)", async () => {
+  const { server, received } = startFakeCollector();
+  server.listen(0);
+  await once(server, "listening");
+  const port = server.address().port;
+
+  // Copy the real wrapper into a temp InstallRoot with managed-settings.json
+  // beside it — the on-disk layout the installer produces. This is the only
+  // source of the OTLP target; the spawn env carries no OTEL_*/STATUSLINE_*.
+  const installRoot = tmpDir("cc-otel-installroot-");
+  const wrapperCopy = path.join(installRoot, "cc-otel-wrapper.mjs");
+  fs.copyFileSync(WRAPPER, wrapperCopy);
+  fs.writeFileSync(
+    path.join(installRoot, "managed-settings.json"),
+    JSON.stringify({
+      env: {
+        OTEL_EXPORTER_OTLP_ENDPOINT: `http://127.0.0.1:${port}`,
+        OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Bearer fleet-token-from-file",
+      },
+    }),
+  );
+
+  const child = spawn("node", [wrapperCopy], {
+    cwd: tmpDir(),
+    env: {
+      ...process.env,
+      ...e2eConfig(),
+      OTEL_EXPORTER_OTLP_ENDPOINT: "",
+      OTEL_EXPORTER_OTLP_HEADERS: "",
+      STATUSLINE_OTLP_ENDPOINT: "",
+      STATUSLINE_OTLP_HEADERS: "",
+    },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  child.stdin.write(JSON.stringify(SAMPLE));
+  child.stdin.end();
+  const [code] = await once(child, "close");
+  await new Promise((r) => server.close(r));
+
+  assert.equal(code, 0);
+  assert.equal(received.length, 1, "the push must reach the file-configured endpoint, not localhost");
+  assert.equal(received[0].url, "/v1/metrics");
+  assert.equal(received[0].auth, "Bearer fleet-token-from-file");
 });
 
 test("end-to-end: second invocation within 5 minutes performs no HTTP call", async () => {
