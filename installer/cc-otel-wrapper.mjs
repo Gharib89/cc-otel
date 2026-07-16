@@ -30,9 +30,12 @@
 // A hard watchdog guarantees we exit within HARD_TIMEOUT_MS regardless of OTLP
 // latency.
 //
-// OTLP endpoint + bearer are REUSED from the machine's existing telemetry env
-// (the managed-settings block install.ps1 installs), so the wrapper re-bakes no
-// secret of its own:
+// OTLP endpoint + bearer are REUSED from the fleet telemetry config install.ps1
+// bakes — the wrapper re-bakes no secret of its own. Source order: process env
+// first, then the installer's managed-settings.json `env` block sitting beside
+// this file. The file fallback exists because Claude Code stops propagating
+// OTEL_* env to the statusLine subprocess (v2.1.128+), so inherited env alone is
+// unreliable; managed-settings.json is the same baked config, always on disk.
 //   OTEL_EXPORTER_OTLP_ENDPOINT  base OTLP URL; the metrics path /v1/metrics is appended
 //   OTEL_EXPORTER_OTLP_HEADERS   "k=v,k=v" headers, incl. Authorization=Bearer <token>
 // The STATUSLINE_* overrides below win when set (used by the test suite):
@@ -50,7 +53,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 
 // Resolve the Claude config dir. Honor CLAUDE_CONFIG_DIR (Claude Code's own
 // override) before falling back to <home>/.claude.
@@ -183,22 +186,63 @@ function resolveInnerCmd() {
   return (_cachedInner = resolveInnerCmdFrom());
 }
 
-// OTLP endpoint. Reuse the machine's telemetry env: OTEL_EXPORTER_OTLP_ENDPOINT
-// is a base URL, so append the metrics signal path. STATUSLINE_OTLP_ENDPOINT (a
-// full /v1/metrics URL) overrides it when set; last resort is the local default.
-export function resolveEndpoint(env = process.env) {
-  const override = env.STATUSLINE_OTLP_ENDPOINT;
-  if (override && override.trim()) return override.trim();
-  const base = env.OTEL_EXPORTER_OTLP_ENDPOINT;
-  if (base && base.trim()) return base.trim().replace(/\/+$/, "") + "/v1/metrics";
+// The installer drops managed-settings.json beside this wrapper in InstallRoot;
+// its `env` block is the authoritative fleet OTLP target. We locate it from this
+// file's own directory so it resolves regardless of the working dir or how the
+// statusLine subprocess was spawned.
+const WRAPPER_DIR = path.dirname(fileURLToPath(import.meta.url));
+
+// Read the OTEL_* telemetry env the installer baked into managed-settings.json.
+// Claude Code strips OTEL_* from the statusLine subprocess (v2.1.128+), so the
+// inherited-env path is unreliable; this file is the fallback source of the
+// endpoint/token. Tolerant by design (statusline must never throw): a missing /
+// unreadable / non-JSON file, or one with no `env` object, yields {}. Only
+// string-valued entries are kept — the values feed .trim()/.split() downstream,
+// so a malformed file (a numeric or object value) must not crash the wrapper.
+export function readManagedSettingsEnv(dir = WRAPPER_DIR) {
+  try {
+    const env = JSON.parse(fs.readFileSync(path.join(dir, "managed-settings.json"), "utf8"))?.env;
+    if (!env || typeof env !== "object") return {};
+    return Object.fromEntries(Object.entries(env).filter(([, v]) => typeof v === "string"));
+  } catch {
+    return {};
+  }
+}
+
+// Read once per process: statusline fires on every refresh, and the baked file
+// does not change under a running install.
+const MANAGED_SETTINGS_ENV = readManagedSettingsEnv();
+
+// First trimmed non-blank string among the candidates, else undefined. A
+// present-but-blank value (whitespace, or a non-string from a malformed managed
+// file) counts as unset, so precedence falls through to the next source instead
+// of a truthy blank shadowing it — and nothing non-string reaches .trim()/.split().
+function firstNonBlank(...vals) {
+  for (const v of vals) if (typeof v === "string" && v.trim()) return v.trim();
+  return undefined;
+}
+
+// OTLP endpoint. STATUSLINE_OTLP_ENDPOINT (a full /v1/metrics URL) wins when set.
+// Otherwise use the base OTEL_EXPORTER_OTLP_ENDPOINT — from process env if Claude
+// Code passed it through, else from managed-settings.json — and append the
+// metrics signal path. Last resort is the local default.
+export function resolveEndpoint(env = process.env, managed = MANAGED_SETTINGS_ENV) {
+  const override = firstNonBlank(env.STATUSLINE_OTLP_ENDPOINT);
+  if (override) return override;
+  const base = firstNonBlank(env.OTEL_EXPORTER_OTLP_ENDPOINT, managed.OTEL_EXPORTER_OTLP_ENDPOINT);
+  if (base) return base.replace(/\/+$/, "") + "/v1/metrics";
   return "http://localhost:4318/v1/metrics";
 }
 
-// OTLP headers. Reuse OTEL_EXPORTER_OTLP_HEADERS (carries Authorization=Bearer
-// <fleet-token>); STATUSLINE_OTLP_HEADERS overrides it when set.
-export function resolveHeaders(env = process.env) {
-  const override = env.STATUSLINE_OTLP_HEADERS;
-  const raw = override && override.trim() ? override : env.OTEL_EXPORTER_OTLP_HEADERS;
+// OTLP headers (carry Authorization=Bearer <fleet-token>). STATUSLINE_OTLP_HEADERS
+// wins; otherwise OTEL_EXPORTER_OTLP_HEADERS from process env, else from
+// managed-settings.json.
+export function resolveHeaders(env = process.env, managed = MANAGED_SETTINGS_ENV) {
+  const raw = firstNonBlank(
+    env.STATUSLINE_OTLP_HEADERS,
+    env.OTEL_EXPORTER_OTLP_HEADERS,
+    managed.OTEL_EXPORTER_OTLP_HEADERS,
+  );
   return parseKv(raw);
 }
 
