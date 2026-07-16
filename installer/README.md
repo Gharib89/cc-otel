@@ -55,7 +55,8 @@ Bootstrap-style: the only input is `-Environment`. Every value is derived from
 container app's public ingress FQDN (resolved live via `az`, so an authenticated
 `az` session is required), and the **fleet token** is the first entry of the
 `FLEET_TOKENS` list (the collector accepts every token in the list; the build bakes
-one).
+one). `FLEET_TOKENS` is a JSON array string in `.env.<env>` — e.g.
+`FLEET_TOKENS=["tokenA","tokenB"]` — not comma-separated.
 
 Bakes the generated `managed-settings.json` (endpoint + token + gates) and the
 wrapper into a **single self-contained `dist/install.ps1`** as base64, then prints
