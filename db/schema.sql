@@ -94,6 +94,41 @@ BEGIN
         SELECT 1 FROM raw.events WHERE user_email IS NULL
     ) q
     HAVING COUNT(*) > 0;
+
+    -- DQ: session-days logged under more than one account. fact_session_daily keeps a
+    -- single (corp-preferred) email, so this is where multi-account usage is recorded —
+    -- one finding per offending session-day, corp vs personal split out.
+    INSERT INTO marts.dq_finding (finding_type, row_count, details)
+    SELECT 'multi_email_session',
+           cardinality(all_emails),
+           jsonb_build_object(
+               'session_id', session_id,
+               'activity_date', activity_date,
+               'corp_emails', to_jsonb(corp_emails),
+               'personal_emails', to_jsonb(personal_emails),
+               'all_emails', to_jsonb(all_emails)
+           )
+    FROM (
+        SELECT
+            session_id,
+            activity_date,
+            ARRAY_AGG(DISTINCT user_email ORDER BY user_email) AS all_emails,
+            ARRAY_AGG(DISTINCT user_email ORDER BY user_email)
+                FILTER (WHERE user_email LIKE '%@itworx.com') AS corp_emails,
+            ARRAY_AGG(DISTINCT user_email ORDER BY user_email)
+                FILTER (WHERE user_email NOT LIKE '%@itworx.com') AS personal_emails
+        FROM (
+            SELECT session_id, ts::date AS activity_date, user_email
+            FROM staging.stg_counter_delta
+            WHERE session_id IS NOT NULL AND user_email IS NOT NULL
+            UNION
+            SELECT session_id, event_time::date AS activity_date, user_email
+            FROM raw.events
+            WHERE session_id IS NOT NULL AND user_email IS NOT NULL
+        ) e
+        GROUP BY session_id, activity_date
+        HAVING COUNT(DISTINCT user_email) > 1
+    ) x;
 END
 $$;
 
@@ -522,8 +557,8 @@ CREATE MATERIALIZED VIEW marts.fact_session AS
 CREATE MATERIALIZED VIEW marts.fact_session_daily AS
  WITH m AS (
          SELECT stg_counter_delta.session_id,
-            stg_counter_delta.user_email,
             (stg_counter_delta.ts)::date AS activity_date,
+            (array_agg(stg_counter_delta.user_email ORDER BY (stg_counter_delta.user_email ~~ '%@itworx.com'::text) DESC NULLS LAST) FILTER (WHERE (stg_counter_delta.user_email IS NOT NULL)))[1] AS user_email,
             sum(stg_counter_delta.value) FILTER (WHERE (stg_counter_delta.metric_name = 'claude_code.commit.count'::text)) AS commits,
             sum(stg_counter_delta.value) FILTER (WHERE (stg_counter_delta.metric_name = 'claude_code.pull_request.count'::text)) AS prs,
             sum(stg_counter_delta.value) FILTER (WHERE ((stg_counter_delta.metric_name = 'claude_code.lines_of_code.count'::text) AND (stg_counter_delta.type_label = 'added'::text))) AS loc_added,
@@ -532,15 +567,15 @@ CREATE MATERIALIZED VIEW marts.fact_session_daily AS
             sum(stg_counter_delta.value) FILTER (WHERE ((stg_counter_delta.metric_name = 'claude_code.active_time.total'::text) AND (stg_counter_delta.type_label = 'cli'::text))) AS active_time_cli_s
            FROM staging.stg_counter_delta
           WHERE (stg_counter_delta.session_id IS NOT NULL)
-          GROUP BY stg_counter_delta.session_id, stg_counter_delta.user_email, ((stg_counter_delta.ts)::date)
+          GROUP BY stg_counter_delta.session_id, ((stg_counter_delta.ts)::date)
         ), p AS (
          SELECT events.session_id,
-            events.user_email,
             (events.event_time)::date AS activity_date,
+            (array_agg(events.user_email ORDER BY (events.user_email ~~ '%@itworx.com'::text) DESC NULLS LAST) FILTER (WHERE (events.user_email IS NOT NULL)))[1] AS user_email,
             count(*) AS prompts
            FROM raw.events
           WHERE ((events.event_name = 'user_prompt'::text) AND (events.session_id IS NOT NULL))
-          GROUP BY events.session_id, events.user_email, ((events.event_time)::date)
+          GROUP BY events.session_id, ((events.event_time)::date)
         )
  SELECT COALESCE(m.session_id, p.session_id) AS session_id,
     COALESCE(m.user_email, p.user_email) AS user_email,
@@ -936,4 +971,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260713170010'),
     ('20260713170011'),
     ('20260713170012'),
-    ('20260713170013');
+    ('20260713170013'),
+    ('20260716153503');
