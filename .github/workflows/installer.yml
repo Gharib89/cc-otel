@@ -1,0 +1,71 @@
+name: installer
+
+# Path-filtered per concern (CLAUDE.md): only the fleet installer sources and this
+# workflow trigger these checks. The installer is pushed to fleet machines by IS
+# (issue #26), never deployed from CI; this workflow only lints and tests the
+# sources. Bootstrap (operator/env setup) is a distinct concern with its own
+# workflow (bootstrap.yml, #52) — PowerShell lint intentionally lives in more than
+# one concern-workflow, the same way iac.yml runs PSRule independently.
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - "installer/**"
+      - ".github/workflows/installer.yml"
+  pull_request:
+    paths: *paths
+
+# Private repo, metered minutes (#32): a review-loop push cancels the stale run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # PSScriptAnalyzer (must be clean) + the wrapper contract test. Both are
+  # OS-agnostic — PSSA parses statically and `node --test` needs only the
+  # preinstalled Node — so they run on ubuntu (1x minutes, #32).
+  lint-wrapper:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned analyzer
+        shell: pwsh
+        run: Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
+
+      - name: PSScriptAnalyzer (fails on any finding)
+        shell: pwsh
+        run: |
+          $findings = Invoke-ScriptAnalyzer -Path ./installer -Recurse
+          if ($findings) {
+            $findings | Format-Table -AutoSize
+            throw "PSScriptAnalyzer found $($findings.Count) issue(s)."
+          }
+
+      - name: Wrapper contract (node --test)
+        run: node --test installer/test_wrapper.mjs
+
+  # Pester dot-sources install.ps1, whose $InstallRoot default
+  # (Join-Path $env:ProgramFiles ...) binds to null off Windows and fails to load,
+  # so the suite needs a Windows runner. It runs under pwsh (not Windows PowerShell
+  # 5.1): the suite is green on pwsh, whereas 5.1 mis-parses a piped JSON array in
+  # build-installer's Select-FleetToken. install.ps1 itself stays 5.1-compatible for
+  # the SYSTEM-context fleet push (that path is covered by the manual matrix, #26).
+  pester:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned Pester
+        shell: pwsh
+        run: Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force
+
+      - name: Pester
+        shell: pwsh
+        run: |
+          Import-Module Pester -RequiredVersion 5.7.1
+          $config = New-PesterConfiguration
+          $config.Run.Path = './installer'
+          $config.Run.Exit = $true
+          $config.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $config
