@@ -54,12 +54,22 @@ table _Measures
 		lineageTag: 8a82517d-97c2-4dae-9141-b174a81cb6a0
 
 	/// Utilization windows at or above the limit-hit threshold, over all 5h windows in context.
+	/// Grain is user × window_type × window_end × segment_no, so collapse reset-split segments to
+	/// one row per window instance first (a window hit the limit if any segment's peak_pct did).
 	measure 'Limit-Hit Rate' =
 			VAR Threshold = [Limit-Hit Threshold Pct]
-			VAR FiveHWindows = CALCULATETABLE ( fact_usage_window, fact_usage_window[window_type] = "5h" )
+			VAR FiveHWindows =
+			    ADDCOLUMNS (
+			        SUMMARIZE (
+			            CALCULATETABLE ( fact_usage_window, fact_usage_window[window_type] = "5h" ),
+			            fact_usage_window[user_email],
+			            fact_usage_window[window_end]
+			        ),
+			        "@PeakInWindow", CALCULATE ( MAX ( fact_usage_window[peak_pct] ) )
+			    )
 			RETURN
 			    DIVIDE (
-			        COUNTROWS ( FILTER ( FiveHWindows, fact_usage_window[peak_pct] >= Threshold ) ),
+			        COUNTROWS ( FILTER ( FiveHWindows, [@PeakInWindow] >= Threshold ) ),
 			        COUNTROWS ( FiveHWindows )
 			    )
 		formatString: 0.0%;-0.0%;0.0%
@@ -67,8 +77,21 @@ table _Measures
 		lineageTag: d69a9564-55ce-4b96-b926-f5ec8ea4c795
 
 	/// Σ segment end_pct ÷ distinct window instances. Reset-split segments sum and may exceed 100% — reported as-is (#9).
+	/// A window instance is user × window_type × window_end (window_end alone is shared across users), so count
+	/// the distinct triple, not DISTINCTCOUNT(window_end) which would collapse instances and inflate the metric.
 	/// v1 does not yet restrict to windows fully inside the report period ("full windows"); refine at report level.
-	measure 'Utilization Intensity' = DIVIDE ( SUM ( fact_usage_window[end_pct] ), DISTINCTCOUNT ( fact_usage_window[window_end] ) )
+	measure 'Utilization Intensity' =
+			DIVIDE (
+			    SUM ( fact_usage_window[end_pct] ),
+			    COUNTROWS (
+			        SUMMARIZE (
+			            fact_usage_window,
+			            fact_usage_window[user_email],
+			            fact_usage_window[window_type],
+			            fact_usage_window[window_end]
+			        )
+			    )
+			)
 		formatString: 0.0%;-0.0%;0.0%
 		displayFolder: Utilization
 		lineageTag: 81068fa0-8934-4b90-aa99-797baea5d229
