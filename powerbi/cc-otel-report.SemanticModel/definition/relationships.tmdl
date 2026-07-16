@@ -1,4 +1,3 @@
-/// Facts → dim_user (active)
 relationship fact_session_to_dim_user
 	fromColumn: fact_session.user_email
 	toColumn: dim_user.user_email
@@ -23,7 +22,6 @@ relationship fact_utilization_hourly_to_dim_user
 	fromColumn: fact_utilization_hourly.user_email
 	toColumn: dim_user.user_email
 
-/// Facts → dim_date on the row's activity_date (active)
 relationship fact_session_to_dim_date
 	fromColumn: fact_session.activity_date
 	toColumn: dim_date.date_day
@@ -48,12 +46,10 @@ relationship fact_utilization_hourly_to_dim_date
 	fromColumn: fact_utilization_hourly.activity_date
 	toColumn: dim_date.date_day
 
-/// fact_api_usage → dim_model (active)
 relationship fact_api_usage_to_dim_model
 	fromColumn: fact_api_usage.model
 	toColumn: dim_model.model_id
 
-/// Bridges → fact_session anchor (active — bridges carry no user/date of their own)
 relationship bridge_session_agent_to_fact_session
 	fromColumn: bridge_session_agent.session_id
 	toColumn: fact_session.session_id
@@ -74,8 +70,6 @@ relationship bridge_session_skill_to_fact_session
 	fromColumn: bridge_session_skill.session_id
 	toColumn: fact_session.session_id
 
-/// Session-grain facts → fact_session anchor (INACTIVE: they already reach dim_user/dim_date
-/// directly, so an active path here would be ambiguous. Activate via USERELATIONSHIP for drill.)
 relationship fact_session_daily_to_fact_session
 	isActive: false
 	fromColumn: fact_session_daily.session_id
@@ -91,7 +85,6 @@ relationship fact_edit_decision_to_fact_session
 	fromColumn: fact_edit_decision.session_id
 	toColumn: fact_session.session_id
 
-/// Employee dim → dim_user on normalized email (single direction: vw filters dim_user, carrying RLS).
 relationship dim_user_to_vw_UserBasicInfo
 	fromColumn: dim_user.user_email
 	toColumn: vw_UserBasicInfo.Email

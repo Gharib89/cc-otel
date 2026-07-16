@@ -16,7 +16,7 @@ Desktop-published semantic model + report.
 
 Import mode. Two sources:
 
-- **Marts** — Azure Postgres `cc_otel` DB, `marts` schema only. The 13 matviews
+- **Marts** — Azure Postgres `cc_otel` DB, `marts` schema only. The 14 matviews
   (`dim_*`, `fact_*`, `bridge_*`) load via `Value.NativeQuery` (`SELECT … FROM marts.<x>`)
   because Power BI's PostgreSQL connector **does not list materialized views** in the
   Navigator — a plain navigation import can't see them. The two ops **tables**
@@ -38,7 +38,9 @@ Structure:
   in DAX (`Limit-Hit Threshold Pct`, `Freshness Amber/Red Hours`), so changing one is a measure
   edit, not a migration.
 - **RLS — `OrgScope`** (dynamic): a viewer sees their own employee row plus every row whose
-  management chain contains them, via `PATHCONTAINS(PATH(Email, ManagerEmail), USERPRINCIPALNAME())`.
+  management chain contains them. `vw_UserBasicInfo` carries a hidden `ManagementPath` calculated
+  column (`PATH(Email, ManagerEmail)`); the role filters it with
+  `Email = USERPRINCIPALNAME() || PATHCONTAINS(ManagementPath, USERPRINCIPALNAME())`.
   Workspace Admin/Member bypass RLS. Requires a clean, acyclic, same-cased `ManagerEmail` chain.
 
 ## Connect / refresh (Desktop)
