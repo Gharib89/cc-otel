@@ -182,3 +182,34 @@ Describe 'Invoke-Install (orchestration)' {
         Invoke-Install -InstallRoot $script:target | Should -Be 1
     }
 }
+
+Describe 'build-installer pure seam' {
+    BeforeAll {
+        # Dot-source with a dummy -Environment; the script's guard defines its
+        # functions without baking, and the nested config-loader dot-source is
+        # inert (guard-skipped, so no .env read or az call at load).
+        . (Join-Path $PSScriptRoot 'build-installer.ps1') -Environment 'interim'
+    }
+
+    Context 'Select-FleetToken' {
+        It 'bakes the first token of the FLEET_TOKENS JSON array' {
+            Select-FleetToken -FleetTokens '["first","second"]' | Should -Be 'first'
+        }
+        It 'handles a single-element array' {
+            Select-FleetToken -FleetTokens '["only"]' | Should -Be 'only'
+        }
+        It 'throws on an empty list' {
+            { Select-FleetToken -FleetTokens '[]' } | Should -Throw -ExpectedMessage '*FLEET_TOKENS is empty*'
+        }
+    }
+
+    Context 'ConvertTo-CollectorEndpoint' {
+        It 'prepends https:// to a bare ingress FQDN' {
+            ConvertTo-CollectorEndpoint -Fqdn 'ccotel-app-interim.region.azurecontainerapps.io' |
+                Should -Be 'https://ccotel-app-interim.region.azurecontainerapps.io'
+        }
+        It 'throws on an empty FQDN' {
+            { ConvertTo-CollectorEndpoint -Fqdn '  ' } | Should -Throw -ExpectedMessage '*FQDN is empty*'
+        }
+    }
+}

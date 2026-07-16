@@ -74,6 +74,9 @@ Describe 'Get-BootstrapConfig - derived values' {
     It 'derives the flexible-server name ccotel-pg-<env>' {
         $script:cfg.ServerName | Should -Be 'ccotel-pg-interim'
     }
+    It 'derives the container-app name ccotel-app-<env>' {
+        $script:cfg.AppName | Should -Be 'ccotel-app-interim'
+    }
     It 'derives the uppercase secret prefix' {
         $script:cfg.SecretPrefix | Should -Be 'INTERIM'
     }

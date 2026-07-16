@@ -124,6 +124,7 @@ function Get-DerivedBootstrapConfig {
         GhcrToken       = Get-DotEnvValue -Raw $Raw -Key 'GHCR_TOKEN'
         # Derived (null-safe when the source key is absent).
         ServerName      = "ccotel-pg-$Environment"
+        AppName         = "ccotel-app-$Environment"
         SecretPrefix    = $Environment.ToUpperInvariant()
         Scope           = if ($sub -and $rg) { "/subscriptions/$sub/resourceGroups/$rg" } else { $null }
         RuleName        = if ($initials) { "operator-$($initials.ToLowerInvariant())" } else { $null }

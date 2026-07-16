@@ -5,6 +5,12 @@
     install.ps1 that IS distributes to the fleet.
 
 .DESCRIPTION
+    Bootstrap-style: the only input is -Environment. Every value is derived from
+    .env.<env> via bootstrap/lib/Get-BootstrapConfig.ps1 (the same loader bootstrap.ps1
+    uses) - no per-command copy-paste of endpoint or token. The fleet token is the
+    first entry of the FLEET_TOKENS list; the collector endpoint is the container
+    app's public ingress FQDN, resolved live via `az`.
+
     Reuses the pure builders in install.ps1 (dot-sourced) so the baked managed
     settings and the runtime materialization share one definition. Generates
     managed-settings.json (endpoint + token + gates) and reads the statusline
@@ -16,22 +22,15 @@
     machine to overwrite (issue #26 acceptance).
 
     The committed install.ps1 / build-installer.ps1 carry no secret: the token is
-    read from $env:FLEET_TOKEN and lands only in the gitignored dist/install.ps1.
+    read from .env.<env> (gitignored) and lands only in the gitignored dist/install.ps1.
 
 .EXAMPLE
-    $env:FLEET_TOKEN = '<token>'
-    ./build-installer.ps1 -Endpoint https://collector.example.com
+    ./build-installer.ps1 -Environment interim
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    # Public HTTPS ingress FQDN of the collector - the fleet OTLP endpoint (iac/main.bicep).
-    [Parameter(Mandatory)][string]$Endpoint,
-
-    # Fleet bearer token (issue #6). Sourced from $env:FLEET_TOKEN by default
-    # (a GitHub/ACA secret in CI, or a locally-exported .env value) so the committed
-    # script carries no secret and the token only ever lives in the environment and
-    # the gitignored dist/ artifact - never in the repo. Override with -Token.
-    [string]$Token = $env:FLEET_TOKEN,
+    # Target environment; selects .env.<env> and the ccotel-app-<env> container app.
+    [Parameter(Mandatory)][ValidateSet('interim', 'prod')][string]$Environment,
 
     # Statusline wrapper source (ADR-0003) bundled into the artifact and hashed
     # into the stamp. A required build input.
@@ -50,36 +49,93 @@ $ErrorActionPreference = 'Stop'
 
 # Reuse install.ps1's builders; its dot-source guard keeps Main from running.
 . (Join-Path $PSScriptRoot 'install.ps1')
+# The shared .env.<env> loader (bootstrap/lib) - its guard defines functions only.
+. (Join-Path (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'bootstrap') 'lib') 'Get-BootstrapConfig.ps1') -Environment $Environment
 
-if (-not (Test-Path -LiteralPath $WrapperPath)) {
-    throw "Wrapper not found at '$WrapperPath'. Build the wrapper (cc-otel-wrapper.mjs, ADR-0003) or pass -WrapperPath."
-}
-if ([string]::IsNullOrWhiteSpace($Token)) {
-    Write-Warning 'No fleet token in $env:FLEET_TOKEN (and none passed via -Token) - this artifact will NOT authenticate. Set FLEET_TOKEN or pass -Token for a real build.'
-    $Token = '__FLEET_TOKEN_PLACEHOLDER__'
-}
+# =============================================================================
+# Pure functions (no side effects) - the tested seam.
+# =============================================================================
 
-$wrapperContent     = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $WrapperPath))
-$wrapperInstallPath = Join-Path $InstallRoot 'cc-otel-wrapper.mjs'
-$telemetryEnv       = Get-DesiredTelemetryEnv -Endpoint $Endpoint -Token $Token
-$managedJson        = ConvertTo-ManagedSettingsJson -TelemetryEnv $telemetryEnv -WrapperPath $wrapperInstallPath
-$stamp          = Get-InstallerStamp -WrapperContent $wrapperContent -ManagedSettingsJson $managedJson -SchemaVersion $script:InstallerSchemaVersion
-
-# Base64 so arbitrary token/JSON/JS bytes can't break the PowerShell string literal.
-$managedB64 = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($managedJson))
-$wrapperB64 = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($wrapperContent))
-
-$source = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot 'install.ps1'))
-$baked  = $source.Replace('__CC_OTEL_MANAGED_B64__', $managedB64).Replace('__CC_OTEL_WRAPPER_B64__', $wrapperB64)
-if ($baked -eq $source) { throw 'Payload placeholders not found in install.ps1 - cannot bake a self-contained artifact.' }
-
-if ($PSCmdlet.ShouldProcess($OutputPath, 'Stage self-contained install.ps1')) {
-    # Outer ShouldProcess is authoritative; force the nested write.
-    if (Test-Path -LiteralPath $OutputPath) { Remove-Item -LiteralPath $OutputPath -Recurse -Force -Confirm:$false }
-    [System.IO.Directory]::CreateDirectory($OutputPath) | Out-Null
-    Write-TextFile -Path (Join-Path $OutputPath 'install.ps1') -Content $baked -Confirm:$false
-    Write-Information "[INFO] Self-contained install.ps1 staged at $OutputPath (schema v$script:InstallerSchemaVersion)." -InformationAction Continue
+function Select-FleetToken {
+    <#
+    .SYNOPSIS
+        The single fleet bearer token to bake, chosen from the FLEET_TOKENS list.
+    .DESCRIPTION
+        FLEET_TOKENS is a JSON array string - the collector accepts every token in
+        it. The installer bakes exactly one; by defined selection that is the FIRST
+        token in the list.
+    #>
+    [OutputType([string])]
+    param([Parameter(Mandatory)][string]$FleetTokens)
+    $tokens = @($FleetTokens | ConvertFrom-Json)
+    if ($tokens.Count -eq 0 -or [string]::IsNullOrWhiteSpace([string]$tokens[0])) {
+        throw 'FLEET_TOKENS is empty - no token to bake. Set FLEET_TOKENS in .env.<env> to a JSON array, e.g. ["<bearer-token>"].'
+    }
+    return [string]$tokens[0]
 }
 
-# Stamp on stdout so callers/CI can diff builds.
-Write-Output $stamp
+function ConvertTo-CollectorEndpoint {
+    <# .SYNOPSIS The https:// OTLP endpoint URL for a bare collector ingress FQDN. #>
+    [OutputType([string])]
+    param([Parameter(Mandatory)][string]$Fqdn)
+    if ([string]::IsNullOrWhiteSpace($Fqdn)) { throw 'Collector FQDN is empty - cannot build the OTLP endpoint URL.' }
+    return "https://$($Fqdn.Trim())"
+}
+
+# =============================================================================
+# Effectful shim - thin wrapper over `az`.
+# =============================================================================
+
+function Get-CollectorFqdn {
+    <# .SYNOPSIS Public ingress FQDN of the collector container app (via az). #>
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)][string]$ResourceGroup,
+        [Parameter(Mandatory)][string]$AppName
+    )
+    $fqdn = az containerapp show --resource-group $ResourceGroup --name $AppName `
+        --query 'properties.configuration.ingress.fqdn' --output tsv 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($fqdn)) {
+        throw "Could not resolve the collector ingress FQDN for '$AppName' in '$ResourceGroup' (az exit $LASTEXITCODE). Deploy the app first and ensure you have an authenticated az session."
+    }
+    return $fqdn.Trim()
+}
+
+# =============================================================================
+# Orchestration
+# =============================================================================
+
+if ($MyInvocation.InvocationName -ne '.') {
+    if (-not (Test-Path -LiteralPath $WrapperPath)) {
+        throw "Wrapper not found at '$WrapperPath'. Build the wrapper (cc-otel-wrapper.mjs, ADR-0003) or pass -WrapperPath."
+    }
+
+    $cfg      = Get-BootstrapConfig -Environment $Environment
+    $token    = Select-FleetToken -FleetTokens $cfg.FleetTokens
+    $endpoint = ConvertTo-CollectorEndpoint -Fqdn (Get-CollectorFqdn -ResourceGroup $cfg.ResourceGroup -AppName $cfg.AppName)
+
+    $wrapperContent     = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $WrapperPath))
+    $wrapperInstallPath = Join-Path $InstallRoot 'cc-otel-wrapper.mjs'
+    $telemetryEnv       = Get-DesiredTelemetryEnv -Endpoint $endpoint -Token $token
+    $managedJson        = ConvertTo-ManagedSettingsJson -TelemetryEnv $telemetryEnv -WrapperPath $wrapperInstallPath
+    $stamp              = Get-InstallerStamp -WrapperContent $wrapperContent -ManagedSettingsJson $managedJson -SchemaVersion $script:InstallerSchemaVersion
+
+    # Base64 so arbitrary token/JSON/JS bytes can't break the PowerShell string literal.
+    $managedB64 = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($managedJson))
+    $wrapperB64 = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($wrapperContent))
+
+    $source = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot 'install.ps1'))
+    $baked  = $source.Replace('__CC_OTEL_MANAGED_B64__', $managedB64).Replace('__CC_OTEL_WRAPPER_B64__', $wrapperB64)
+    if ($baked -eq $source) { throw 'Payload placeholders not found in install.ps1 - cannot bake a self-contained artifact.' }
+
+    if ($PSCmdlet.ShouldProcess($OutputPath, 'Stage self-contained install.ps1')) {
+        # Outer ShouldProcess is authoritative; force the nested write.
+        if (Test-Path -LiteralPath $OutputPath) { Remove-Item -LiteralPath $OutputPath -Recurse -Force -Confirm:$false }
+        [System.IO.Directory]::CreateDirectory($OutputPath) | Out-Null
+        Write-TextFile -Path (Join-Path $OutputPath 'install.ps1') -Content $baked -Confirm:$false
+        Write-Information "[INFO] Self-contained install.ps1 for '$Environment' staged at $OutputPath (schema v$script:InstallerSchemaVersion)." -InformationAction Continue
+    }
+
+    # Stamp on stdout so callers/CI can diff builds.
+    Write-Output $stamp
+}

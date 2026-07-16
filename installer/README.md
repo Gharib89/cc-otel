@@ -46,9 +46,16 @@ without Node skipped).
 ## `build-installer.ps1`
 
 ```powershell
-$env:FLEET_TOKEN = '<fleet-bearer-token>'   # or a locally-exported .env value / CI secret
-./build-installer.ps1 -Endpoint https://<collector-fqdn> -WrapperPath <path-to>/cc-otel-wrapper.mjs
+./build-installer.ps1 -Environment interim   # or prod
 ```
+
+Bootstrap-style: the only input is `-Environment`. Every value is derived from
+`.env.<env>` via `bootstrap/lib/Get-BootstrapConfig.ps1` (the same loader
+`bootstrap.ps1` uses) — the **collector endpoint** is the `ccotel-app-<env>`
+container app's public ingress FQDN (resolved live via `az`, so an authenticated
+`az` session is required), and the **fleet token** is the first entry of the
+`FLEET_TOKENS` list (the collector accepts every token in the list; the build bakes
+one).
 
 Bakes the generated `managed-settings.json` (endpoint + token + gates) and the
 wrapper into a **single self-contained `dist/install.ps1`** as base64, then prints
@@ -58,13 +65,10 @@ forcing every machine (and WSL distro) to overwrite. On each run the script
 materializes the managed settings and wrapper back onto disk under the install root.
 
 **`dist/install.ps1` is the only file handed to IS** — a single script their managed
-tool distributes fleet-wide. The token is read from `$env:FLEET_TOKEN` (a GitHub/ACA
-secret in CI, issue #11, or a locally-exported `.env` value); `-Token` overrides it.
-**The token only ever lives in the environment and the baked `dist/install.ps1` —
-`installer/dist/` is gitignored and never committed; the committed `install.ps1`
-carries only placeholders.** With no token set, the build warns and bakes a
-non-authenticating placeholder. The statusline wrapper (`cc-otel-wrapper.mjs`,
-ADR-0003) is a required build input.
+tool distributes fleet-wide. **The token only ever lives in the gitignored
+`.env.<env>` and the baked `dist/install.ps1` — `installer/dist/` is gitignored and
+never committed; the committed `install.ps1` carries only placeholders.** The
+statusline wrapper (`cc-otel-wrapper.mjs`, ADR-0003) is a required build input.
 
 ## Testing
 
