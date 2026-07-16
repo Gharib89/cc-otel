@@ -129,6 +129,27 @@ function Test-PgCronPreloaded {
     return ($entries -contains 'pg_cron')
 }
 
+function Test-PgCronDatabaseApplied {
+    <#
+    .SYNOPSIS
+        True when cron.database_name equals the expected DB and is not pending a
+        restart.
+    .DESCRIPTION
+        cron.database_name is restart-only on Azure PG Flexible Server and Azure
+        does not auto-restart for it, so a set-but-pending value means pg_cron is
+        still bound to the default database and cron.schedule() silently no-ops
+        (#65/#66). Both conditions must hold before migrating.
+    #>
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Value,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Pending,
+        [Parameter(Mandatory)][string]$Expected
+    )
+    $isPending = ($Pending.Trim().ToLowerInvariant() -eq 'true')
+    return (($Value.Trim() -eq $Expected) -and -not $isPending)
+}
+
 function Get-PgCronJobReport {
     <#
     .SYNOPSIS
@@ -234,6 +255,33 @@ function Get-PgCronJob {
     return [object[]]$rows
 }
 
+function Get-PgParameter {
+    <# .SYNOPSIS A server parameter field (value / isConfigPendingRestart) via az. #>
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)][string]$ResourceGroup,
+        [Parameter(Mandatory)][string]$ServerName,
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Query
+    )
+    $val = az postgres flexible-server parameter show --resource-group $ResourceGroup `
+        --server-name $ServerName --name $Name --query $Query --output tsv 2>$null
+    if ($LASTEXITCODE -ne 0) { throw "Could not read server parameter '$Name' (is the server reachable?)." }
+    return ([string]$val).Trim()
+}
+
+function Invoke-PostgresRestart {
+    <# .SYNOPSIS Restart the flexible server (applies restart-only config). #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)][string]$ResourceGroup,
+        [Parameter(Mandatory)][string]$ServerName
+    )
+    if (-not $PSCmdlet.ShouldProcess($ServerName, 'restart')) { return }
+    az postgres flexible-server restart --resource-group $ResourceGroup --name $ServerName --output none
+    if ($LASTEXITCODE -ne 0) { throw "Server restart failed (az exit $LASTEXITCODE)." }
+}
+
 function Test-ContainerImage {
     <# .SYNOPSIS True when a container image reference exists in its registry. #>
     [OutputType([bool])]
@@ -333,12 +381,34 @@ function Invoke-StepDeploy {
 function Invoke-StepPgCronGate {
     [OutputType([int])]
     param([Parameter(Mandatory)]$Config)
+    # 1. shared_preload_libraries must have pg_cron loaded.
     $preload = Get-PgCronPreload -DatabaseUrl $Config.DatabaseUrl
     if (-not (Test-PgCronPreloaded -PreloadValue $preload)) {
         Write-BootstrapLog "pg_cron is not in shared_preload_libraries ('$preload'). Migrating now would schedule-and-skip the cron jobs and mark the migration applied. Set azure.extensions + shared_preload_libraries to include pg_cron on the server, then re-run." 'HALT'
         return 1
     }
     Write-BootstrapLog "pg_cron is preloaded ('$preload')."
+
+    # 2. cron.database_name must be cc_otel AND applied (not pending a restart).
+    # It is restart-only on Azure PG Flexible Server and Azure does not auto-restart
+    # for it (unlike shared_preload_libraries), so Bicep sets it but pg_cron still
+    # binds to the default DB until a restart - every cron.schedule() silently
+    # no-ops (#65/#66). Restart when pending, then assert it applied.
+    $pending = Get-PgParameter -ResourceGroup $Config.ResourceGroup -ServerName $Config.ServerName `
+        -Name 'cron.database_name' -Query 'isConfigPendingRestart'
+    if ($pending.Trim().ToLowerInvariant() -eq 'true') {
+        Write-BootstrapLog "cron.database_name restart pending; restarting $($Config.ServerName) (one restart applies all pending config)."
+        Invoke-PostgresRestart -ResourceGroup $Config.ResourceGroup -ServerName $Config.ServerName -Confirm:$false
+        $pending = Get-PgParameter -ResourceGroup $Config.ResourceGroup -ServerName $Config.ServerName `
+            -Name 'cron.database_name' -Query 'isConfigPendingRestart'
+    }
+    $value = Get-PgParameter -ResourceGroup $Config.ResourceGroup -ServerName $Config.ServerName `
+        -Name 'cron.database_name' -Query 'value'
+    if (-not (Test-PgCronDatabaseApplied -Value $value -Pending $pending -Expected $script:CronDatabase)) {
+        Write-BootstrapLog "cron.database_name is '$value' (pendingRestart=$pending); expected '$($script:CronDatabase)' applied. pg_cron jobs will not schedule - do NOT migrate." 'HALT'
+        return 1
+    }
+    Write-BootstrapLog "cron.database_name applied ('$value')."
     return 0
 }
 

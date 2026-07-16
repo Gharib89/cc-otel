@@ -64,7 +64,7 @@ The default spine runs in this order. `mode` is how the step behaves:
 | `sync-secrets` | Fan `.env.<env>` out to the prefixed GitHub secrets | auto |
 | `deploy` | Deploy the Bicep template (`CapacityNotAvailable` retry/zone note below) | auto |
 | `open-ip` | Open the operator firewall rule; **stays open** (no auto-close) | auto |
-| `pg-cron-gate` | Assert `shared_preload_libraries` contains `pg_cron` **before** migrating | gate |
+| `pg-cron-gate` | Assert `pg_cron` is preloaded and `cron.database_name=cc_otel` is applied (restart if pending) **before** migrating | gate |
 | `migrate` | `dbmate up` | auto |
 | `db-logins` | Create the ingest + read LOGIN users (passwords from `.env`; was gate G1) | auto |
 | `pg-cron-verify` | Assert the 3 cron jobs are present, **active**, and on **cc_otel** | auto |

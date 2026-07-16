@@ -97,6 +97,21 @@ Describe 'Test-PgCronPreloaded' {
     }
 }
 
+Describe 'Test-PgCronDatabaseApplied' {
+    It 'is true only when the value matches and no restart is pending' {
+        Test-PgCronDatabaseApplied -Value 'cc_otel' -Pending 'false' -Expected 'cc_otel' | Should -BeTrue
+    }
+    It 'is false when a restart is still pending (the #66 failure mode)' {
+        Test-PgCronDatabaseApplied -Value 'cc_otel' -Pending 'true' -Expected 'cc_otel' | Should -BeFalse
+    }
+    It 'is false when the value targets the wrong database' {
+        Test-PgCronDatabaseApplied -Value 'postgres' -Pending 'false' -Expected 'cc_otel' | Should -BeFalse
+    }
+    It 'treats the pending flag case-insensitively' {
+        Test-PgCronDatabaseApplied -Value 'cc_otel' -Pending 'True' -Expected 'cc_otel' | Should -BeFalse
+    }
+}
+
 Describe 'Get-PgCronJobReport' {
     BeforeAll {
         $script:expected = @('trim-processed-batches', 'refresh-marts', 'trim-mart-refresh-log')
