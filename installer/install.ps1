@@ -9,7 +9,10 @@
     no-ops fast and exits 0. The three drift surfaces verified each tick:
 
       1. Installed files    - managed-settings.json + cc-otel-wrapper.mjs match the payload.
-      2. Machine env vars   - the telemetry env block mirrored at Machine scope.
+      2. Machine env vars   - the telemetry env block mirrored at Machine scope, and
+                              stale OTEL_* vars not in that block pruned (a leftover
+                              signal-specific endpoint override would otherwise divert
+                              metrics off the fleet while logs keep flowing).
       3. User telemetry keys - conflicting telemetry keys stripped from user settings*.json.
 
     Telemetry config is delivered from one baked source two ways: managed-settings.json
@@ -196,6 +199,23 @@ function Resolve-InstallExitCode {
     return 0
 }
 
+function Select-StaleTelemetryVar {
+    <#
+    .SYNOPSIS Machine-scope OTEL_* var names to prune: present on the machine but absent
+    from the authoritative managed env block. A leftover signal-specific override (e.g. a
+    POC OTEL_EXPORTER_OTLP_METRICS_ENDPOINT) silently outranks OTEL_EXPORTER_OTLP_ENDPOINT
+    and routes metrics to a dead host while logs keep flowing on the general endpoint - the
+    "logs land, metrics don't" regression. Scoped to OTEL_* so the installer prunes only
+    the telemetry namespace it owns.
+    #>
+    [OutputType([string[]])]
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Existing,
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Desired
+    )
+    return @($Existing | Where-Object { $_ -match '^OTEL_' -and $_ -notin $Desired })
+}
+
 # =============================================================================
 # Effectful shims - thin wrappers over machine state, kept small on purpose.
 # =============================================================================
@@ -263,6 +283,24 @@ function Set-MachineEnvVar {
     if (-not $PSCmdlet.ShouldProcess("Machine env $Name", 'Set')) { return $false }
     [System.Environment]::SetEnvironmentVariable($Name, $Value, 'Machine')
     return $true
+}
+
+function Remove-MachineEnvVar {
+    <# .SYNOPSIS Remove a machine-scope env var when present. #>
+    [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([bool])]
+    param([Parameter(Mandatory)][string]$Name)
+    if ($null -eq [System.Environment]::GetEnvironmentVariable($Name, 'Machine')) { return $false }
+    if (-not $PSCmdlet.ShouldProcess("Machine env $Name", 'Remove')) { return $false }
+    [System.Environment]::SetEnvironmentVariable($Name, $null, 'Machine')
+    return $true
+}
+
+function Get-MachineEnvName {
+    <# .SYNOPSIS Names of all machine-scope env vars (a seam over the static call). #>
+    [OutputType([string[]])]
+    param()
+    return @([System.Environment]::GetEnvironmentVariables('Machine').Keys)
 }
 
 function Get-InstallState {
@@ -442,6 +480,15 @@ function Invoke-Install {
         foreach ($name in $desiredEnv.Keys) {
             if (Set-MachineEnvVar -Name $name -Value $desiredEnv[$name]) {
                 Write-InstallLog "Repaired machine env var $name."
+            }
+        }
+        # The managed env block is authoritative: prune stale Machine-scope OTEL_* vars
+        # not in it, so a POC leftover (e.g. OTEL_EXPORTER_OTLP_METRICS_ENDPOINT) can't
+        # outrank the general endpoint and silently divert metrics off the fleet.
+        $existingMachineVars = @(Get-MachineEnvName)
+        foreach ($stale in (Select-StaleTelemetryVar -Existing $existingMachineVars -Desired @($desiredEnv.Keys))) {
+            if (Remove-MachineEnvVar -Name $stale) {
+                Write-InstallLog "Removed stale machine env var $stale."
             }
         }
     }
