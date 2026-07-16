@@ -67,6 +67,16 @@ param ghcrPassword string
 @description('Log Analytics retention in days.')
 param logRetentionInDays int = 30
 
+// --- Cost budget ---
+@description('Monthly cost cap in USD (150 prod / interim credit slice).')
+param budgetAmount int
+
+@description('Email addresses that receive budget threshold notifications.')
+param budgetContactEmails array
+
+@description('Budget anchor date — first of a month, fixed so redeploys never shift it.')
+param budgetStartDate string
+
 @description('Resource tags applied to every resource.')
 param tags object = {
   application: 'cc-otel'
@@ -133,6 +143,16 @@ module containerApp 'modules/containerapp.bicep' = {
     registryUsername: ghcrUsername
     registryPassword: ghcrPassword
     tags: tags
+  }
+}
+
+module budget 'modules/budget.bicep' = {
+  name: 'budget'
+  params: {
+    name: '${namePrefix}-budget-${environmentName}'
+    amount: budgetAmount
+    contactEmails: budgetContactEmails
+    startDate: budgetStartDate
   }
 }
 

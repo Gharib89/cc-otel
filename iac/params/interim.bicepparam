@@ -33,3 +33,10 @@ param fleetTokens = readEnvironmentVariable('FLEET_TOKENS', '')
 param databaseUrl = readEnvironmentVariable('DATABASE_URL', '')
 param ghcrUsername = readEnvironmentVariable('GHCR_USERNAME', '')
 param ghcrPassword = readEnvironmentVariable('GHCR_TOKEN', '')
+
+// Cost budget — fence cc-otel's slice of the shared VS-benefits subscription at 75
+// USD/mo (other resources share the credit) so it can't be drained early. RG scope
+// means this counts only cc-otel spend. Add more recipients to the array as needed.
+param budgetAmount = 75
+param budgetContactEmails = ['Ahmed.Gharib@itworx.com']
+param budgetStartDate = '2026-07-01'
