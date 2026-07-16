@@ -1,0 +1,36 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	sourceQueryCulture: en-US
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+annotation __PBI_TimeIntelligenceEnabled = 0
+
+annotation PBI_QueryOrder = ["dim_date","dim_user","dim_model","fact_session","fact_session_daily","fact_api_usage","fact_edit_decision","fact_usage_window","fact_utilization_hourly","bridge_session_agent","bridge_session_hook","bridge_session_mcp","bridge_session_plugin","bridge_session_skill","mart_refresh_log","dq_finding","vw_UserBasicInfo"]
+
+annotation PBI_ProTooling = ["DevMode"]
+
+ref table dim_date
+ref table dim_user
+ref table dim_model
+ref table fact_session
+ref table fact_session_daily
+ref table fact_api_usage
+ref table fact_edit_decision
+ref table fact_usage_window
+ref table fact_utilization_hourly
+ref table bridge_session_agent
+ref table bridge_session_hook
+ref table bridge_session_mcp
+ref table bridge_session_plugin
+ref table bridge_session_skill
+ref table mart_refresh_log
+ref table dq_finding
+ref table vw_UserBasicInfo
+ref table '_Measures'
+
+ref role OrgScope
+
+ref cultureInfo en-US

@@ -1,0 +1,63 @@
+table dim_user
+
+	column user_email
+		dataType: string
+		summarizeBy: none
+		sourceColumn: user_email
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_unknown
+		dataType: boolean
+		summarizeBy: none
+		sourceColumn: is_unknown
+
+		annotation SummarizationSetBy = Automatic
+
+	column first_seen
+		dataType: dateTime
+		formatString: General Date
+		summarizeBy: none
+		sourceColumn: first_seen
+
+		annotation SummarizationSetBy = Automatic
+
+	column last_seen
+		dataType: dateTime
+		formatString: General Date
+		summarizeBy: none
+		sourceColumn: last_seen
+
+		annotation SummarizationSetBy = Automatic
+
+	column user_account_id
+		dataType: string
+		summarizeBy: none
+		sourceColumn: user_account_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column organization_id
+		dataType: string
+		summarizeBy: none
+		sourceColumn: organization_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column last_cc_version
+		dataType: string
+		summarizeBy: none
+		sourceColumn: last_cc_version
+
+		annotation SummarizationSetBy = Automatic
+
+	partition dim_user = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT * FROM marts.dim_user")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table
+

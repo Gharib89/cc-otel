@@ -1,0 +1,91 @@
+table fact_session_daily
+
+	column session_id
+		dataType: string
+		summarizeBy: none
+		sourceColumn: session_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column user_email
+		dataType: string
+		summarizeBy: none
+		sourceColumn: user_email
+
+		annotation SummarizationSetBy = Automatic
+
+	column activity_date
+		dataType: dateTime
+		formatString: Short Date
+		summarizeBy: none
+		sourceColumn: activity_date
+
+		annotation SummarizationSetBy = Automatic
+
+	column prompts
+		dataType: int64
+		formatString: 0
+		summarizeBy: sum
+		sourceColumn: prompts
+
+		annotation SummarizationSetBy = Automatic
+
+	column commits
+		dataType: double
+		summarizeBy: sum
+		sourceColumn: commits
+
+		annotation SummarizationSetBy = Automatic
+
+	column prs
+		dataType: double
+		summarizeBy: sum
+		sourceColumn: prs
+
+		annotation SummarizationSetBy = Automatic
+
+	column loc_added
+		dataType: double
+		summarizeBy: sum
+		sourceColumn: loc_added
+
+		annotation SummarizationSetBy = Automatic
+
+	column loc_removed
+		dataType: double
+		summarizeBy: sum
+		sourceColumn: loc_removed
+
+		annotation SummarizationSetBy = Automatic
+
+	column active_time_user_s
+		dataType: double
+		summarizeBy: sum
+		sourceColumn: active_time_user_s
+
+		annotation SummarizationSetBy = Automatic
+
+	column active_time_cli_s
+		dataType: double
+		summarizeBy: sum
+		sourceColumn: active_time_cli_s
+
+		annotation SummarizationSetBy = Automatic
+
+	column active_time_total_s
+		dataType: double
+		summarizeBy: sum
+		sourceColumn: active_time_total_s
+
+		annotation SummarizationSetBy = Automatic
+
+	partition fact_session_daily = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT * FROM marts.fact_session_daily")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table
+

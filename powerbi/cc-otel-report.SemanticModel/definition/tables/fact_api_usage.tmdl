@@ -1,0 +1,99 @@
+table fact_api_usage
+
+	column session_id
+		dataType: string
+		summarizeBy: none
+		sourceColumn: session_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column activity_date
+		dataType: dateTime
+		formatString: Short Date
+		summarizeBy: none
+		sourceColumn: activity_date
+
+		annotation SummarizationSetBy = Automatic
+
+	column model
+		dataType: string
+		summarizeBy: none
+		sourceColumn: model
+
+		annotation SummarizationSetBy = Automatic
+
+	column effort
+		dataType: string
+		summarizeBy: none
+		sourceColumn: effort
+
+		annotation SummarizationSetBy = Automatic
+
+	column query_source
+		dataType: string
+		summarizeBy: none
+		sourceColumn: query_source
+
+		annotation SummarizationSetBy = Automatic
+
+	column user_email
+		dataType: string
+		summarizeBy: none
+		sourceColumn: user_email
+
+		annotation SummarizationSetBy = Automatic
+
+	column input_tokens
+		dataType: double
+		summarizeBy: sum
+		sourceColumn: input_tokens
+
+		annotation SummarizationSetBy = Automatic
+
+	column output_tokens
+		dataType: double
+		summarizeBy: sum
+		sourceColumn: output_tokens
+
+		annotation SummarizationSetBy = Automatic
+
+	column cache_creation_tokens
+		dataType: double
+		summarizeBy: sum
+		sourceColumn: cache_creation_tokens
+
+		annotation SummarizationSetBy = Automatic
+
+	column cache_read_tokens
+		dataType: double
+		summarizeBy: sum
+		sourceColumn: cache_read_tokens
+
+		annotation SummarizationSetBy = Automatic
+
+	column request_count
+		dataType: int64
+		formatString: 0
+		summarizeBy: sum
+		sourceColumn: request_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column last_event_ts
+		dataType: dateTime
+		formatString: General Date
+		summarizeBy: none
+		sourceColumn: last_event_ts
+
+		annotation SummarizationSetBy = Automatic
+
+	partition fact_api_usage = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT * FROM marts.fact_api_usage")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table
+

@@ -1,0 +1,110 @@
+table '_Measures'
+
+	/// Report thresholds live in DAX (not the marts) so a change is a measure edit, never a migration (#9/#27).
+	measure 'Limit-Hit Threshold Pct' = 90
+		formatString: 0
+		displayFolder: Thresholds
+
+	measure 'Freshness Amber Hours' = 8
+		formatString: 0
+		displayFolder: Thresholds
+
+	measure 'Freshness Red Hours' = 24
+		formatString: 0
+		displayFolder: Thresholds
+
+	/// Distinct users with any activity in context — "any signal that day", no minimum-activity gate (#9).
+	measure 'Active Users' = DISTINCTCOUNT(fact_session_daily[user_email])
+		formatString: #,##0
+		displayFolder: Adoption
+
+	measure 'Active Days' = DISTINCTCOUNT(fact_session_daily[activity_date])
+		formatString: #,##0
+		displayFolder: Adoption
+
+	measure 'Total Sessions' = DISTINCTCOUNT(fact_session[session_id])
+		formatString: #,##0
+		displayFolder: Adoption
+
+	measure 'Total Prompts' = SUM(fact_session_daily[prompts])
+		formatString: #,##0
+		displayFolder: Adoption
+
+	measure 'Total Input Tokens' = SUM(fact_api_usage[input_tokens])
+		formatString: #,##0
+		displayFolder: API Usage
+
+	measure 'Total Output Tokens' = SUM(fact_api_usage[output_tokens])
+		formatString: #,##0
+		displayFolder: API Usage
+
+	measure 'Total Requests' = SUM(fact_api_usage[request_count])
+		formatString: #,##0
+		displayFolder: API Usage
+
+	/// Utilization windows at or above the limit-hit threshold, over all 5h windows in context.
+	measure 'Limit-Hit Rate' = ```
+			VAR Threshold = [Limit-Hit Threshold Pct]
+			VAR FiveHWindows = CALCULATETABLE ( fact_usage_window, fact_usage_window[window_type] = "5h" )
+			RETURN
+			    DIVIDE (
+			        COUNTROWS ( FILTER ( FiveHWindows, fact_usage_window[peak_pct] >= Threshold ) ),
+			        COUNTROWS ( FiveHWindows )
+			    )
+			```
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Utilization
+
+	/// Σ segment end_pct ÷ distinct window instances. Reset-split segments sum and may exceed 100% — reported as-is (#9).
+	/// v1 does not yet restrict to windows fully inside the report period ("full windows"); refine at report level.
+	measure 'Utilization Intensity' = DIVIDE ( SUM ( fact_usage_window[end_pct] ), DISTINCTCOUNT ( fact_usage_window[window_end] ) )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Utilization
+
+	measure 'Tool Acceptance Rate' = ```
+			DIVIDE (
+			    CALCULATE ( SUM ( fact_edit_decision[decision_count] ), fact_edit_decision[decision] = "accept" ),
+			    SUM ( fact_edit_decision[decision_count] )
+			)
+			```
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Tool Quality
+
+	/// Import-mode caveat: staleness includes the daily report-refresh lag, not just pipeline silence.
+	measure 'Hours Since Last Signal' = ```
+			VAR LastSignal = MAX ( fact_api_usage[last_event_ts] )
+			RETURN
+			    IF ( ISBLANK ( LastSignal ), BLANK (), DATEDIFF ( LastSignal, NOW (), HOUR ) )
+			```
+		formatString: #,##0
+		displayFolder: Ingest Health
+
+	measure 'Data Freshness Status' = ```
+			VAR H = [Hours Since Last Signal]
+			RETURN
+			    SWITCH (
+			        TRUE (),
+			        ISBLANK ( H ), "No data",
+			        H < [Freshness Amber Hours], "Fresh",
+			        H <= [Freshness Red Hours], "Amber",
+			        "Red"
+			    )
+			```
+		displayFolder: Ingest Health
+
+	/// Second freshness signal — catches pg_cron death independently of the pipeline-silence signal (#9).
+	measure 'Last Mart Refresh' = MAX(mart_refresh_log[finished])
+		formatString: General Date
+		displayFolder: Ingest Health
+
+	column Value
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Value]
+
+	partition '_Measures' = calculated
+		mode: import
+		source = {1}
+

@@ -1,0 +1,69 @@
+table fact_edit_decision
+
+	column session_id
+		dataType: string
+		summarizeBy: none
+		sourceColumn: session_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column activity_date
+		dataType: dateTime
+		formatString: Short Date
+		summarizeBy: none
+		sourceColumn: activity_date
+
+		annotation SummarizationSetBy = Automatic
+
+	column tool_name
+		dataType: string
+		summarizeBy: none
+		sourceColumn: tool_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column language
+		dataType: string
+		summarizeBy: none
+		sourceColumn: language
+
+		annotation SummarizationSetBy = Automatic
+
+	column decision
+		dataType: string
+		summarizeBy: none
+		sourceColumn: decision
+
+		annotation SummarizationSetBy = Automatic
+
+	column source
+		dataType: string
+		summarizeBy: none
+		sourceColumn: source
+
+		annotation SummarizationSetBy = Automatic
+
+	column user_email
+		dataType: string
+		summarizeBy: none
+		sourceColumn: user_email
+
+		annotation SummarizationSetBy = Automatic
+
+	column decision_count
+		dataType: double
+		summarizeBy: sum
+		sourceColumn: decision_count
+
+		annotation SummarizationSetBy = Automatic
+
+	partition fact_edit_decision = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT * FROM marts.fact_edit_decision")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table
+

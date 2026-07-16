@@ -1,0 +1,34 @@
+table bridge_session_plugin
+
+	column session_id
+		dataType: string
+		summarizeBy: none
+		sourceColumn: session_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column plugin_name
+		dataType: string
+		summarizeBy: none
+		sourceColumn: plugin_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column load_count
+		dataType: int64
+		formatString: 0
+		summarizeBy: sum
+		sourceColumn: load_count
+
+		annotation SummarizationSetBy = Automatic
+
+	partition bridge_session_plugin = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT * FROM marts.bridge_session_plugin")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table
+

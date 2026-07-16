@@ -1,0 +1,100 @@
+table vw_UserBasicInfo
+	lineageTag: 7c6db242-8b5a-4ecc-aeb2-018d35a21d3b
+
+	column Email
+		dataType: string
+		lineageTag: a54ae88d-1f4c-4c3d-9ec2-f3fe7234a68b
+		summarizeBy: none
+		sourceColumn: Email
+
+		annotation SummarizationSetBy = Automatic
+
+	column DisplayName
+		dataType: string
+		lineageTag: 6bc8768c-b60e-4cff-8b61-de2f69c150ed
+		summarizeBy: none
+		sourceColumn: DisplayName
+
+		annotation SummarizationSetBy = Automatic
+
+	column Organization
+		dataType: string
+		lineageTag: 68a2353c-c7b4-4fab-aedf-2f061e6c346e
+		summarizeBy: none
+		sourceColumn: Organization
+
+		annotation SummarizationSetBy = Automatic
+
+	column Department
+		dataType: string
+		lineageTag: 431a7774-a82f-40df-ad48-e453cea852f5
+		summarizeBy: none
+		sourceColumn: Department
+
+		annotation SummarizationSetBy = Automatic
+
+	column Division
+		dataType: string
+		lineageTag: 1f3091f4-9c2b-429b-a4ff-690a31a6099f
+		summarizeBy: none
+		sourceColumn: Division
+
+		annotation SummarizationSetBy = Automatic
+
+	column BusinessUnit
+		dataType: string
+		lineageTag: 537f3b88-4b74-4ec9-bb99-2efac8d82222
+		summarizeBy: none
+		sourceColumn: BusinessUnit
+
+		annotation SummarizationSetBy = Automatic
+
+	column Account
+		dataType: string
+		lineageTag: fe5e9925-e946-48be-823b-4c212e55e1c4
+		summarizeBy: none
+		sourceColumn: Account
+
+		annotation SummarizationSetBy = Automatic
+
+	column ManagerEmail
+		dataType: string
+		lineageTag: ae3812ab-130c-4ba7-ab72-42147e570ce1
+		summarizeBy: none
+		sourceColumn: ManagerEmail
+
+		annotation SummarizationSetBy = Automatic
+
+	column ManagerFirstName
+		dataType: string
+		lineageTag: cea034d3-f1dc-4fe1-8953-b392087385b8
+		summarizeBy: none
+		sourceColumn: ManagerFirstName
+
+		annotation SummarizationSetBy = Automatic
+
+	column ManagerLastName
+		dataType: string
+		lineageTag: 8dba46c7-2ee1-4c19-b77b-d7c7699f7cd8
+		summarizeBy: none
+		sourceColumn: ManagerLastName
+
+		annotation SummarizationSetBy = Automatic
+
+	/// Root-to-node management chain (each node = a normalized Email), used by the OrgScope RLS role.
+	column ManagementPath = PATH(vw_UserBasicInfo[Email], vw_UserBasicInfo[ManagerEmail])
+		dataType: string
+		isHidden
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	partition vw_UserBasicInfo = m
+		mode: import
+		source =
+				let
+				  Source = Sql.Database("itxdatainteg-prod.database.windows.net", "EmployeeSchema"),
+				  #"Navigation 1" = Source{[Schema = "dbo", Item = "vw_UserBasicInfo"]}[Data]
+				in
+				  #"Navigation 1"
+

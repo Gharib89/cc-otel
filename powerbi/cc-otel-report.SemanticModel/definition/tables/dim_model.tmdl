@@ -1,0 +1,40 @@
+table dim_model
+
+	column model_id
+		dataType: string
+		summarizeBy: none
+		sourceColumn: model_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column family
+		dataType: string
+		summarizeBy: none
+		sourceColumn: family
+
+		annotation SummarizationSetBy = Automatic
+
+	column version
+		dataType: string
+		summarizeBy: none
+		sourceColumn: version
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_long_context
+		dataType: boolean
+		summarizeBy: none
+		sourceColumn: is_long_context
+
+		annotation SummarizationSetBy = Automatic
+
+	partition dim_model = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT * FROM marts.dim_model")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table
+

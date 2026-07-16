@@ -1,0 +1,56 @@
+table fact_utilization_hourly
+
+	column user_email
+		dataType: string
+		summarizeBy: none
+		sourceColumn: user_email
+
+		annotation SummarizationSetBy = Automatic
+
+	column window_type
+		dataType: string
+		summarizeBy: none
+		sourceColumn: window_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column hour
+		dataType: dateTime
+		formatString: General Date
+		summarizeBy: none
+		sourceColumn: hour
+
+		annotation SummarizationSetBy = Automatic
+
+	column avg_pct
+		dataType: double
+		summarizeBy: none
+		sourceColumn: avg_pct
+
+		annotation SummarizationSetBy = Automatic
+
+	column max_pct
+		dataType: double
+		summarizeBy: none
+		sourceColumn: max_pct
+
+		annotation SummarizationSetBy = Automatic
+
+	column activity_date
+		dataType: dateTime
+		formatString: Short Date
+		summarizeBy: none
+		sourceColumn: activity_date
+
+		annotation SummarizationSetBy = Automatic
+
+	partition fact_utilization_hourly = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT t.*, t.hour::date AS activity_date FROM marts.fact_utilization_hourly t")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table
+
