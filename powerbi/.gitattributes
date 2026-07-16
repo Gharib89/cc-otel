@@ -1,0 +1,5 @@
+# Normalize the .pbip text tree to LF so Desktop's CRLF saves don't churn the whole model.
+* text=auto eol=lf
+*.png binary
+*.pptx binary
+*.abf binary

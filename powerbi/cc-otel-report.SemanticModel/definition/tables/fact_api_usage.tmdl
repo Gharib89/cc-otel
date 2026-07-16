@@ -1,0 +1,112 @@
+table fact_api_usage
+	lineageTag: 3cfc0f9c-48ef-4864-9c03-83f48407ba6a
+
+	column session_id
+		dataType: string
+		lineageTag: 38f68dd3-9471-4084-b324-c9003de6831e
+		summarizeBy: none
+		sourceColumn: session_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column activity_date
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: d90bef6f-2714-435d-a605-71cf48cd6c9a
+		summarizeBy: none
+		sourceColumn: activity_date
+
+		annotation SummarizationSetBy = Automatic
+
+	column model
+		dataType: string
+		lineageTag: 91f51a53-16f5-495a-b5e6-a46e02c95637
+		summarizeBy: none
+		sourceColumn: model
+
+		annotation SummarizationSetBy = Automatic
+
+	column effort
+		dataType: string
+		lineageTag: cc6f7bff-c749-44be-93d2-e1ca29e74d18
+		summarizeBy: none
+		sourceColumn: effort
+
+		annotation SummarizationSetBy = Automatic
+
+	column query_source
+		dataType: string
+		lineageTag: ab5daa91-b40a-46b8-b506-118933d010fa
+		summarizeBy: none
+		sourceColumn: query_source
+
+		annotation SummarizationSetBy = Automatic
+
+	column user_email
+		dataType: string
+		lineageTag: 36ff987f-9b89-433f-9808-914980f26d5b
+		summarizeBy: none
+		sourceColumn: user_email
+
+		annotation SummarizationSetBy = Automatic
+
+	column input_tokens
+		dataType: double
+		lineageTag: c711cd8c-a099-47f8-917a-ff6f4b0e970f
+		summarizeBy: sum
+		sourceColumn: input_tokens
+
+		annotation SummarizationSetBy = Automatic
+
+	column output_tokens
+		dataType: double
+		lineageTag: 2e465ae6-16ee-4845-99d8-0060b6036ac6
+		summarizeBy: sum
+		sourceColumn: output_tokens
+
+		annotation SummarizationSetBy = Automatic
+
+	column cache_creation_tokens
+		dataType: double
+		lineageTag: 116522c7-17c2-47a6-99e8-1551fe46314f
+		summarizeBy: sum
+		sourceColumn: cache_creation_tokens
+
+		annotation SummarizationSetBy = Automatic
+
+	column cache_read_tokens
+		dataType: double
+		lineageTag: ef36523c-fc1a-4b88-a063-591f895ca69b
+		summarizeBy: sum
+		sourceColumn: cache_read_tokens
+
+		annotation SummarizationSetBy = Automatic
+
+	column request_count
+		dataType: int64
+		formatString: 0
+		lineageTag: 240a774a-0fe9-44a4-a190-f6f29d3c8bcd
+		summarizeBy: sum
+		sourceColumn: request_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column last_event_ts
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: ffb61fad-223a-411a-8eb5-426889b2a9af
+		summarizeBy: none
+		sourceColumn: last_event_ts
+
+		annotation SummarizationSetBy = Automatic
+
+	partition fact_api_usage = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT * FROM marts.fact_api_usage")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table
+

@@ -1,0 +1,38 @@
+table bridge_session_skill
+	lineageTag: 20b77478-8f76-49ad-a8d5-bd50a08aa5ce
+
+	column session_id
+		dataType: string
+		lineageTag: a89afb4b-42b8-4305-b2f4-c608db43341d
+		summarizeBy: none
+		sourceColumn: session_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column skill_name
+		dataType: string
+		lineageTag: e1b32aa5-2566-4d0f-bcbf-8c986e6d184f
+		summarizeBy: none
+		sourceColumn: skill_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column activations
+		dataType: int64
+		formatString: 0
+		lineageTag: 7efe48b4-9965-4a93-91b6-5acaf315beb3
+		summarizeBy: sum
+		sourceColumn: activations
+
+		annotation SummarizationSetBy = Automatic
+
+	partition bridge_session_skill = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT * FROM marts.bridge_session_skill")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table
+

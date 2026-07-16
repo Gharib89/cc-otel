@@ -1,0 +1,133 @@
+table fact_usage_window
+	lineageTag: 2aa8dd97-c694-4dbb-8136-8e46b91f5159
+
+	column user_email
+		dataType: string
+		lineageTag: f6a566c5-a131-482c-910d-27376c730b17
+		summarizeBy: none
+		sourceColumn: user_email
+
+		annotation SummarizationSetBy = Automatic
+
+	column window_type
+		dataType: string
+		lineageTag: ca155f78-3148-43a3-92c6-dcabc9a17b57
+		summarizeBy: none
+		sourceColumn: window_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column window_end
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: ee550b35-88ce-4ac5-9a12-5ebf4a69d919
+		summarizeBy: none
+		sourceColumn: window_end
+
+		annotation SummarizationSetBy = Automatic
+
+	column segment_no
+		dataType: int64
+		formatString: 0
+		lineageTag: b9b5c75a-dca7-43a6-9792-8d3c617b7c66
+		summarizeBy: none
+		sourceColumn: segment_no
+
+		annotation SummarizationSetBy = Automatic
+
+	column end_pct
+		dataType: double
+		lineageTag: cf210fed-3468-4e8a-b6f1-737e77827203
+		summarizeBy: none
+		sourceColumn: end_pct
+
+		annotation SummarizationSetBy = Automatic
+
+	column peak_pct
+		dataType: double
+		lineageTag: 6fbda7ea-56b8-4d26-9152-a93cc3d7cfb9
+		summarizeBy: none
+		sourceColumn: peak_pct
+
+		annotation SummarizationSetBy = Automatic
+
+	column peak_ts
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 48aa57bd-daa8-4459-884e-9538986f65f0
+		summarizeBy: none
+		sourceColumn: peak_ts
+
+		annotation SummarizationSetBy = Automatic
+
+	column first_sample_ts
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 05e9a7c6-cc62-416d-94cd-cd1e7bcc823a
+		summarizeBy: none
+		sourceColumn: first_sample_ts
+
+		annotation SummarizationSetBy = Automatic
+
+	column last_sample_ts
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 7b018047-3214-4c69-8428-d4242db20fdc
+		summarizeBy: none
+		sourceColumn: last_sample_ts
+
+		annotation SummarizationSetBy = Automatic
+
+	column sample_count
+		dataType: int64
+		formatString: 0
+		lineageTag: facce396-f77c-4698-a40e-5ef56d77b53a
+		summarizeBy: sum
+		sourceColumn: sample_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column window_start
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 37eac10e-a4a1-482c-9c9e-cdee5b87f3db
+		summarizeBy: none
+		sourceColumn: window_start
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_reset_split
+		dataType: boolean
+		lineageTag: bc9e8df5-61cf-4ae6-b933-8284f746585f
+		summarizeBy: none
+		sourceColumn: is_reset_split
+
+		annotation SummarizationSetBy = Automatic
+
+	column pace_pct_per_hour
+		dataType: double
+		lineageTag: b3574967-d14d-4e63-8e27-9932db631ac2
+		summarizeBy: none
+		sourceColumn: pace_pct_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+	column activity_date
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 48a46ecb-f580-49db-ac2b-1d1ea55d299c
+		summarizeBy: none
+		sourceColumn: activity_date
+
+		annotation SummarizationSetBy = Automatic
+
+	partition fact_usage_window = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT t.*, t.window_end::date AS activity_date FROM marts.fact_usage_window t")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table
+

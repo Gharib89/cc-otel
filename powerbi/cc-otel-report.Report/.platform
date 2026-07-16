@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Report",
+    "displayName": "cc-otel-report"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "952b45d1-977f-4136-b7bd-0803ee00e116"
+  }
+}

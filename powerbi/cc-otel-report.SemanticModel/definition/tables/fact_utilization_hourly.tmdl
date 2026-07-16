@@ -1,0 +1,63 @@
+table fact_utilization_hourly
+	lineageTag: cc82b113-78ba-42f5-8caa-2e2ab03d7f61
+
+	column user_email
+		dataType: string
+		lineageTag: b75b4d18-eec6-4bb2-8b65-762452a28f93
+		summarizeBy: none
+		sourceColumn: user_email
+
+		annotation SummarizationSetBy = Automatic
+
+	column window_type
+		dataType: string
+		lineageTag: 9a101a79-5d7f-40a9-a196-6a0b0caaa9fb
+		summarizeBy: none
+		sourceColumn: window_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column hour
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 53eb9645-dc72-4375-9bd2-ab2d5230b45c
+		summarizeBy: none
+		sourceColumn: hour
+
+		annotation SummarizationSetBy = Automatic
+
+	column avg_pct
+		dataType: double
+		lineageTag: 67e62d59-94bd-4277-a952-dc22d0f52beb
+		summarizeBy: none
+		sourceColumn: avg_pct
+
+		annotation SummarizationSetBy = Automatic
+
+	column max_pct
+		dataType: double
+		lineageTag: 84d1ab94-a1b5-4f9d-91e8-469890183db3
+		summarizeBy: none
+		sourceColumn: max_pct
+
+		annotation SummarizationSetBy = Automatic
+
+	column activity_date
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: d9fee247-203f-46a3-9f53-b3e0e5df3af6
+		summarizeBy: none
+		sourceColumn: activity_date
+
+		annotation SummarizationSetBy = Automatic
+
+	partition fact_utilization_hourly = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT t.*, t.hour::date AS activity_date FROM marts.fact_utilization_hourly t")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table
+

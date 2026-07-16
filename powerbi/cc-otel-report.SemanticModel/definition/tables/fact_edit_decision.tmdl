@@ -1,0 +1,78 @@
+table fact_edit_decision
+	lineageTag: 3e1a188d-84bd-4230-96d0-ada844dfa52b
+
+	column session_id
+		dataType: string
+		lineageTag: bf70d868-d002-4e6d-b4a3-a606f3fa6c23
+		summarizeBy: none
+		sourceColumn: session_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column activity_date
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: c6d69671-aaa8-4d4d-9b75-26dd3adc0c2c
+		summarizeBy: none
+		sourceColumn: activity_date
+
+		annotation SummarizationSetBy = Automatic
+
+	column tool_name
+		dataType: string
+		lineageTag: f69aadbd-e3eb-4225-b36d-5bb947ee99c7
+		summarizeBy: none
+		sourceColumn: tool_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column language
+		dataType: string
+		lineageTag: b7b070e3-6460-4916-b4bf-a0b5cef11a56
+		summarizeBy: none
+		sourceColumn: language
+
+		annotation SummarizationSetBy = Automatic
+
+	column decision
+		dataType: string
+		lineageTag: d4263c46-3539-4a6e-8a1f-ba24295ac8e2
+		summarizeBy: none
+		sourceColumn: decision
+
+		annotation SummarizationSetBy = Automatic
+
+	column source
+		dataType: string
+		lineageTag: 3b830223-9480-4eb9-ab57-2c8b42f75ed8
+		summarizeBy: none
+		sourceColumn: source
+
+		annotation SummarizationSetBy = Automatic
+
+	column user_email
+		dataType: string
+		lineageTag: 3192c80d-0d14-4612-ad12-56e70ffb1193
+		summarizeBy: none
+		sourceColumn: user_email
+
+		annotation SummarizationSetBy = Automatic
+
+	column decision_count
+		dataType: double
+		lineageTag: 0e38563a-117b-4ad6-85a0-8ea112918e32
+		summarizeBy: sum
+		sourceColumn: decision_count
+
+		annotation SummarizationSetBy = Automatic
+
+	partition fact_edit_decision = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT * FROM marts.fact_edit_decision")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table
+

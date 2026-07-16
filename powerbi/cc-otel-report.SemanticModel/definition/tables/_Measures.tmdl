@@ -1,0 +1,147 @@
+table _Measures
+	lineageTag: 41db967c-6b17-4d4e-9ae2-f63f216ae1d1
+
+	/// Report thresholds live in DAX (not the marts) so a change is a measure edit, never a migration (#9/#27).
+	measure 'Limit-Hit Threshold Pct' = 90
+		formatString: 0
+		displayFolder: Thresholds
+		lineageTag: ab03459a-9aaa-4ecf-b90c-81c378d024fc
+
+	measure 'Freshness Amber Hours' = 8
+		formatString: 0
+		displayFolder: Thresholds
+		lineageTag: 54b2239c-b99d-45ef-bae6-41bcdef482b4
+
+	measure 'Freshness Red Hours' = 24
+		formatString: 0
+		displayFolder: Thresholds
+		lineageTag: b6055541-5d85-4a6a-b268-5f526649c39f
+
+	/// Distinct users with any activity in context — "any signal that day", no minimum-activity gate (#9).
+	measure 'Active Users' = DISTINCTCOUNT(fact_session_daily[user_email])
+		formatString: #,##0
+		displayFolder: Adoption
+		lineageTag: 55aa8e20-36db-4ca3-9484-07abdea77d38
+
+	measure 'Active Days' = DISTINCTCOUNT(fact_session_daily[activity_date])
+		formatString: #,##0
+		displayFolder: Adoption
+		lineageTag: 77795e6a-9794-4abb-b9e4-0b53e6ab4690
+
+	measure 'Total Sessions' = DISTINCTCOUNT(fact_session[session_id])
+		formatString: #,##0
+		displayFolder: Adoption
+		lineageTag: 41898052-d590-4540-b200-6a9bc8f635ee
+
+	measure 'Total Prompts' = SUM(fact_session_daily[prompts])
+		formatString: #,##0
+		displayFolder: Adoption
+		lineageTag: c32123b6-c301-441d-93fd-98d398cbe178
+
+	measure 'Total Input Tokens' = SUM(fact_api_usage[input_tokens])
+		formatString: #,##0
+		displayFolder: API Usage
+		lineageTag: 43bc0efa-c276-4d09-8afc-3c2965a3be2b
+
+	measure 'Total Output Tokens' = SUM(fact_api_usage[output_tokens])
+		formatString: #,##0
+		displayFolder: API Usage
+		lineageTag: 516734d9-04df-4e4a-8d08-b91ca2468828
+
+	measure 'Total Requests' = SUM(fact_api_usage[request_count])
+		formatString: #,##0
+		displayFolder: API Usage
+		lineageTag: 8a82517d-97c2-4dae-9141-b174a81cb6a0
+
+	/// Utilization windows at or above the limit-hit threshold, over all 5h windows in context.
+	/// Grain is user × window_type × window_end × segment_no, so collapse reset-split segments to
+	/// one row per window instance first (a window hit the limit if any segment's peak_pct did).
+	measure 'Limit-Hit Rate' =
+			VAR Threshold = [Limit-Hit Threshold Pct]
+			VAR FiveHWindows =
+			    ADDCOLUMNS (
+			        SUMMARIZE (
+			            CALCULATETABLE ( fact_usage_window, fact_usage_window[window_type] = "5h" ),
+			            fact_usage_window[user_email],
+			            fact_usage_window[window_end]
+			        ),
+			        "@PeakInWindow", CALCULATE ( MAX ( fact_usage_window[peak_pct] ) )
+			    )
+			RETURN
+			    DIVIDE (
+			        COUNTROWS ( FILTER ( FiveHWindows, [@PeakInWindow] >= Threshold ) ),
+			        COUNTROWS ( FiveHWindows )
+			    )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Utilization
+		lineageTag: d69a9564-55ce-4b96-b926-f5ec8ea4c795
+
+	/// Σ segment end_pct ÷ distinct window instances. Reset-split segments sum and may exceed 100% — reported as-is (#9).
+	/// A window instance is user × window_type × window_end (window_end alone is shared across users), so count
+	/// the distinct triple, not DISTINCTCOUNT(window_end) which would collapse instances and inflate the metric.
+	/// v1 does not yet restrict to windows fully inside the report period ("full windows"); refine at report level.
+	measure 'Utilization Intensity' =
+			DIVIDE (
+			    SUM ( fact_usage_window[end_pct] ),
+			    COUNTROWS (
+			        SUMMARIZE (
+			            fact_usage_window,
+			            fact_usage_window[user_email],
+			            fact_usage_window[window_type],
+			            fact_usage_window[window_end]
+			        )
+			    )
+			)
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Utilization
+		lineageTag: 81068fa0-8934-4b90-aa99-797baea5d229
+
+	measure 'Tool Acceptance Rate' =
+			DIVIDE (
+			    CALCULATE ( SUM ( fact_edit_decision[decision_count] ), fact_edit_decision[decision] = "accept" ),
+			    SUM ( fact_edit_decision[decision_count] )
+			)
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Tool Quality
+		lineageTag: d2bb363b-cd63-4aa4-84eb-169753d92097
+
+	/// Import-mode caveat: staleness includes the daily report-refresh lag, not just pipeline silence.
+	measure 'Hours Since Last Signal' =
+			VAR LastSignal = MAX ( fact_api_usage[last_event_ts] )
+			RETURN
+			    IF ( ISBLANK ( LastSignal ), BLANK (), DATEDIFF ( LastSignal, NOW (), HOUR ) )
+		formatString: #,##0
+		displayFolder: Ingest Health
+		lineageTag: ce8455de-52fb-4851-9ba7-ae6bf293d1bb
+
+	measure 'Data Freshness Status' =
+			VAR H = [Hours Since Last Signal]
+			RETURN
+			    SWITCH (
+			        TRUE (),
+			        ISBLANK ( H ), "No data",
+			        H < [Freshness Amber Hours], "Fresh",
+			        H <= [Freshness Red Hours], "Amber",
+			        "Red"
+			    )
+		displayFolder: Ingest Health
+		lineageTag: 07e67adf-426d-478d-be5e-0be7551fb58c
+
+	/// Second freshness signal — catches pg_cron death independently of the pipeline-silence signal (#9).
+	measure 'Last Mart Refresh' = MAX(mart_refresh_log[finished])
+		formatString: General Date
+		displayFolder: Ingest Health
+		lineageTag: 833b49f9-2225-4543-aaa6-a8a2b971b811
+
+	column Value
+		dataType: int64
+		isHidden
+		lineageTag: 8f1efc75-7bf7-4108-80f2-d122b6a69db6
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Value]
+
+	partition _Measures = calculated
+		mode: import
+		source = {1}
+

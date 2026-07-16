@@ -62,7 +62,7 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 | `db/` | dbmate migrations + `schema.sql` |
 | `installer/` | `install.ps1` fleet setup |
 | `bootstrap/` | env bring-up runbook + PowerShell scripts (operator-run) |
-| `powerbi/` | `.pbip` report + branding |
+| `powerbi/` | `.pbip` semantic model + report + branding |
 | `tools/` | Curation + ops tooling over the blob reservoir (sweep, data dictionary, replay, scrub) |
 | `tests/integration/` | end-to-end suite |
 | `scripts/` | skill-sync + cloud-ship bootstrap + dev-migrate |

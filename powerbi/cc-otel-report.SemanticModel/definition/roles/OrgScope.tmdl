@@ -1,0 +1,11 @@
+/// Dynamic row-level security (#10): a viewer sees their own employee row, plus every row whose
+/// management chain contains them (any depth) — a manager sees everyone reporting up to them.
+/// Workspace Admin/Member (Ahmed, Karim) bypass RLS via Power BI workspace-role semantics.
+/// Requires a clean, acyclic ManagerEmail chain, normalized to the same casing as Email.
+role OrgScope
+	modelPermission: read
+
+	tablePermission vw_UserBasicInfo = vw_UserBasicInfo[Email] = USERPRINCIPALNAME() || PATHCONTAINS(vw_UserBasicInfo[ManagementPath], USERPRINCIPALNAME())
+
+	annotation PBI_Id = 6989c039aaf549d78edd30d991fc66cd
+

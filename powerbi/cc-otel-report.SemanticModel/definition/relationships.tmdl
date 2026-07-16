@@ -1,0 +1,91 @@
+relationship fact_session_to_dim_user
+	fromColumn: fact_session.user_email
+	toColumn: dim_user.user_email
+
+relationship fact_session_daily_to_dim_user
+	fromColumn: fact_session_daily.user_email
+	toColumn: dim_user.user_email
+
+relationship fact_api_usage_to_dim_user
+	fromColumn: fact_api_usage.user_email
+	toColumn: dim_user.user_email
+
+relationship fact_edit_decision_to_dim_user
+	fromColumn: fact_edit_decision.user_email
+	toColumn: dim_user.user_email
+
+relationship fact_usage_window_to_dim_user
+	fromColumn: fact_usage_window.user_email
+	toColumn: dim_user.user_email
+
+relationship fact_utilization_hourly_to_dim_user
+	fromColumn: fact_utilization_hourly.user_email
+	toColumn: dim_user.user_email
+
+relationship fact_session_to_dim_date
+	fromColumn: fact_session.activity_date
+	toColumn: dim_date.date_day
+
+relationship fact_session_daily_to_dim_date
+	fromColumn: fact_session_daily.activity_date
+	toColumn: dim_date.date_day
+
+relationship fact_api_usage_to_dim_date
+	fromColumn: fact_api_usage.activity_date
+	toColumn: dim_date.date_day
+
+relationship fact_edit_decision_to_dim_date
+	fromColumn: fact_edit_decision.activity_date
+	toColumn: dim_date.date_day
+
+relationship fact_usage_window_to_dim_date
+	fromColumn: fact_usage_window.activity_date
+	toColumn: dim_date.date_day
+
+relationship fact_utilization_hourly_to_dim_date
+	fromColumn: fact_utilization_hourly.activity_date
+	toColumn: dim_date.date_day
+
+relationship fact_api_usage_to_dim_model
+	fromColumn: fact_api_usage.model
+	toColumn: dim_model.model_id
+
+relationship bridge_session_agent_to_fact_session
+	fromColumn: bridge_session_agent.session_id
+	toColumn: fact_session.session_id
+
+relationship bridge_session_hook_to_fact_session
+	fromColumn: bridge_session_hook.session_id
+	toColumn: fact_session.session_id
+
+relationship bridge_session_mcp_to_fact_session
+	fromColumn: bridge_session_mcp.session_id
+	toColumn: fact_session.session_id
+
+relationship bridge_session_plugin_to_fact_session
+	fromColumn: bridge_session_plugin.session_id
+	toColumn: fact_session.session_id
+
+relationship bridge_session_skill_to_fact_session
+	fromColumn: bridge_session_skill.session_id
+	toColumn: fact_session.session_id
+
+relationship fact_session_daily_to_fact_session
+	isActive: false
+	fromColumn: fact_session_daily.session_id
+	toColumn: fact_session.session_id
+
+relationship fact_api_usage_to_fact_session
+	isActive: false
+	fromColumn: fact_api_usage.session_id
+	toColumn: fact_session.session_id
+
+relationship fact_edit_decision_to_fact_session
+	isActive: false
+	fromColumn: fact_edit_decision.session_id
+	toColumn: fact_session.session_id
+
+relationship dim_user_to_vw_UserBasicInfo
+	fromColumn: dim_user.user_email
+	toColumn: vw_UserBasicInfo.Email
+

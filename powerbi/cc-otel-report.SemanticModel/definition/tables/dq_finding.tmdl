@@ -1,0 +1,57 @@
+table dq_finding
+	lineageTag: 0bec46a6-6219-49db-a1fa-6f5f7afbdf5d
+
+	column id
+		dataType: int64
+		formatString: 0
+		lineageTag: 9edb97c7-659c-4f08-aa59-9c068f898268
+		summarizeBy: none
+		sourceColumn: id
+
+		annotation SummarizationSetBy = Automatic
+
+	column finding_type
+		dataType: string
+		lineageTag: c13b2202-686e-47a1-8ea7-b3e312dc1d2d
+		summarizeBy: none
+		sourceColumn: finding_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column detected_at
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 7d9981cf-967c-468f-8768-9e6ae12e4631
+		summarizeBy: none
+		sourceColumn: detected_at
+
+		annotation SummarizationSetBy = Automatic
+
+	column row_count
+		dataType: int64
+		formatString: 0
+		lineageTag: 61a92cfe-6fcc-4060-9675-e8a562df4baa
+		summarizeBy: sum
+		sourceColumn: row_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column details
+		dataType: string
+		lineageTag: 306ada61-f08a-4129-841a-b63ce357817f
+		summarizeBy: none
+		sourceColumn: details
+
+		annotation SummarizationSetBy = Automatic
+
+	partition dq_finding = m
+		mode: import
+		source =
+				let
+				  Source = PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"),
+				  #"Navigation 1" = Source{[Schema = "marts", Item = "dq_finding"]}[Data]
+				in
+				  #"Navigation 1"
+
+	annotation PBI_ResultType = Table
+

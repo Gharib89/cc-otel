@@ -1,0 +1,45 @@
+table dim_model
+	lineageTag: a8326654-0f66-4be6-9e1c-f2c660855995
+
+	column model_id
+		dataType: string
+		lineageTag: 3840ed7e-945f-4237-b4a4-0102053fbbae
+		summarizeBy: none
+		sourceColumn: model_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column family
+		dataType: string
+		lineageTag: 2e3ef576-f0f1-414d-be9b-441453644981
+		summarizeBy: none
+		sourceColumn: family
+
+		annotation SummarizationSetBy = Automatic
+
+	column version
+		dataType: string
+		lineageTag: 484f06d4-c57a-41a7-88ab-c6b3bb3259c8
+		summarizeBy: none
+		sourceColumn: version
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_long_context
+		dataType: boolean
+		lineageTag: 658d67a4-0da0-4037-a38c-b54bed711d85
+		summarizeBy: none
+		sourceColumn: is_long_context
+
+		annotation SummarizationSetBy = Automatic
+
+	partition dim_model = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT * FROM marts.dim_model")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table
+

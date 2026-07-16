@@ -1,0 +1,58 @@
+table mart_refresh_log
+	lineageTag: 33e94fbf-4839-41b1-b37e-a5a741acb46d
+
+	column id
+		dataType: int64
+		formatString: 0
+		lineageTag: 51fcefde-3e86-4e8e-affe-92d29e2192af
+		summarizeBy: none
+		sourceColumn: id
+
+		annotation SummarizationSetBy = Automatic
+
+	column mart
+		dataType: string
+		lineageTag: 55005da6-b249-4510-aa5d-2f43920f4aba
+		summarizeBy: none
+		sourceColumn: mart
+
+		annotation SummarizationSetBy = Automatic
+
+	column started
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: f37e8632-cdea-4a22-993d-c3472bb47a18
+		summarizeBy: none
+		sourceColumn: started
+
+		annotation SummarizationSetBy = Automatic
+
+	column finished
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 6e95b0d1-1a0b-47bd-9dc9-3adf4d82ad57
+		summarizeBy: none
+		sourceColumn: finished
+
+		annotation SummarizationSetBy = Automatic
+
+	column row_count
+		dataType: int64
+		formatString: 0
+		lineageTag: 4516ea5e-e6d4-4758-99d3-f8b880839e5d
+		summarizeBy: sum
+		sourceColumn: row_count
+
+		annotation SummarizationSetBy = Automatic
+
+	partition mart_refresh_log = m
+		mode: import
+		source =
+				let
+				  Source = PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"),
+				  #"Navigation 1" = Source{[Schema = "marts", Item = "mart_refresh_log"]}[Data]
+				in
+				  #"Navigation 1"
+
+	annotation PBI_ResultType = Table
+
