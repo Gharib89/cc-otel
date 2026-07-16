@@ -113,15 +113,23 @@ BEGIN
             session_id,
             activity_date,
             ARRAY_AGG(DISTINCT user_email ORDER BY user_email) AS all_emails,
-            ARRAY_AGG(DISTINCT user_email ORDER BY user_email)
-                FILTER (WHERE user_email LIKE '%@itworx.com') AS corp_emails,
-            ARRAY_AGG(DISTINCT user_email ORDER BY user_email)
-                FILTER (WHERE user_email NOT LIKE '%@itworx.com') AS personal_emails
+            COALESCE(
+                ARRAY_AGG(DISTINCT user_email ORDER BY user_email)
+                    FILTER (WHERE user_email LIKE '%@itworx.com'),
+                '{}'::text[]
+            ) AS corp_emails,
+            COALESCE(
+                ARRAY_AGG(DISTINCT user_email ORDER BY user_email)
+                    FILTER (WHERE user_email NOT LIKE '%@itworx.com'),
+                '{}'::text[]
+            ) AS personal_emails
         FROM (
+            -- UNION ALL, not UNION: the outer COUNT(DISTINCT)/ARRAY_AGG(DISTINCT)
+            -- already de-dupe, so a set UNION here is a wasted sort each refresh.
             SELECT session_id, ts::date AS activity_date, user_email
             FROM staging.stg_counter_delta
             WHERE session_id IS NOT NULL AND user_email IS NOT NULL
-            UNION
+            UNION ALL
             SELECT session_id, event_time::date AS activity_date, user_email
             FROM raw.events
             WHERE session_id IS NOT NULL AND user_email IS NOT NULL
@@ -578,7 +586,11 @@ CREATE MATERIALIZED VIEW marts.fact_session_daily AS
           GROUP BY events.session_id, ((events.event_time)::date)
         )
  SELECT COALESCE(m.session_id, p.session_id) AS session_id,
-    COALESCE(m.user_email, p.user_email) AS user_email,
+        CASE
+            WHEN (m.user_email ~~ '%@itworx.com'::text) THEN m.user_email
+            WHEN (p.user_email ~~ '%@itworx.com'::text) THEN p.user_email
+            ELSE COALESCE(m.user_email, p.user_email)
+        END AS user_email,
     COALESCE(m.activity_date, p.activity_date) AS activity_date,
     COALESCE(p.prompts, (0)::bigint) AS prompts,
     COALESCE(m.commits, (0)::double precision) AS commits,

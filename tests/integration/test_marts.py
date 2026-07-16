@@ -197,11 +197,23 @@ def test_fact_session_daily_multi_email_collapses_and_flags(conn):
             session_id=S2,
             user_email=email,
         )
+    # Cross-source disagreement: metrics carry only the personal email, prompts the corp
+    # one — the fact must still prefer corp across the m/p join, not just within a source.
+    ins_metric(
+        conn,
+        ts="2026-07-01T10:00:00Z",
+        metric_name="claude_code.commit.count",
+        metric_type="sum",
+        value=1,
+        value_kind="sum_delta",
+        session_id=S2,
+        user_email="dev.personal@gmail.com",
+    )
     refresh(conn)  # must not raise on the duplicate (session_id, activity_date) key
     assert all_(
         conn,
-        f"SELECT user_email, prompts FROM marts.fact_session_daily WHERE session_id='{S2}'",
-    ) == [("dev@itworx.com", 2)]
+        f"SELECT user_email, prompts, commits FROM marts.fact_session_daily WHERE session_id='{S2}'",
+    ) == [("dev@itworx.com", 2, 1)]
     assert one(
         conn,
         "SELECT details->>'corp_emails', details->>'personal_emails' FROM marts.dq_finding "
