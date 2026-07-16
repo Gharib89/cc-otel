@@ -39,7 +39,7 @@ Structure:
   edit, not a migration.
 - **RLS — `OrgScope`** (dynamic): a viewer sees their own employee row plus every row whose
   management chain contains them. `vw_UserBasicInfo` carries a hidden `ManagementPath` calculated
-  column (`PATH(Email, ManagerEmail)`); the role filters it with
+  column (`PATH(Email, ManagerEmailClean)`); the role filters it with
   `Email = USERPRINCIPALNAME() || PATHCONTAINS(ManagementPath, USERPRINCIPALNAME())`.
   Workspace Admin/Member bypass RLS. Requires a clean, acyclic, same-cased `ManagerEmail` chain.
   The HR view currently violates that (service accounts create cycles), so `ManagerEmailClean`
