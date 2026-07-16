@@ -94,6 +94,11 @@ resource sharedPreload 'Microsoft.DBforPostgreSQL/flexibleServers/configurations
   dependsOn: [extensionsAllowlist]
 }
 
+// Restart-only, and — unlike shared_preload_libraries — Azure does NOT auto-restart
+// for it. Bicep has no restart primitive, so setting this value here only marks it
+// pending; the deploy/bootstrap flow issues the required restart before migrating
+// (#65). Without that restart pg_cron loads against the default DB and every job
+// silently no-ops.
 resource cronDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2024-08-01' = {
   parent: server
   name: 'cron.database_name'

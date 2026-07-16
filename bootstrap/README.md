@@ -215,15 +215,31 @@ Expect `Succeeded` (~5–10 min; the Postgres flexible server is the slow part).
 >    the command above and cycle `1` → `2` → `3` (all supported for `Standard_B2s` in
 >    swedencentral) until one provisions.
 
-### 7. Open the operator IP, then migrate
+### 7. Open the operator IP, apply the pg_cron restart, then migrate
 
 ```powershell
 .\bootstrap\open-my-ip.ps1 -Environment interim -ResourceGroup $env:RESOURCE_GROUP -Initials $env:OPERATOR_INITIALS
+
+# cron.database_name is restart-only on Azure PG Flexible Server, and Azure does
+# NOT auto-restart for it (unlike shared_preload_libraries, which it does). Bicep
+# (step 6) set the value but cannot restart, so on this fresh server pg_cron still
+# loads against the default `postgres` DB — every cron.schedule() in the migrations
+# below would silently no-op (#65). Restart if pending, then confirm it applied
+# before migrating.
+$server = "ccotel-pg-interim"
+if ((az postgres flexible-server parameter show --resource-group $env:RESOURCE_GROUP --server-name $server --name cron.database_name --query isConfigPendingRestart -o tsv) -eq "true") {
+  az postgres flexible-server restart --resource-group $env:RESOURCE_GROUP --name $server
+}
+az postgres flexible-server parameter show --resource-group $env:RESOURCE_GROUP --server-name $server --name cron.database_name --query "{value:value, pendingRestart:isConfigPendingRestart}" -o table
+
 dbmate --url $env:DATABASE_URL up
 ```
 
-Migrations create the schemas and the `cc_otel_read`/`cc_otel_ingest` **NOLOGIN
-group roles** (migration `…170001`). They do **not** create logins.
+Confirm the table shows `value=cc_otel` and `pendingRestart=False` **before**
+`dbmate up` runs — otherwise pg_cron is not live and the refresh jobs will not
+schedule. Migrations then create the schemas and the
+`cc_otel_read`/`cc_otel_ingest` **NOLOGIN group roles** (migration `…170001`).
+They do **not** create logins.
 
 ### 8. GATE G1 — DB login users + passwords
 

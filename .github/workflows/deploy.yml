@@ -85,6 +85,40 @@ jobs:
             https://github.com/amacneil/dbmate/releases/download/v2.34.1/dbmate-linux-amd64
           sudo chmod +x /usr/local/bin/dbmate
 
+      # cron.database_name is restart-only on Azure PG Flexible Server, and Azure
+      # does NOT auto-restart for it (unlike shared_preload_libraries). Bicep sets
+      # the value but has no restart primitive, so on a fresh server pg_cron loads
+      # against the default `postgres` DB and every cron.schedule() in the
+      # migrations below silently no-ops (#65). Restart when the config is pending,
+      # then assert it applied — a mismatch fails the deploy loudly rather than
+      # shipping dead refresh jobs. One restart applies all pending config.
+      - name: Apply pending pg_cron restart
+        env:
+          RESOURCE_GROUP: ${{ secrets[format('{0}_RESOURCE_GROUP', steps.env.outputs.prefix)] }}
+        run: |
+          set -euo pipefail
+          server="ccotel-pg-${{ inputs.environment }}"
+          expected="cc_otel"
+          show() {
+            az postgres flexible-server parameter show \
+              --resource-group "$RESOURCE_GROUP" --server-name "$server" \
+              --name cron.database_name --query "$1" -o tsv \
+              | tr '[:upper:]' '[:lower:]'
+          }
+          value="$(show value)"
+          pending="$(show isConfigPendingRestart)"
+          echo "cron.database_name value=$value pendingRestart=$pending"
+          if [ "$pending" = "true" ]; then
+            echo "Config pending restart — restarting $server"
+            az postgres flexible-server restart \
+              --resource-group "$RESOURCE_GROUP" --name "$server"
+            pending="$(show isConfigPendingRestart)"
+          fi
+          if [ "$value" != "$expected" ] || [ "$pending" = "true" ]; then
+            echo "::error::cron.database_name is '$value' (pendingRestart=$pending); expected '$expected' applied. pg_cron jobs will not schedule."
+            exit 1
+          fi
+
       - name: Run migrations
         env:
           DATABASE_URL: ${{ secrets[format('{0}_DATABASE_URL', steps.env.outputs.prefix)] }}
