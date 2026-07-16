@@ -1,0 +1,101 @@
+"""Re-redact a blob window **in place** — the scrub-on-deny job (#8, #29).
+
+When a key is newly classified ``denied``, blobs written before that decision still hold
+it. This rewrites each blob in the window through the sink's own ``redact`` and the same
+canonical serialization, then overwrites it. It deliberately does **not** touch
+``meta.processed_batches``: scrubbing changes the payload bytes, so the batch hash would
+change — replaying through the sink (``tools.replay``) is the wrong tool for a deny, this
+is. Postgres already dropped the denied key at ingest (or never promoted it), so only the
+blob reservoir needs the rewrite.
+
+Destructive (overwrites blobs); dry-run by default. Pass ``--execute`` to write.
+
+    uv run python -m tools.scrub --days 30                 # dry-run: count blobs
+    uv run python -m tools.scrub --since 2026-06-01 --until 2026-06-30 --execute
+"""
+
+from __future__ import annotations
+
+import argparse
+import gzip
+import json
+import sys
+from datetime import UTC, date, datetime, timedelta
+
+from cc_otel_sink.config import load_settings
+from cc_otel_sink.redaction import redact
+
+from ._reservoir import CurationReservoir
+from ._window import SIGNALS, date_range, prefixes
+
+
+def canonical_bytes(payload: dict) -> bytes:
+    """Canonical redacted-payload bytes — must match the sink's ingest serialization
+    (``cc_otel_sink.app._ingest``) so a scrubbed blob is byte-identical to a fresh one."""
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+
+
+def rescrub(blob_bytes: bytes) -> tuple[bytes, int]:
+    """Return re-redacted gzip bytes for one blob, plus the defense-in-depth leak count.
+
+    Idempotent on an already-clean blob: its content is already canonical, so redact is a
+    no-op and the decompressed output is byte-identical to the input's.
+    """
+    result = redact(json.loads(gzip.decompress(blob_bytes)))
+    return gzip.compress(canonical_bytes(result.payload)), result.gate_leaks
+
+
+def _parse_args(argv: list[str] | None) -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--days", type=int, default=30, help="window = last N days ending today (UTC); default 30"
+    )
+    p.add_argument(
+        "--since", type=date.fromisoformat, help="window start (YYYY-MM-DD); overrides --days"
+    )
+    p.add_argument(
+        "--until", type=date.fromisoformat, help="window end (YYYY-MM-DD); defaults to today (UTC)"
+    )
+    p.add_argument("--signal", choices=SIGNALS, help="restrict to one blob signal; default both")
+    p.add_argument("--execute", action="store_true", help="overwrite blobs (default: dry-run)")
+    return p.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+    today = datetime.now(UTC).date()
+    until = args.until or today
+    since = args.since or (until - timedelta(days=args.days - 1))
+    days = date_range(since, until)
+    signals = (args.signal,) if args.signal else SIGNALS
+
+    reservoir = CurationReservoir.from_settings(load_settings())
+    scanned = rewritten = leaks = 0
+    try:
+        for prefix in prefixes(signals, days):
+            for name in reservoir.list_names(prefix):
+                scanned += 1
+                original = reservoir.download(name)
+                scrubbed, blob_leaks = rescrub(original)
+                leaks += blob_leaks
+                if gzip.decompress(scrubbed) == gzip.decompress(original):
+                    continue  # already clean — skip the write
+                if args.execute:
+                    reservoir.overwrite(name, scrubbed)
+                rewritten += 1
+    finally:
+        reservoir.close()
+
+    verb = "rewrote" if args.execute else "would rewrite"
+    print(
+        f"Scrub {since:%Y-%m-%d}..{until:%Y-%m-%d} signals={','.join(signals)}: "
+        f"scanned {scanned} blobs, {verb} {rewritten} ({leaks} defense-in-depth leaks seen)"
+        + ("" if args.execute else " — dry-run, pass --execute to write")
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
