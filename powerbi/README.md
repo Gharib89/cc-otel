@@ -42,6 +42,10 @@ Structure:
   column (`PATH(Email, ManagerEmail)`); the role filters it with
   `Email = USERPRINCIPALNAME() || PATHCONTAINS(ManagementPath, USERPRINCIPALNAME())`.
   Workspace Admin/Member bypass RLS. Requires a clean, acyclic, same-cased `ManagerEmail` chain.
+  The HR view currently violates that (service accounts create cycles), so `ManagerEmailClean`
+  carries a **stopgap** exclusion list (`{"internal.application@itworx.com"}`) that roots those
+  accounts to break the loop — extend the list if a new cycle surfaces; the durable fix is upstream
+  in `vw_UserBasicInfo`.
 
 ## Connect / refresh (Desktop)
 

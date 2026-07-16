@@ -81,10 +81,13 @@ table vw_UserBasicInfo
 
 		annotation SummarizationSetBy = Automatic
 
-	/// ManagerEmail, but blank when it isn't itself an Email in this table (org top / external manager).
-	/// PATH() requires a bare column reference for the parent, and rejects a parent value not present as
-	/// a key — so the dangling links are cleaned here first, turning those rows into roots.
-	column ManagerEmailClean = IF(vw_UserBasicInfo[ManagerEmail] IN VALUES(vw_UserBasicInfo[Email]), vw_UserBasicInfo[ManagerEmail])
+	/// ManagerEmail cleaned so PATH() (which needs a bare column and rejects cycles + dangling parents)
+	/// always resolves. Blank when: the row is a service/shared account that must not sit in the people
+	/// hierarchy (they create management cycles — see the exclusion list; extend it as more surface), or
+	/// the ManagerEmail isn't itself an Email in this table (org top / external manager). Blank = a root.
+	/// STOPGAP for the #10 "acyclic manager chain" contract the HR view currently violates; durable fix
+	/// is upstream in vw_UserBasicInfo.
+	column ManagerEmailClean = IF(NOT(vw_UserBasicInfo[Email] IN {"internal.application@itworx.com"}) && vw_UserBasicInfo[ManagerEmail] IN VALUES(vw_UserBasicInfo[Email]), vw_UserBasicInfo[ManagerEmail])
 		dataType: string
 		isHidden
 		summarizeBy: none
