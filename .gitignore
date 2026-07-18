@@ -12,3 +12,9 @@ installer/dist/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Editor-local (per-machine git-lock mitigation, not shared config)
+.vscode/
+
+# ad-hoc analysis
+.analysis/
