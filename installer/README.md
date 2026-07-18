@@ -94,5 +94,5 @@ self-heal paths are the manual matrix in issue #26.
 
 CI runs these three gates on every `installer/**` change (`.github/workflows/installer.yml`):
 PSScriptAnalyzer and `node --test` on `ubuntu-latest`, and Pester on `windows-latest`
-under `pwsh` (the suite dot-sources the Windows-only `install.ps1`). Run them locally
-before pushing to keep CI green on the first try.
+under **both** `pwsh` and Windows PowerShell 5.1 (the suite dot-sources the Windows-only
+`install.ps1`). Run them locally before pushing to keep CI green on the first try.
