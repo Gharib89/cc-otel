@@ -47,10 +47,10 @@ jobs:
 
   # Pester dot-sources install.ps1, whose $InstallRoot default
   # (Join-Path $env:ProgramFiles ...) binds to null off Windows and fails to load,
-  # so the suite needs a Windows runner. It runs under pwsh (not Windows PowerShell
-  # 5.1): the suite is green on pwsh, whereas 5.1 mis-parses a piped JSON array in
-  # build-installer's Select-FleetToken. install.ps1 itself stays 5.1-compatible for
-  # the SYSTEM-context fleet push (that path is covered by the manual matrix, #26).
+  # so the suite needs a Windows runner. This is the pwsh leg (developer default);
+  # the pester-winps51 job below runs the same suite under Windows PowerShell 5.1.
+  # Two jobs rather than a `shell` matrix: the matrix context is not available in a
+  # step's `shell:` key, so `shell: ${{ matrix.shell }}` is an invalid workflow.
   pester:
     runs-on: windows-latest
     steps:
@@ -62,6 +62,33 @@ jobs:
 
       - name: Pester
         shell: pwsh
+        run: |
+          Import-Module Pester -RequiredVersion 5.7.1
+          $config = New-PesterConfiguration
+          $config.Run.Path = './installer'
+          $config.Run.Exit = $true
+          $config.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $config
+
+  # The Windows PowerShell 5.1 leg of the Pester suite (see the pester job above).
+  # 5.1 is the SYSTEM-context fleet runtime — IS pushes install.ps1 in SYSTEM
+  # context on stock Windows — so this leg guards install.ps1's #Requires -Version
+  # 5.1 contract against a 5.1-vs-7 divergence (the class of bug #91, now fixed).
+  pester-winps51:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned Pester
+        shell: powershell
+        run: |
+          # Windows PowerShell 5.1 defaults to TLS 1.0 for PSGallery; force 1.2
+          # so Install-Module can resolve the source.
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force
+
+      - name: Pester
+        shell: powershell
         run: |
           Import-Module Pester -RequiredVersion 5.7.1
           $config = New-PesterConfiguration
