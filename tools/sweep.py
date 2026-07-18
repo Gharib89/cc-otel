@@ -28,6 +28,7 @@ import psycopg
 from cc_otel_sink.config import load_settings
 
 from ._keypaths import KeyPath, extract_key_paths
+from ._progress import Progress
 from ._registry import Diff, load_registry
 from ._reservoir import configure_duckdb
 from ._window import SIGNALS, globs, resolve_window
@@ -58,17 +59,26 @@ def _read_blob_keys(con: duckdb.DuckDBPyConnection, targets: list[str]) -> tuple
     """Extract key paths from every blob matched by ``targets``; also count blobs read."""
     extracted: set[KeyPath] = set()
     blobs = 0
+    progress = Progress("sweep partitions", total=len(targets))
     for target in targets:
         escaped = target.replace("'", "''")
         try:
             rows = con.execute(
                 f"SELECT json FROM read_json_objects('{escaped}', format='unstructured')"
             ).fetchall()
-        except duckdb.IOException:
-            continue  # partition has no blobs for this day/signal
+        except duckdb.IOException as err:
+            # DuckDB raises IOException both for a glob that matches no blobs (a legitimately
+            # empty day/signal partition) and for a real read/credential failure. Only the
+            # former is safe to skip; swallowing the latter would report a false "all-clean"
+            # sweep over data it never read.
+            if "no files found" not in str(err).lower():
+                raise
+            rows = []  # partition has no blobs for this day/signal
         for (payload_text,) in rows:
             blobs += 1
             extracted |= extract_key_paths(json.loads(payload_text))
+        progress.tick()
+    progress.done()
     return extracted, blobs
 
 

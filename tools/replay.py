@@ -29,6 +29,7 @@ import httpx
 import psycopg
 from cc_otel_sink.config import load_settings
 
+from ._progress import Progress
 from ._reservoir import CurationReservoir
 from ._window import SIGNALS, date_range, prefixes
 
@@ -122,7 +123,12 @@ def main(argv: list[str] | None = None) -> int:
         names = [
             name for prefix in prefixes(signals, days) for name in reservoir.list_names(prefix)
         ]
-        hashes = [blob_hash(reservoir.download(name)) for name in names]
+        hash_progress = Progress("hash blobs", total=len(names))
+        hashes = []
+        for name in names:
+            hashes.append(blob_hash(reservoir.download(name)))
+            hash_progress.tick()
+        hash_progress.done()
 
         with psycopg.connect(settings.database_url) as conn:
             row_counts = _count_rows(conn, signals, start, end)
@@ -137,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
 
             _delete_window(conn, signals, start, end, hashes)
 
+        post_progress = Progress("re-POST blobs", total=len(names))
         with httpx.Client(base_url=args.sink_url, timeout=30) as client:
             for name in names:
                 resp = client.post(
@@ -145,6 +152,8 @@ def main(argv: list[str] | None = None) -> int:
                     headers={"content-type": "application/json", "content-encoding": "gzip"},
                 )
                 resp.raise_for_status()
+                post_progress.tick()
+        post_progress.done()
         print(f"re-POSTed {len(names)} blobs to {args.sink_url}")
     finally:
         reservoir.close()
