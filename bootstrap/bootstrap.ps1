@@ -378,6 +378,16 @@ function Invoke-StepDeploy {
     $repoRoot = Split-Path -Parent $PSScriptRoot
     $template = Join-Path $repoRoot (Join-Path 'iac' 'main.bicep')
     $params = Join-Path $repoRoot (Join-Path 'iac' (Join-Path 'params' "$($Config.Environment).bicepparam"))
+    # The .bicepparam files resolve the ACA secret params via
+    # readEnvironmentVariable(...) — Bicep reads them from this process's
+    # environment, not from $Config. Export them here (from the validated .env)
+    # so a local deploy sets real secret values; omitting them makes Bicep fall
+    # back to '' and Azure rejects the empty ACA secrets (ContainerAppSecretInvalid).
+    $env:FLEET_TOKENS = $Config.FleetTokens
+    $env:DATABASE_URL = $Config.DatabaseUrl
+    $env:GHCR_USERNAME = $Config.GhcrUsername
+    $env:GHCR_TOKEN = $Config.GhcrToken
+    $env:PG_ADMIN_PASSWORD = $Config.PgAdminPassword
     $state = az deployment group create --resource-group $Config.ResourceGroup `
         --template-file $template --parameters $params `
         --query 'properties.provisioningState' -o tsv
