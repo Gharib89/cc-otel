@@ -28,12 +28,14 @@ class Progress:
         self._stream = stream if stream is not None else sys.stderr
         self._count = 0
         self._emitted = 0
-        self._last = 0.0  # monotonic clock of the last emit; 0 forces an emit on the first tick
+        self._last: float | None = None  # monotonic clock of the last emit; None until first tick
 
     def tick(self, n: int = 1) -> None:
         self._count += n
         now = time.monotonic()
-        if now - self._last >= self._interval:
+        # Always emit the first tick (don't compare against a sentinel — time.monotonic() is
+        # seconds since boot, so a magnitude assumption breaks on a low-uptime CI runner).
+        if self._last is None or now - self._last >= self._interval:
             self._emit()
             self._last = now
 
