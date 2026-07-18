@@ -436,7 +436,17 @@ function Invoke-StepPgCronGate {
 function Invoke-StepMigrate {
     [OutputType([int])]
     param([Parameter(Mandatory)]$Config)
-    dbmate --url $Config.DatabaseUrl up
+    # --no-dump-schema: a bring-up applies migrations against the live target
+    # (prod/interim); it must NOT re-author db/schema.sql, which is dumped from
+    # the canonical CI image by scripts/dev-migrate.sh. Dumping against Azure PG
+    # instead injects environment-specific noise (server-version string, pg_cron
+    # placement) that dirties the tree and fails the CI schema-drift gate.
+    #
+    # Out-Host keeps dbmate's stdout (e.g. "Applying:") off the pipeline. Left on
+    # it, that output falls into the function's return value, making it
+    # @(<text>, 0); the dispatcher's `$rc -ne 0` then sees a truthy array and
+    # false-halts a migration that actually succeeded.
+    dbmate --url $Config.DatabaseUrl --no-dump-schema up 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { Write-BootstrapLog 'dbmate up failed.' 'FAIL'; return 1 }
     return 0
 }
@@ -445,8 +455,11 @@ function Invoke-StepDbLogin {
     [OutputType([int])]
     param([Parameter(Mandatory)]$Config)
     $sql = Join-Path $PSScriptRoot 'create-db-logins.sql'
+    # Out-Host keeps psql's stdout (CREATE ROLE, NOTICE, ...) off the pipeline;
+    # left on it, it pollutes the return value into @(<psql output>, 0) and the
+    # dispatcher false-halts (same class as the dbmate leak above).
     psql $Config.DatabaseUrl -v ON_ERROR_STOP=1 `
-        -v ingest_pw="$($Config.IngestPassword)" -v read_pw="$($Config.ReadPassword)" -f $sql
+        -v ingest_pw="$($Config.IngestPassword)" -v read_pw="$($Config.ReadPassword)" -f $sql 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { Write-BootstrapLog 'create-db-logins.sql failed.' 'FAIL'; return 1 }
     Write-BootstrapLog 'DB logins created/converged.'
     return 0
