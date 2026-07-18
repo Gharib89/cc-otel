@@ -73,7 +73,8 @@ def test_account_url_registers_secret_with_prefetched_access_token(fake_credenti
 
 def test_connection_string_path_is_unchanged(fake_credential):
     con = _Con()
-    configure_duckdb(con, _settings(connection_string="DefaultEndpointsProtocol=https;AccountName=x"))
+    settings = _settings(connection_string="DefaultEndpointsProtocol=https;AccountName=x")
+    configure_duckdb(con, settings)
 
     secret_sql = next(s for s in con.sql if "CREATE OR REPLACE SECRET" in s)
     assert "CONNECTION_STRING" in secret_sql
