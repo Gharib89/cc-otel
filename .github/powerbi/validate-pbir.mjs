@@ -9,7 +9,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join, extname } from 'node:path';
 import Ajv from 'ajv';
 
-const FABRIC_HOST = 'developer.microsoft.com/json-schemas/fabric/';
+const FABRIC_PREFIX = 'https://developer.microsoft.com/json-schemas/fabric/';
 const ROOT = process.argv[2] ?? 'powerbi';
 const EXTS = new Set(['.json', '.pbir', '.pbip', '.pbism']);
 
@@ -50,11 +50,17 @@ for (const file of files.sort()) {
   let data;
   try {
     data = JSON.parse(await readFile(file, 'utf8'));
-  } catch {
-    continue; // not JSON we can parse — skip
+  } catch (err) {
+    // Every collected extension must be valid JSON — a parse failure is a broken
+    // report/model file, so fail the gate rather than silently skipping it.
+    failed++;
+    console.error(`✗ ${file}`);
+    console.error(`    invalid JSON: ${err.message}`);
+    continue;
   }
   const schemaUrl = data?.$schema;
-  if (typeof schemaUrl !== 'string' || !schemaUrl.includes(FABRIC_HOST)) continue;
+  // Exact prefix (not substring) so only Microsoft's Fabric schema host is fetched.
+  if (typeof schemaUrl !== 'string' || !schemaUrl.startsWith(FABRIC_PREFIX)) continue;
   const validate = await validatorFor(schemaUrl);
   checked++;
   if (validate(data)) {

@@ -20,5 +20,6 @@ Tabular Editor 2 `-A` fails CI only on severity-3 (Error) violations. The semant
 model uses `double` columns intentionally for cost/rate/token aggregates (#90), so
 enforcing "no floats" as a hard error would fail the gate on the already-reviewed
 model. Downgraded to a warning (still reported, non-blocking). The other two
-severity-3 rules — `DAX_DIVISION_COLUMNS` (use `DIVIDE`) and `DISABLE_AUTO_DATE/TIME`
-— remain hard errors, so the gate can still go red.
+severity-3 rules — `DAX_DIVISION_COLUMNS` (use `DIVIDE`) and the auto-date/time
+rule (`DIABLE_AUTO_DATE/TIME`, an upstream ID typo kept verbatim so it correlates
+with BPA output) — remain hard errors, so the gate can still go red.
