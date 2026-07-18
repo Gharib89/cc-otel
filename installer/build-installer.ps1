@@ -68,11 +68,14 @@ function Select-FleetToken {
     #>
     [OutputType([string])]
     param([Parameter(Mandatory)][string]$FleetTokens)
-    $tokens = @($FleetTokens | ConvertFrom-Json)
-    if ($tokens.Count -eq 0 -or [string]::IsNullOrWhiteSpace([string]$tokens[0])) {
+    # Pipe to Select-Object -First 1 rather than @(...)[0]: under Windows
+    # PowerShell 5.1, @($json | ConvertFrom-Json)[0] collapses to the whole
+    # array; this picks the first element consistently on 5.1 and pwsh 7.
+    $first = ConvertFrom-Json -InputObject $FleetTokens | Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace([string]$first)) {
         throw 'FLEET_TOKENS is empty - no token to bake. Set FLEET_TOKENS in .env.<env> to a JSON array, e.g. ["<bearer-token>"].'
     }
-    return [string]$tokens[0]
+    return [string]$first
 }
 
 function ConvertTo-CollectorEndpoint {
