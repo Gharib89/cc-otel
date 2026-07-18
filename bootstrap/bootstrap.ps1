@@ -118,7 +118,9 @@ function Get-PrecheckReport {
     if (-not $TenantMatch) { $fail.Add('Active az tenant does not match .env AZURE_TENANT_ID (prod gate G3).') }
     if (-not $SubMatch) { $fail.Add('Active az subscription does not match .env AZURE_SUBSCRIPTION_ID.') }
     if ($MissingEnvKey.Count -gt 0) { $fail.Add("Missing/empty .env keys: $($MissingEnvKey -join ', ').") }
-    return [string[]]$fail
+    # Unary comma preserves the array; a bare empty [string[]] unrolls to $null
+    # on return, and $null.Count throws under Set-StrictMode -Version Latest.
+    return , [string[]]$fail
 }
 
 function Test-PgCronPreloaded {
@@ -177,7 +179,9 @@ function Get-PgCronJobReport {
             $problem.Add("cron job '$name' targets database '$($row.Database)' (expected $Database)")
         }
     }
-    return [string[]]$problem
+    # Unary comma preserves the array across the return boundary; see
+    # Get-PrecheckReport for why a bare empty [string[]] would crash the caller.
+    return , [string[]]$problem
 }
 
 function Get-SeedImagesDecision {
@@ -374,6 +378,16 @@ function Invoke-StepDeploy {
     $repoRoot = Split-Path -Parent $PSScriptRoot
     $template = Join-Path $repoRoot (Join-Path 'iac' 'main.bicep')
     $params = Join-Path $repoRoot (Join-Path 'iac' (Join-Path 'params' "$($Config.Environment).bicepparam"))
+    # The .bicepparam files resolve the ACA secret params via
+    # readEnvironmentVariable(...) - Bicep reads them from this process's
+    # environment, not from $Config. Export them here (from the validated .env)
+    # so a local deploy sets real secret values; omitting them makes Bicep fall
+    # back to '' and Azure rejects the empty ACA secrets (ContainerAppSecretInvalid).
+    $env:FLEET_TOKENS = $Config.FleetTokens
+    $env:DATABASE_URL = $Config.DatabaseUrl
+    $env:GHCR_USERNAME = $Config.GhcrUsername
+    $env:GHCR_TOKEN = $Config.GhcrToken
+    $env:PG_ADMIN_PASSWORD = $Config.PgAdminPassword
     $state = az deployment group create --resource-group $Config.ResourceGroup `
         --template-file $template --parameters $params `
         --query 'properties.provisioningState' -o tsv
@@ -422,7 +436,17 @@ function Invoke-StepPgCronGate {
 function Invoke-StepMigrate {
     [OutputType([int])]
     param([Parameter(Mandatory)]$Config)
-    dbmate --url $Config.DatabaseUrl up
+    # --no-dump-schema: a bring-up applies migrations against the live target
+    # (prod/interim); it must NOT re-author db/schema.sql, which is dumped from
+    # the canonical CI image by scripts/dev-migrate.sh. Dumping against Azure PG
+    # instead injects environment-specific noise (server-version string, pg_cron
+    # placement) that dirties the tree and fails the CI schema-drift gate.
+    #
+    # Out-Host keeps dbmate's stdout (e.g. "Applying:") off the pipeline. Left on
+    # it, that output falls into the function's return value, making it
+    # @(<text>, 0); the dispatcher's `$rc -ne 0` then sees a truthy array and
+    # false-halts a migration that actually succeeded.
+    dbmate --url $Config.DatabaseUrl --no-dump-schema up 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { Write-BootstrapLog 'dbmate up failed.' 'FAIL'; return 1 }
     return 0
 }
@@ -431,8 +455,11 @@ function Invoke-StepDbLogin {
     [OutputType([int])]
     param([Parameter(Mandatory)]$Config)
     $sql = Join-Path $PSScriptRoot 'create-db-logins.sql'
+    # Out-Host keeps psql's stdout (CREATE ROLE, NOTICE, ...) off the pipeline;
+    # left on it, it pollutes the return value into @(<psql output>, 0) and the
+    # dispatcher false-halts (same class as the dbmate leak above).
     psql $Config.DatabaseUrl -v ON_ERROR_STOP=1 `
-        -v ingest_pw="$($Config.IngestPassword)" -v read_pw="$($Config.ReadPassword)" -f $sql
+        -v ingest_pw="$($Config.IngestPassword)" -v read_pw="$($Config.ReadPassword)" -f $sql 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { Write-BootstrapLog 'create-db-logins.sql failed.' 'FAIL'; return 1 }
     Write-BootstrapLog 'DB logins created/converged.'
     return 0
