@@ -66,7 +66,13 @@ def _read_blob_keys(con: duckdb.DuckDBPyConnection, targets: list[str]) -> tuple
             rows = con.execute(
                 f"SELECT json FROM read_json_objects('{escaped}', format='unstructured')"
             ).fetchall()
-        except duckdb.IOException:
+        except duckdb.IOException as err:
+            # DuckDB raises IOException both for a glob that matches no blobs (a legitimately
+            # empty day/signal partition) and for a real read/credential failure. Only the
+            # former is safe to skip; swallowing the latter would report a false "all-clean"
+            # sweep over data it never read.
+            if "no files found" not in str(err).lower():
+                raise
             rows = []  # partition has no blobs for this day/signal
         for (payload_text,) in rows:
             blobs += 1
