@@ -133,6 +133,35 @@ table _Measures
 		displayFolder: Ingest Health
 		lineageTag: 833b49f9-2225-4543-aaa6-a8a2b971b811
 
+	/// Report-data-contract user-page fields (#28). commits/prs are doubles in the daily mart.
+	measure 'Total Commits' = SUM(fact_session_daily[commits])
+		formatString: #,##0
+		displayFolder: Productivity
+		lineageTag: a1c00001-0000-4000-8000-000000000028
+
+	measure 'Total PRs' = SUM(fact_session_daily[prs])
+		formatString: #,##0
+		displayFolder: Productivity
+		lineageTag: a1c00002-0000-4000-8000-000000000028
+
+	/// LOC = added + removed: the lines_of_code.count metric splits into type=added/removed rows (#9).
+	measure 'Total Lines of Code' = SUM(fact_session_daily[loc_added]) + SUM(fact_session_daily[loc_removed])
+		formatString: #,##0
+		displayFolder: Productivity
+		lineageTag: a1c00003-0000-4000-8000-000000000028
+
+	/// Mean active duration per active day (contract "Avg active time per day"), in minutes.
+	measure 'Avg Active Time per Day' = DIVIDE(SUM(fact_session_daily[active_time_total_s]), [Active Days]) / 60
+		formatString: #,##0.0 "min"
+		displayFolder: Adoption
+		lineageTag: a1c00004-0000-4000-8000-000000000028
+
+	/// Mean session length (contract "Avg session duration"), in minutes.
+	measure 'Avg Session Duration' = AVERAGE(fact_session[duration_s]) / 60
+		formatString: #,##0.0 "min"
+		displayFolder: Adoption
+		lineageTag: a1c00005-0000-4000-8000-000000000028
+
 	column Value
 		dataType: int64
 		isHidden
