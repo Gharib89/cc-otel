@@ -1,0 +1,72 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "name": "sd_hook",
+  "position": {
+    "x": 1008,
+    "y": 504,
+    "z": 11,
+    "height": 200,
+    "width": 244,
+    "tabOrder": 11
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "bridge_session_hook"
+                    }
+                  },
+                  "Property": "executions"
+                }
+              },
+              "queryRef": "bridge_session_hook.executions",
+              "nativeQueryRef": "executions"
+            }
+          ]
+        },
+        "category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "bridge_session_hook"
+                    }
+                  },
+                  "Property": "hook_name"
+                }
+              },
+              "queryRef": "bridge_session_hook.hook_name",
+              "nativeQueryRef": "hook_name",
+              "active": true
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Hooks'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

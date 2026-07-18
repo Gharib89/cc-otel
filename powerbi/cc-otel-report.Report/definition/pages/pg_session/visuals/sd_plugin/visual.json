@@ -1,0 +1,72 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "name": "sd_plugin",
+  "position": {
+    "x": 512,
+    "y": 504,
+    "z": 9,
+    "height": 200,
+    "width": 244,
+    "tabOrder": 9
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "bridge_session_plugin"
+                    }
+                  },
+                  "Property": "load_count"
+                }
+              },
+              "queryRef": "bridge_session_plugin.load_count",
+              "nativeQueryRef": "load_count"
+            }
+          ]
+        },
+        "category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "bridge_session_plugin"
+                    }
+                  },
+                  "Property": "plugin_name"
+                }
+              },
+              "queryRef": "bridge_session_plugin.plugin_name",
+              "nativeQueryRef": "plugin_name",
+              "active": true
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Plugins'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

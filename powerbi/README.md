@@ -47,6 +47,31 @@ Structure:
   accounts to break the loop — extend the list if a new cycle surfaces; the durable fix is upstream
   in `vw_UserBasicInfo`.
 
+## Report (#28)
+
+Seven pages, authored offline as PBIR JSON via `pbi-cli-tool` v3.11.1's Report layer
+(`pbi report`/`visual`/`format` with `--no-sync`; see `docs/research/pbi-cli-visual-authoring.md`).
+Canvas 1280×720, AIWorx theme (`theme.json`, registered under `StaticResources/RegisteredResources/`).
+
+| Page | Content |
+|---|---|
+| Overview | 6 fleet KPI cards, daily-active-users trend, requests-by-model-family donut, last-mart-refresh + freshness cards |
+| Users | One row per developer — the full [report data contract](../docs/report-data-contract.md) |
+| Session drill | Per-session table + all 5 bridge tables (skills/MCP/plugins/subagents/hooks); **hidden**, drillthrough target |
+| Usage & capacity | Utilization-intensity + limit-hit KPIs, intensity trend, hour-of-day heatmap matrix |
+| Tool quality | Acceptance-rate KPI, edit-decisions-by-language bar, decision-mix donut |
+| Ecosystem adoption | Five bars — skills, MCP servers, plugins, subagents, hooks |
+| Ingest health | Freshness + unknown-email KPIs, `dq_finding` and `mart_refresh_log` tables |
+
+### Finish in Desktop before publishing (pbi-cli gaps — see research §2/§4)
+
+These four steps are **not** authorable offline and are done once in Desktop at publish:
+
+1. **Drillthrough** — wire Users → Session drill on `dim_user[user_email]` (PBIR drillthrough config is a v3.11.1 CLI gap).
+2. **Conditional formatting** — the freshness cards' green/amber/red background via the `Freshness Color` measure (Overview `ov_fresh`, Ingest `ih_fresh`), and the heatmap gradient on `uc_heat`. The `pbi format` verbs need pywin32 + a live Desktop, so they can't run in the offline build.
+3. **Fixed per-model-family colours** — pin each `dim_model[family]` series to a stable colour so families read consistently report-wide.
+4. **Publish** — manual from Desktop to the PPU workspace; configure the daily scheduled refresh at 07:00 (public Postgres, no gateway).
+
 ## CI validation
 
 `.github/workflows/ci-powerbi.yml` gates every `powerbi/**` change (path-filtered

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "name": "ih_refresh",
+  "position": {
+    "x": 648,
+    "y": 72,
+    "z": 8,
+    "height": 100,
+    "width": 300,
+    "tabOrder": 8
+  },
+  "visual": {
+    "visualType": "card",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Last Mart Refresh"
+                }
+              },
+              "queryRef": "_Measures.Last Mart Refresh",
+              "nativeQueryRef": "Last Mart Refresh"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Last Mart Refresh'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
+  "name": "sd_mcp",
+  "position": {
+    "x": 264,
+    "y": 504,
+    "z": 8,
+    "height": 200,
+    "width": 244,
+    "tabOrder": 8
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "bridge_session_mcp"
+                    }
+                  },
+                  "Property": "tool_calls"
+                }
+              },
+              "queryRef": "bridge_session_mcp.tool_calls",
+              "nativeQueryRef": "tool_calls"
+            }
+          ]
+        },
+        "category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "bridge_session_mcp"
+                    }
+                  },
+                  "Property": "mcp_name"
+                }
+              },
+              "queryRef": "bridge_session_mcp.mcp_name",
+              "nativeQueryRef": "mcp_name",
+              "active": true
+            }
+          ]
+        }
+      }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'MCP servers'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "0ca6fa6b3e314f3219f2",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "bridge_session_mcp"
+              }
+            },
+            "Property": "mcp_name"
+          }
+        },
+        "type": "Categorical"
+      }
+    ]
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "name": "eco_hook",
+  "position": {
+    "x": 652,
+    "y": 388,
+    "z": 9,
+    "height": 316,
+    "width": 612,
+    "tabOrder": 9
+  },
+  "visual": {
+    "visualType": "barChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "bridge_session_hook"
+                    }
+                  },
+                  "Property": "hook_name"
+                }
+              },
+              "queryRef": "bridge_session_hook.hook_name",
+              "nativeQueryRef": "hook_name",
+              "active": true
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "bridge_session_hook"
+                    }
+                  },
+                  "Property": "executions"
+                }
+              },
+              "queryRef": "bridge_session_hook.executions",
+              "nativeQueryRef": "executions"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Hooks'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,385 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
+  "name": "ux_table",
+  "position": {
+    "x": 16,
+    "y": 72,
+    "z": 1,
+    "height": 632,
+    "width": 1248,
+    "tabOrder": 1
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_user"
+                    }
+                  },
+                  "Property": "user_email"
+                }
+              },
+              "queryRef": "dim_user.user_email",
+              "nativeQueryRef": "user_email"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Active Days"
+                }
+              },
+              "queryRef": "_Measures.Active Days",
+              "nativeQueryRef": "Active Days"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Total Sessions"
+                }
+              },
+              "queryRef": "_Measures.Total Sessions",
+              "nativeQueryRef": "Total Sessions"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Total Input Tokens"
+                }
+              },
+              "queryRef": "_Measures.Total Input Tokens",
+              "nativeQueryRef": "Total Input Tokens"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Total Output Tokens"
+                }
+              },
+              "queryRef": "_Measures.Total Output Tokens",
+              "nativeQueryRef": "Total Output Tokens"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Total Commits"
+                }
+              },
+              "queryRef": "_Measures.Total Commits",
+              "nativeQueryRef": "Total Commits"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Total PRs"
+                }
+              },
+              "queryRef": "_Measures.Total PRs",
+              "nativeQueryRef": "Total PRs"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Avg Active Time per Day"
+                }
+              },
+              "queryRef": "_Measures.Avg Active Time per Day",
+              "nativeQueryRef": "Avg Active Time per Day"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Avg Session Duration"
+                }
+              },
+              "queryRef": "_Measures.Avg Session Duration",
+              "nativeQueryRef": "Avg Session Duration"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Total Lines of Code"
+                }
+              },
+              "queryRef": "_Measures.Total Lines of Code",
+              "nativeQueryRef": "Total Lines of Code"
+            }
+          ]
+        },
+        "category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_user"
+                    }
+                  },
+                  "Property": "last_seen"
+                }
+              },
+              "queryRef": "dim_user.last_seen",
+              "nativeQueryRef": "last_seen",
+              "active": true
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_user"
+                    }
+                  },
+                  "Property": "last_cc_version"
+                }
+              },
+              "queryRef": "dim_user.last_cc_version",
+              "nativeQueryRef": "last_cc_version",
+              "active": true
+            }
+          ]
+        }
+      }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Developers'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "e0ba078d3a2ce273a468",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "_Measures"
+              }
+            },
+            "Property": "Active Days"
+          }
+        },
+        "type": "Advanced"
+      },
+      {
+        "name": "f0e7faaf0c1d38e31e48",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "_Measures"
+              }
+            },
+            "Property": "Total Sessions"
+          }
+        },
+        "type": "Advanced"
+      },
+      {
+        "name": "5579f7705f9787b91bd2",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "_Measures"
+              }
+            },
+            "Property": "Total Input Tokens"
+          }
+        },
+        "type": "Advanced"
+      },
+      {
+        "name": "dd776b86199bc95e000b",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "_Measures"
+              }
+            },
+            "Property": "Total Output Tokens"
+          }
+        },
+        "type": "Advanced"
+      },
+      {
+        "name": "85c689202119950a173d",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "_Measures"
+              }
+            },
+            "Property": "Total Commits"
+          }
+        },
+        "type": "Advanced"
+      },
+      {
+        "name": "d7c27728de9e1233232c",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "_Measures"
+              }
+            },
+            "Property": "Total PRs"
+          }
+        },
+        "type": "Advanced"
+      },
+      {
+        "name": "5a2087fdcfe62904d46b",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "_Measures"
+              }
+            },
+            "Property": "Avg Active Time per Day"
+          }
+        },
+        "type": "Advanced"
+      },
+      {
+        "name": "df1609b998b2bc7e5cf3",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "_Measures"
+              }
+            },
+            "Property": "Avg Session Duration"
+          }
+        },
+        "type": "Advanced"
+      },
+      {
+        "name": "b44ae4ac5dc26397efcf",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "_Measures"
+              }
+            },
+            "Property": "Total Lines of Code"
+          }
+        },
+        "type": "Advanced"
+      },
+      {
+        "name": "1bec6d2d6b4d0730306b",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "dim_user"
+              }
+            },
+            "Property": "last_seen"
+          }
+        },
+        "type": "Categorical"
+      },
+      {
+        "name": "c2d88375acd49861b0a0",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "dim_user"
+              }
+            },
+            "Property": "last_cc_version"
+          }
+        },
+        "type": "Categorical"
+      },
+      {
+        "name": "b07f2f46c11994939943",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "dim_user"
+              }
+            },
+            "Property": "user_email"
+          }
+        },
+        "type": "Categorical"
+      }
+    ]
+  }
+}
