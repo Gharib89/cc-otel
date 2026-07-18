@@ -379,7 +379,7 @@ function Invoke-StepDeploy {
     $template = Join-Path $repoRoot (Join-Path 'iac' 'main.bicep')
     $params = Join-Path $repoRoot (Join-Path 'iac' (Join-Path 'params' "$($Config.Environment).bicepparam"))
     # The .bicepparam files resolve the ACA secret params via
-    # readEnvironmentVariable(...) — Bicep reads them from this process's
+    # readEnvironmentVariable(...) - Bicep reads them from this process's
     # environment, not from $Config. Export them here (from the validated .env)
     # so a local deploy sets real secret values; omitting them makes Bicep fall
     # back to '' and Azure rejects the empty ACA secrets (ContainerAppSecretInvalid).
