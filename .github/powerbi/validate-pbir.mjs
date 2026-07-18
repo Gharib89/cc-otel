@@ -1,0 +1,76 @@
+// Validate every Power BI project file that declares a Microsoft Fabric JSON
+// `$schema` against that schema. ajv fetches each declared schema and its `$ref`
+// closure over HTTP (relative refs resolve against each schema's absolute `$id`),
+// so every file is checked against the exact schema version it pins — the gate
+// never drifts as the report/model gain pages or bump schema versions.
+//
+// Usage: node .github/powerbi/validate-pbir.mjs [rootDir]   (default: powerbi)
+import { readFile, readdir } from 'node:fs/promises';
+import { join, extname } from 'node:path';
+import Ajv from 'ajv';
+
+const FABRIC_HOST = 'developer.microsoft.com/json-schemas/fabric/';
+const ROOT = process.argv[2] ?? 'powerbi';
+const EXTS = new Set(['.json', '.pbir', '.pbip', '.pbism']);
+
+async function walk(dir, out = []) {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const p = join(dir, entry.name);
+    if (entry.isDirectory()) await walk(p, out);
+    else if (EXTS.has(extname(entry.name))) out.push(p);
+  }
+  return out;
+}
+
+// ajv only calls loadSchema for refs it hasn't already registered, so this cache
+// is purely a network optimisation across the per-file compiles.
+const fetchCache = new Map();
+const loadSchema = async (uri) => {
+  if (fetchCache.has(uri)) return fetchCache.get(uri);
+  const res = await fetch(uri);
+  if (!res.ok) throw new Error(`fetch ${uri} -> HTTP ${res.status}`);
+  const json = await res.json();
+  fetchCache.set(uri, json);
+  return json;
+};
+
+const ajv = new Ajv({ strict: false, allErrors: true, loadSchema });
+const validators = new Map();
+const validatorFor = async (schemaUrl) => {
+  if (!validators.has(schemaUrl)) {
+    validators.set(schemaUrl, await ajv.compileAsync(await loadSchema(schemaUrl)));
+  }
+  return validators.get(schemaUrl);
+};
+
+const files = await walk(ROOT);
+let checked = 0;
+let failed = 0;
+for (const file of files.sort()) {
+  let data;
+  try {
+    data = JSON.parse(await readFile(file, 'utf8'));
+  } catch {
+    continue; // not JSON we can parse — skip
+  }
+  const schemaUrl = data?.$schema;
+  if (typeof schemaUrl !== 'string' || !schemaUrl.includes(FABRIC_HOST)) continue;
+  const validate = await validatorFor(schemaUrl);
+  checked++;
+  if (validate(data)) {
+    console.log(`✓ ${file}`);
+  } else {
+    failed++;
+    console.error(`✗ ${file}`);
+    for (const err of validate.errors) {
+      console.error(`    ${err.instancePath || '/'} ${err.message}`);
+    }
+  }
+}
+
+console.log(`\nPBIR schema validation: ${checked} file(s) checked, ${failed} failed.`);
+if (checked === 0) {
+  console.error('No Fabric-schema files found to validate — check the root path.');
+  process.exit(1);
+}
+process.exit(failed ? 1 : 0);
