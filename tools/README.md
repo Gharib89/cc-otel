@@ -34,7 +34,7 @@ lives in [`docs/agents/column-curation.md`](../docs/agents/column-curation.md).
 
 ### Blob RBAC per tool
 
-Grant the role on the storage account (or `raw` container) to the identity you `az login`ed as:
+Grant the role on the storage account (or `raw` container) to the identity you logged in as with `az login`:
 
 | tool | blob role | why |
 |---|---|---|
