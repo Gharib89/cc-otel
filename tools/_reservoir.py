@@ -84,10 +84,21 @@ def configure_duckdb(con: duckdb.DuckDBPyConnection, settings: Settings) -> None
         conn_str = settings.blob_connection_string.replace("'", "''")
         con.execute(f"CREATE OR REPLACE SECRET blob (TYPE azure, CONNECTION_STRING '{conn_str}')")
     elif settings.blob_account_url:
+        from azure.identity import DefaultAzureCredential
+
         account = _account_name(settings.blob_account_url)
+        # Fetch one OAuth token up front rather than PROVIDER credential_chain: DuckDB's chain
+        # re-acquires a token on blob opens and throttles/expires mid-read on large partitions
+        # (#99). One prefetched token (valid ~1h — ample for a sweep) is registered statically.
+        credential = DefaultAzureCredential()
+        try:
+            token = credential.get_token("https://storage.azure.com/.default").token
+        finally:
+            credential.close()
+        token = token.replace("'", "''")
         con.execute(
             "CREATE OR REPLACE SECRET blob "
-            f"(TYPE azure, PROVIDER credential_chain, ACCOUNT_NAME '{account}')"
+            f"(TYPE azure, PROVIDER access_token, ACCESS_TOKEN '{token}', ACCOUNT_NAME '{account}')"
         )
     else:
         raise ReservoirUnconfigured
