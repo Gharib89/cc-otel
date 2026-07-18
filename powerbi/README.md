@@ -47,6 +47,15 @@ Structure:
   accounts to break the loop — extend the list if a new cycle surfaces; the durable fix is upstream
   in `vw_UserBasicInfo`.
 
+## CI validation
+
+`.github/workflows/ci-powerbi.yml` gates every `powerbi/**` change (path-filtered
+per concern, CLAUDE.md). Three checks: PBIR/PBIP JSON-schema validation (ajv),
+`fab-inspector` report-quality rules (ubuntu), and Tabular Editor 2 Best Practice
+Analyzer against the semantic model (windows). Nothing is deployed — publishing
+stays manual from Desktop. Pinned tool versions + vendored rulesets live in
+`.github/powerbi/` (see its README).
+
 ## Connect / refresh (Desktop)
 
 Data-source credentials (per `bootstrap.ps1 powerbi` step):

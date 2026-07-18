@@ -1,0 +1,93 @@
+name: ci-powerbi
+
+# Path-filtered per concern (CLAUDE.md): only the Power BI project, this workflow,
+# and its gate assets under .github/powerbi/ trigger these checks. The workflow
+# validates the PBIP/PBIR report and the TMDL semantic model — nothing is deployed
+# from CI (publishing is manual from Desktop, see powerbi/README.md). The path
+# filter includes the workflow file itself so edits to the gate re-run it.
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - "powerbi/**"
+      - ".github/powerbi/**"
+      - ".github/workflows/ci-powerbi.yml"
+  pull_request:
+    paths: *paths
+
+# Private repo, metered minutes (#32): a review-loop push cancels the stale run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ajv validates every PBIP/PBIR file against the exact Fabric JSON schema it
+  # declares in `$schema` (ajv fetches the schema + its $ref closure over HTTP, so
+  # each file is pinned to the version it declares). Node-only -> ubuntu (1x, #32).
+  pbir-schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pinned ajv
+        run: npm install --no-save ajv@8.17.1
+
+      - name: Validate PBIR schemas
+        run: node .github/powerbi/validate-pbir.mjs powerbi
+
+  # fab-inspector runs declarative report-quality rules against the report item.
+  # Self-contained linux binary -> ubuntu (1x metered minutes, #32).
+  fab-inspector:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download pinned fab-inspector (v3.4.0)
+        run: |
+          curl -fsSL --retry 3 -o fab.zip \
+            https://github.com/NatVanG/fab-inspector/releases/download/v3.4.0/linux-x64-FabInspCLI.zip
+          unzip -q fab.zip -d fab-inspector
+          chmod +x fab-inspector/linux-x64/FabInspCLI/fab-inspector
+
+      # `-formats GitHub` is load-bearing: it makes fab-inspector exit non-zero on
+      # a logType:error rule failure (and emit ::error:: annotations). With Console
+      # format it prints violations but exits 0, so the job would never go red.
+      - name: Inspect report
+        run: |
+          fab-inspector/linux-x64/FabInspCLI/fab-inspector \
+            -fabricitem "powerbi/cc-otel-report.Report" \
+            -rules ".github/powerbi/fab-inspector-rules.json" \
+            -formats GitHub
+
+  # Tabular Editor 2 Best Practice Analyzer against the TMDL semantic model. TE2
+  # needs .NET Framework / AMO, so this is the only job that must run on Windows
+  # (windows-latest burns 2x metered minutes, #32). `-A` exits non-zero only on
+  # Error-severity (3) rule violations; the vendored ruleset keeps division and
+  # auto-date/time as hard errors (see .github/powerbi/README.md).
+  bpa:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download pinned Tabular Editor 2 (2.28.0)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://github.com/TabularEditor/TabularEditor/releases/download/2.28.0/TabularEditor.Portable.zip -OutFile te2.zip
+          Expand-Archive te2.zip -DestinationPath te2
+
+      - name: Best Practice Analyzer
+        shell: pwsh
+        run: |
+          # TabularEditor.exe is a GUI-subsystem app: `& exe` does not propagate
+          # its exit code to $LASTEXITCODE, so drive it via Start-Process -PassThru
+          # and exit on .ExitCode (1 = an Error-severity rule was violated).
+          $log = "te2-bpa.log"
+          $p = Start-Process -FilePath ".\te2\TabularEditor.exe" `
+            -ArgumentList @("powerbi\cc-otel-report.SemanticModel\definition\model.tmdl", "-A", ".github\powerbi\BPARules.json") `
+            -Wait -PassThru -NoNewWindow -RedirectStandardOutput $log -RedirectStandardError "te2-bpa.err"
+          Get-Content $log, "te2-bpa.err" -ErrorAction SilentlyContinue
+          exit $p.ExitCode
