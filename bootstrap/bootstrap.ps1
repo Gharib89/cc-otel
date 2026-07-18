@@ -118,7 +118,9 @@ function Get-PrecheckReport {
     if (-not $TenantMatch) { $fail.Add('Active az tenant does not match .env AZURE_TENANT_ID (prod gate G3).') }
     if (-not $SubMatch) { $fail.Add('Active az subscription does not match .env AZURE_SUBSCRIPTION_ID.') }
     if ($MissingEnvKey.Count -gt 0) { $fail.Add("Missing/empty .env keys: $($MissingEnvKey -join ', ').") }
-    return [string[]]$fail
+    # Unary comma preserves the array; a bare empty [string[]] unrolls to $null
+    # on return, and $null.Count throws under Set-StrictMode -Version Latest.
+    return , [string[]]$fail
 }
 
 function Test-PgCronPreloaded {
@@ -177,7 +179,9 @@ function Get-PgCronJobReport {
             $problem.Add("cron job '$name' targets database '$($row.Database)' (expected $Database)")
         }
     }
-    return [string[]]$problem
+    # Unary comma preserves the array across the return boundary; see
+    # Get-PrecheckReport for why a bare empty [string[]] would crash the caller.
+    return , [string[]]$problem
 }
 
 function Get-SeedImagesDecision {

@@ -79,10 +79,13 @@ function Get-MissingConfigKey {
         [Parameter(Mandatory)][System.Collections.IDictionary]$Raw,
         [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Required
     )
-    $missing = foreach ($key in $Required) {
+    $missing = @(foreach ($key in $Required) {
         if (-not $Raw.Contains($key) -or [string]::IsNullOrWhiteSpace([string]$Raw[$key])) { $key }
-    }
-    return [string[]]$missing
+    })
+    # Unary comma preserves the array across the return boundary; without it
+    # PowerShell unrolls an empty result to $null, which then fails to bind to
+    # precheck's Mandatory -MissingEnvKey and crashes on a complete .env.
+    return , [string[]]$missing
 }
 
 function Get-DotEnvValue {

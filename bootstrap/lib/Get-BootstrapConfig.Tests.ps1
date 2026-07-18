@@ -111,3 +111,14 @@ Describe 'Get-BootstrapConfig - missing-key validation' {
             Should -Throw -ExpectedMessage '*nope.env*'
     }
 }
+
+Describe 'Get-MissingConfigKey' {
+    It 'returns an empty array (not $null) when nothing is missing' {
+        # Regression: a $null return failed to bind to precheck's Mandatory
+        # -MissingEnvKey param, crashing precheck on a complete .env.
+        $raw = ConvertFrom-DotEnv -Line ($script:FullEnv -split "`n")
+        $result = Get-MissingConfigKey -Raw $raw -Required (Get-BootstrapRequiredKey)
+        ($null -eq $result) | Should -BeFalse
+        @($result).Count | Should -Be 0
+    }
+}
