@@ -47,21 +47,30 @@ jobs:
 
   # Pester dot-sources install.ps1, whose $InstallRoot default
   # (Join-Path $env:ProgramFiles ...) binds to null off Windows and fails to load,
-  # so the suite needs a Windows runner. It runs under pwsh (not Windows PowerShell
-  # 5.1): the suite is green on pwsh, whereas 5.1 mis-parses a piped JSON array in
-  # build-installer's Select-FleetToken. install.ps1 itself stays 5.1-compatible for
-  # the SYSTEM-context fleet push (that path is covered by the manual matrix, #26).
+  # so the suite needs a Windows runner. It runs under BOTH pwsh and Windows
+  # PowerShell 5.1 (powershell.exe): 5.1 is the real fleet runtime — IS pushes
+  # install.ps1 in SYSTEM context on stock Windows — so the 5.1 leg guards the
+  # #Requires-5.1 contract against a 5.1-vs-7 divergence (the class of bug #91,
+  # now fixed). fail-fast is off so one shell's failure still reports the other.
   pester:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [pwsh, powershell]
     steps:
       - uses: actions/checkout@v4
 
       - name: Install pinned Pester
-        shell: pwsh
-        run: Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force
+        shell: ${{ matrix.shell }}
+        run: |
+          # Windows PowerShell 5.1 defaults to TLS 1.0 for PSGallery; force 1.2
+          # so Install-Module resolves the source (harmless on pwsh 7).
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force
 
       - name: Pester
-        shell: pwsh
+        shell: ${{ matrix.shell }}
         run: |
           Import-Module Pester -RequiredVersion 5.7.1
           $config = New-PesterConfiguration
