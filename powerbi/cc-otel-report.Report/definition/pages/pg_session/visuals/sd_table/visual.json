@@ -1,0 +1,130 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "name": "sd_table",
+  "position": {
+    "x": 16,
+    "y": 72,
+    "z": 6,
+    "height": 408,
+    "width": 1248,
+    "tabOrder": 6
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Total Input Tokens"
+                }
+              },
+              "queryRef": "_Measures.Total Input Tokens",
+              "nativeQueryRef": "Total Input Tokens"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Total Output Tokens"
+                }
+              },
+              "queryRef": "_Measures.Total Output Tokens",
+              "nativeQueryRef": "Total Output Tokens"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Total Requests"
+                }
+              },
+              "queryRef": "_Measures.Total Requests",
+              "nativeQueryRef": "Total Requests"
+            }
+          ]
+        },
+        "category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_session"
+                    }
+                  },
+                  "Property": "started_at"
+                }
+              },
+              "queryRef": "fact_session.started_at",
+              "nativeQueryRef": "started_at",
+              "active": true
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_model"
+                    }
+                  },
+                  "Property": "family"
+                }
+              },
+              "queryRef": "dim_model.family",
+              "nativeQueryRef": "family",
+              "active": true
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_api_usage"
+                    }
+                  },
+                  "Property": "effort"
+                }
+              },
+              "queryRef": "fact_api_usage.effort",
+              "nativeQueryRef": "effort",
+              "active": true
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Sessions'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

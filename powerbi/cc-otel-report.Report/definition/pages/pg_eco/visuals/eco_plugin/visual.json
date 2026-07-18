@@ -1,0 +1,72 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "name": "eco_plugin",
+  "position": {
+    "x": 860,
+    "y": 72,
+    "z": 7,
+    "height": 300,
+    "width": 404,
+    "tabOrder": 7
+  },
+  "visual": {
+    "visualType": "barChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "bridge_session_plugin"
+                    }
+                  },
+                  "Property": "plugin_name"
+                }
+              },
+              "queryRef": "bridge_session_plugin.plugin_name",
+              "nativeQueryRef": "plugin_name",
+              "active": true
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "bridge_session_plugin"
+                    }
+                  },
+                  "Property": "load_count"
+                }
+              },
+              "queryRef": "bridge_session_plugin.load_count",
+              "nativeQueryRef": "load_count"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Plugins'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

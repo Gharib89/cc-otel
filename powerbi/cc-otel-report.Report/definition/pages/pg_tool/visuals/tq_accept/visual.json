@@ -1,0 +1,53 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "name": "tq_accept",
+  "position": {
+    "x": 16,
+    "y": 72,
+    "z": 3,
+    "height": 100,
+    "width": 300,
+    "tabOrder": 3
+  },
+  "visual": {
+    "visualType": "card",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Tool Acceptance Rate"
+                }
+              },
+              "queryRef": "_Measures.Tool Acceptance Rate",
+              "nativeQueryRef": "Tool Acceptance Rate"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Tool Acceptance Rate'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

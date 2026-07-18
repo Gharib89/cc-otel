@@ -1,7 +1,13 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/pagesMetadata/1.1.0/schema.json",
   "pageOrder": [
-    "0950a53ee3ff7f65b5f8"
+    "pg_overview",
+    "pg_users",
+    "pg_session",
+    "pg_usage",
+    "pg_tool",
+    "pg_eco",
+    "pg_ingest"
   ],
-  "activePageName": "0950a53ee3ff7f65b5f8"
+  "activePageName": "pg_overview"
 }

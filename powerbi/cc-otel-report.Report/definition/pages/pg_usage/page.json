@@ -1,7 +1,7 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/2.1.0/schema.json",
-  "name": "0950a53ee3ff7f65b5f8",
-  "displayName": "Page 1",
+  "name": "pg_usage",
+  "displayName": "Usage & capacity",
   "displayOption": "FitToPage",
   "height": 720,
   "width": 1280

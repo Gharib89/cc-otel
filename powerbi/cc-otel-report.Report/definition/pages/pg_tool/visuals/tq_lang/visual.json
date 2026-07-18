@@ -1,0 +1,91 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "name": "tq_lang",
+  "position": {
+    "x": 16,
+    "y": 188,
+    "z": 4,
+    "height": 516,
+    "width": 620,
+    "tabOrder": 4
+  },
+  "visual": {
+    "visualType": "barChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_edit_decision"
+                    }
+                  },
+                  "Property": "language"
+                }
+              },
+              "queryRef": "fact_edit_decision.language",
+              "nativeQueryRef": "language",
+              "active": true
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_edit_decision"
+                    }
+                  },
+                  "Property": "decision_count"
+                }
+              },
+              "queryRef": "fact_edit_decision.decision_count",
+              "nativeQueryRef": "decision_count"
+            }
+          ]
+        },
+        "Legend": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_edit_decision"
+                    }
+                  },
+                  "Property": "decision"
+                }
+              },
+              "queryRef": "fact_edit_decision.decision",
+              "nativeQueryRef": "decision",
+              "active": true
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Edit decisions by language'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

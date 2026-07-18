@@ -1,0 +1,87 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "name": "ih_marts",
+  "position": {
+    "x": 652,
+    "y": 188,
+    "z": 11,
+    "height": 516,
+    "width": 612,
+    "tabOrder": 11
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "mart_refresh_log"
+                    }
+                  },
+                  "Property": "row_count"
+                }
+              },
+              "queryRef": "mart_refresh_log.row_count",
+              "nativeQueryRef": "row_count"
+            }
+          ]
+        },
+        "category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "mart_refresh_log"
+                    }
+                  },
+                  "Property": "mart"
+                }
+              },
+              "queryRef": "mart_refresh_log.mart",
+              "nativeQueryRef": "mart",
+              "active": true
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "mart_refresh_log"
+                    }
+                  },
+                  "Property": "finished"
+                }
+              },
+              "queryRef": "mart_refresh_log.finished",
+              "nativeQueryRef": "finished",
+              "active": true
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Mart refresh log'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

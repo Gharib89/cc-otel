@@ -1,0 +1,87 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "name": "ih_dq",
+  "position": {
+    "x": 16,
+    "y": 188,
+    "z": 10,
+    "height": 516,
+    "width": 620,
+    "tabOrder": 10
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dq_finding"
+                    }
+                  },
+                  "Property": "row_count"
+                }
+              },
+              "queryRef": "dq_finding.row_count",
+              "nativeQueryRef": "row_count"
+            }
+          ]
+        },
+        "category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dq_finding"
+                    }
+                  },
+                  "Property": "finding_type"
+                }
+              },
+              "queryRef": "dq_finding.finding_type",
+              "nativeQueryRef": "finding_type",
+              "active": true
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dq_finding"
+                    }
+                  },
+                  "Property": "detected_at"
+                }
+              },
+              "queryRef": "dq_finding.detected_at",
+              "nativeQueryRef": "detected_at",
+              "active": true
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Data-quality findings'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

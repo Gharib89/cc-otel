@@ -1,0 +1,75 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "name": "tq_mix",
+  "position": {
+    "x": 652,
+    "y": 188,
+    "z": 5,
+    "height": 516,
+    "width": 612,
+    "tabOrder": 5
+  },
+  "visual": {
+    "visualType": "donutChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": []
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_edit_decision"
+                    }
+                  },
+                  "Property": "decision_count"
+                }
+              },
+              "queryRef": "fact_edit_decision.decision_count",
+              "nativeQueryRef": "decision_count"
+            }
+          ]
+        },
+        "Legend": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_edit_decision"
+                    }
+                  },
+                  "Property": "decision"
+                }
+              },
+              "queryRef": "fact_edit_decision.decision",
+              "nativeQueryRef": "decision",
+              "active": true
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Edit-decision mix'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
