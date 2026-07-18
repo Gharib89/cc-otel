@@ -23,15 +23,18 @@ async function walk(dir, out = []) {
 }
 
 // ajv only calls loadSchema for refs it hasn't already registered, so this cache
-// is purely a network optimisation across the per-file compiles.
+// dedupes concurrent $ref loads across the per-file compiles.
+const FETCH_TIMEOUT_MS = 15_000;
 const fetchCache = new Map();
-const loadSchema = async (uri) => {
-  if (fetchCache.has(uri)) return fetchCache.get(uri);
-  const res = await fetch(uri);
-  if (!res.ok) throw new Error(`fetch ${uri} -> HTTP ${res.status}`);
-  const json = await res.json();
-  fetchCache.set(uri, json);
-  return json;
+const loadSchema = (uri) => {
+  if (!fetchCache.has(uri)) {
+    fetchCache.set(uri, (async () => {
+      const res = await fetch(uri, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+      if (!res.ok) throw new Error(`fetch ${uri} -> HTTP ${res.status}`);
+      return res.json();
+    })());
+  }
+  return fetchCache.get(uri);
 };
 
 const ajv = new Ajv({ strict: false, allErrors: true, loadSchema });

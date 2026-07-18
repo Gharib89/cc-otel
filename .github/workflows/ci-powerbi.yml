@@ -48,7 +48,7 @@ jobs:
 
       - name: Download pinned fab-inspector (v3.4.0)
         run: |
-          curl -sSL -o fab.zip \
+          curl -fsSL --retry 3 -o fab.zip \
             https://github.com/NatVanG/fab-inspector/releases/download/v3.4.0/linux-x64-FabInspCLI.zip
           unzip -q fab.zip -d fab-inspector
           chmod +x fab-inspector/linux-x64/FabInspCLI/fab-inspector
