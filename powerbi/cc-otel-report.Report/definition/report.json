@@ -54,7 +54,7 @@
         {
           "name": "AIWorx",
           "type": "CustomTheme",
-          "path": "theme.json"
+          "path": "AIWorx"
         }
       ]
     }

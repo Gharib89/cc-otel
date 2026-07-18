@@ -1,5 +1,5 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "uc_heat",
   "position": {
     "x": 652,
@@ -52,22 +52,6 @@
         }
       }
     },
-    "drillFilterOtherVisuals": true,
-    "visualContainerObjects": {
-      "title": [
-        {
-          "properties": {
-            "text": {
-              "expr": {
-                "Literal": {
-                  "Value": "'Hourly utilization heatmap'"
-                }
-              }
-            }
-          }
-        }
-      ]
-    },
     "objects": {
       "values": [
         {
@@ -99,13 +83,6 @@
                               "Literal": {
                                 "Value": "'#FFFFFF'"
                               }
-                            },
-                            "nullColoringStrategy": {
-                              "strategy": {
-                                "Literal": {
-                                  "Value": "'asZero'"
-                                }
-                              }
                             }
                           },
                           "max": {
@@ -135,6 +112,22 @@
           }
         }
       ]
-    }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Hourly utilization heatmap'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
   }
 }

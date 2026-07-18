@@ -1,5 +1,5 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "sd_table",
   "position": {
     "x": 16,
@@ -110,7 +110,6 @@
         }
       }
     },
-    "drillFilterOtherVisuals": true,
     "visualContainerObjects": {
       "title": [
         {
@@ -125,6 +124,95 @@
           }
         }
       ]
-    }
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "9ab85a6acdc6d2b7cd14",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "_Measures"
+              }
+            },
+            "Property": "Total Input Tokens"
+          }
+        },
+        "type": "Advanced"
+      },
+      {
+        "name": "797221097905c77c7ea2",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "_Measures"
+              }
+            },
+            "Property": "Total Output Tokens"
+          }
+        },
+        "type": "Advanced"
+      },
+      {
+        "name": "0984f6f90f265fe99205",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "_Measures"
+              }
+            },
+            "Property": "Total Requests"
+          }
+        },
+        "type": "Advanced"
+      },
+      {
+        "name": "391e418cd4cafcd8678e",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "fact_session"
+              }
+            },
+            "Property": "started_at"
+          }
+        },
+        "type": "Categorical"
+      },
+      {
+        "name": "05fbe3374f68ba125f12",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "dim_model"
+              }
+            },
+            "Property": "family"
+          }
+        },
+        "type": "Categorical"
+      },
+      {
+        "name": "bb19dce003f7cf232433",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "fact_api_usage"
+              }
+            },
+            "Property": "effort"
+          }
+        },
+        "type": "Categorical"
+      }
+    ]
   }
 }

@@ -1,7 +1,14 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/powerbi-desktop-samples/main/Report%20Theme%20JSON%20Schema/reportThemeSchema-2.143.json",
   "name": "AIWorx",
-  "dataColors": ["#3A44D4", "#0198CB", "#6E9A21", "#792A8E", "#A17E00", "#B61E24"],
+  "dataColors": [
+    "#3A44D4",
+    "#0198CB",
+    "#6E9A21",
+    "#792A8E",
+    "#A17E00",
+    "#B61E24"
+  ],
   "foreground": "#0E2841",
   "foregroundNeutralSecondary": "#5A6473",
   "foregroundNeutralTertiary": "#9AA0AA",
@@ -28,9 +35,21 @@
     }
   },
   "textClasses": {
-    "label": { "fontFace": "Century Gothic", "color": "#0E2841" },
-    "callout": { "fontFace": "Century Gothic", "color": "#171B8E" },
-    "title": { "fontFace": "Century Gothic", "color": "#171B8E" },
-    "header": { "fontFace": "Century Gothic", "color": "#0E2841" }
+    "label": {
+      "fontFace": "Century Gothic",
+      "color": "#0E2841"
+    },
+    "callout": {
+      "fontFace": "Century Gothic",
+      "color": "#171B8E"
+    },
+    "title": {
+      "fontFace": "Century Gothic",
+      "color": "#171B8E"
+    },
+    "header": {
+      "fontFace": "Century Gothic",
+      "color": "#0E2841"
+    }
   }
 }
