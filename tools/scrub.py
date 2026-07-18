@@ -26,6 +26,7 @@ from cc_otel_sink.canonical import canonical_bytes
 from cc_otel_sink.config import load_settings
 from cc_otel_sink.redaction import redact
 
+from ._progress import Progress
 from ._reservoir import CurationReservoir
 from ._window import SIGNALS, prefixes, resolve_window
 
@@ -65,10 +66,12 @@ def main(argv: list[str] | None = None) -> int:
 
     reservoir = CurationReservoir.from_settings(load_settings())
     scanned = rewritten = leaks = 0
+    progress = Progress("scrub blobs")
     try:
         for prefix in prefixes(signals, days):
             for name in reservoir.list_names(prefix):
                 scanned += 1
+                progress.tick()
                 original = reservoir.download(name)
                 scrubbed, blob_leaks = rescrub(original)
                 leaks += blob_leaks
@@ -77,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
                 if args.execute:
                     reservoir.overwrite(name, scrubbed)
                 rewritten += 1
+        progress.done()
     finally:
         reservoir.close()
 
