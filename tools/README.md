@@ -15,8 +15,11 @@ lives in [`docs/agents/column-curation.md`](../docs/agents/column-curation.md).
 ## Prerequisites
 
 1. **`uv sync`** — installs the workspace so `uv run python -m tools.<name>` resolves.
-2. **`az login`** — the blob tools authenticate with `DefaultAzureCredential` (your `az`
-   session), so log in as an identity that holds the RBAC below on the storage account.
+2. **`az login`** — the blob tools authenticate off your `az` session: `scrub` / `replay`
+   via `DefaultAzureCredential`, `sweep` via DuckDB's Azure extension using its own
+   `credential_chain` provider. Log in as an identity that holds the RBAC below on the
+   storage account. (If `sweep` fails to read a partition with `Failed to get token from
+   ChainedTokenCredential`, that's the DuckDB path — see #99.)
 3. **Environment** — the tools read the same settings the sink uses. Export or put in `.env`:
 
    | var | needed by | value |
