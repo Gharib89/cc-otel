@@ -73,19 +73,6 @@
             "fontSize": 10,
             "fontFamily": "Segoe UI Semibold"
           }
-        ],
-        "subTitle": [
-          {
-            "show": true,
-            "alignment": "center",
-            "fontColor": {
-              "solid": {
-                "color": "#5A6473"
-              }
-            },
-            "fontSize": 8,
-            "fontFamily": "Segoe UI"
-          }
         ]
       }
     },
@@ -107,19 +94,6 @@
             },
             "fontSize": 10,
             "fontFamily": "Segoe UI Semibold"
-          }
-        ],
-        "subTitle": [
-          {
-            "show": true,
-            "alignment": "center",
-            "fontColor": {
-              "solid": {
-                "color": "#5A6473"
-              }
-            },
-            "fontSize": 8,
-            "fontFamily": "Segoe UI"
           }
         ]
       }

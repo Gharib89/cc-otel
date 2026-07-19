@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "nav_health",
   "position": {
-    "x": 1029,
+    "x": 1018,
     "y": 18,
     "z": 100,
     "height": 28,
-    "width": 86,
+    "width": 100,
     "tabOrder": 10
   },
   "visual": {
@@ -87,7 +87,7 @@
             "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "10D"
+                  "Value": "12D"
                 }
               }
             }

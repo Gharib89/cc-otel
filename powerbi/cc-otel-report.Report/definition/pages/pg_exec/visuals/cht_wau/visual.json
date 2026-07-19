@@ -3,9 +3,9 @@
   "name": "cht_wau",
   "position": {
     "x": 28,
-    "y": 270,
+    "y": 216,
     "z": 220,
-    "height": 422,
+    "height": 476,
     "width": 800,
     "tabOrder": 30
   },
@@ -299,39 +299,7 @@
             "show": {
               "expr": {
                 "Literal": {
-                  "Value": "true"
-                }
-              }
-            },
-            "text": {
-              "expr": {
-                "Literal": {
-                  "Value": "'complete ISO weeks, all seats'"
-                }
-              }
-            },
-            "alignment": {
-              "expr": {
-                "Literal": {
-                  "Value": "'center'"
-                }
-              }
-            },
-            "fontColor": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#5A6473'"
-                    }
-                  }
-                }
-              }
-            },
-            "fontSize": {
-              "expr": {
-                "Literal": {
-                  "Value": "8D"
+                  "Value": "false"
                 }
               }
             }

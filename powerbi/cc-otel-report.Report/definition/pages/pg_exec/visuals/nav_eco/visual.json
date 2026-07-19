@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "nav_eco",
   "position": {
-    "x": 943,
+    "x": 917,
     "y": 18,
     "z": 90,
     "height": 28,
-    "width": 80,
+    "width": 95,
     "tabOrder": 9
   },
   "visual": {
@@ -87,7 +87,7 @@
             "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "10D"
+                  "Value": "12D"
                 }
               }
             }

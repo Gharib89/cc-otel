@@ -3,9 +3,9 @@
   "name": "crd_hero",
   "position": {
     "x": 28,
-    "y": 84,
+    "y": 76,
     "z": 110,
-    "height": 150,
+    "height": 110,
     "width": 260,
     "tabOrder": 14
   },

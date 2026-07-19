@@ -3,9 +3,9 @@
   "name": "cht_tier",
   "position": {
     "x": 852,
-    "y": 270,
+    "y": 216,
     "z": 230,
-    "height": 250,
+    "height": 270,
     "width": 400,
     "tabOrder": 31
   },
@@ -239,39 +239,7 @@
             "show": {
               "expr": {
                 "Literal": {
-                  "Value": "true"
-                }
-              }
-            },
-            "text": {
-              "expr": {
-                "Literal": {
-                  "Value": "'28-day, vs seats held'"
-                }
-              }
-            },
-            "alignment": {
-              "expr": {
-                "Literal": {
-                  "Value": "'center'"
-                }
-              }
-            },
-            "fontColor": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#5A6473'"
-                    }
-                  }
-                }
-              }
-            },
-            "fontSize": {
-              "expr": {
-                "Literal": {
-                  "Value": "8D"
+                  "Value": "false"
                 }
               }
             }

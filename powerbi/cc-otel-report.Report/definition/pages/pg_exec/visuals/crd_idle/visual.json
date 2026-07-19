@@ -3,9 +3,9 @@
   "name": "crd_idle",
   "position": {
     "x": 852,
-    "y": 540,
+    "y": 506,
     "z": 240,
-    "height": 152,
+    "height": 186,
     "width": 400,
     "tabOrder": 32
   },
@@ -195,39 +195,7 @@
             "show": {
               "expr": {
                 "Literal": {
-                  "Value": "true"
-                }
-              }
-            },
-            "text": {
-              "expr": {
-                "Literal": {
-                  "Value": "'paid seats with no activity in 28 days'"
-                }
-              }
-            },
-            "alignment": {
-              "expr": {
-                "Literal": {
-                  "Value": "'center'"
-                }
-              }
-            },
-            "fontColor": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#5A6473'"
-                    }
-                  }
-                }
-              }
-            },
-            "fontSize": {
-              "expr": {
-                "Literal": {
-                  "Value": "8D"
+                  "Value": "false"
                 }
               }
             }
