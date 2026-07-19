@@ -55,9 +55,11 @@ Rejected below). Do not use them; author with pbi-cli instead.
 pwsh .github/powerbi/validate.ps1
 ```
 
-Mirrors `ci-powerbi` byte-for-byte on the same pinned versions (ajv 8.17.1,
-fab-inspector v3.4.0, Tabular Editor 2 2.28.0), reusing the rule files in
-`.github/powerbi/`. fab-inspector and TE2 are cached under `.pbi-tools/`
+Runs the same three checks as the `ci-powerbi` gate on the same pinned versions
+(ajv 8.17.1, fab-inspector v3.4.0, Tabular Editor 2 2.28.0) and the same rule
+files in `.github/powerbi/`. It runs the **Windows** fab-inspector binary where
+CI runs the linux one, and runs everything on one machine where CI splits
+ajv+fab-inspector onto ubuntu and TE2 onto windows — same versions, same rules. fab-inspector and TE2 are cached under `.pbi-tools/`
 (gitignored) and reused; the ajv leg installs into a gitignored `node_modules/`
 in the repo root (`--no-package-lock`, so the tree stays clean). A fourth leg
 runs the Microsoft conformance CLI for comparison and is **non-blocking** — its
@@ -69,8 +71,9 @@ result never changes the exit code.
 - `1` a validation error (a report/model bug)
 - `2` tooling failure (download/env issue — not your report's fault)
 
-Requires `node` + `npx` on PATH (Node 20+) and runs on Windows (Tabular Editor 2
-is Windows-only).
+Requires `node` + `npm` on PATH for the ajv leg (Node 20+); `npx` is needed only
+for the non-blocking Microsoft check. Runs on Windows (Tabular Editor 2 is
+Windows-only).
 
 ## Microsoft conformance CLI — under evaluation
 

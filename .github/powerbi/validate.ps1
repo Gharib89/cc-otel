@@ -40,7 +40,10 @@ function Section($name) { Write-Host ''; Write-Host "== $name ==" -ForegroundCol
 # (required) or just a skipped non-blocking check, and prints its own message.
 function Have($tool) { [bool](Get-Command $tool -ErrorAction SilentlyContinue) }
 
-New-Item -ItemType Directory -Force -Path $Cache | Out-Null
+# Outside any leg's try/catch, so guard it explicitly: a failure here must honour
+# the exit-code contract (tooling failure = 2), not throw a bare non-2 exit.
+try { New-Item -ItemType Directory -Force -Path $Cache -ErrorAction Stop | Out-Null }
+catch { Write-Host "[TOOL] cannot create cache dir ${Cache}: $_" -ForegroundColor Red; exit 2 }
 
 # --- 1. ajv PBIR schema validation ------------------------------------------
 Section 'ajv PBIR schema'
