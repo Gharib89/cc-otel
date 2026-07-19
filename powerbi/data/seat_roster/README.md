@@ -12,6 +12,12 @@ IS-provided Claude seat roster consumed by the `seat_roster` semantic-model tabl
   stays possible; the model itself is Type 1 (latest snapshot only).
 - **Git:** `*.csv` here is gitignored — roster files carry employee emails and
   stay off the repo. Only this README is tracked.
+- **Path:** the `seat_roster` M partition reads this folder by **absolute path**
+  (`D:\projects\cc-otel\powerbi\data\seat_roster`) — Power Query's `Folder.Files`
+  takes no relative paths, and the model already carries machine/env-specific
+  source values (the Postgres hostname). Authoring/refresh happens on the one
+  Desktop authoring machine by convention; adjust the partition source if that
+  ever moves.
 - Until #116 delivers the real file, the drop in place is a **stub** (real
   telemetry emails + clearly-marked `stub.idle-seat-*` rows) so measures return
   non-blank values; swap in the real file when it lands.

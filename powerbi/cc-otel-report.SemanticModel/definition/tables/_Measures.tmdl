@@ -185,7 +185,7 @@ table _Measures
 	/// #117 measure layer. All 28d windows end at the mart-refresh anchor MAX(dim_date[date_day]);
 	/// "Prior 28d" = days 29-56 back. Headline (Seat ROI) numerators are roster-matched only;
 	/// plain [Active Users] stays for non-ROI contexts.
-	measure 'Paid Seats' = COUNTROWS ( seat_roster )
+	measure 'Paid Seats' = DISTINCTCOUNT ( seat_roster[user_email] )
 		formatString: #,##0
 		displayFolder: Seat ROI
 		lineageTag: b9365732-93a2-497e-b49d-0215e0fe0d5e

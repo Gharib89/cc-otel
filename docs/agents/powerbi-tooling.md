@@ -138,7 +138,7 @@ stack the report effort (#104) excludes.
 
 Findings from driving semantic-model edits through Desktop headlessly:
 
-- **A TMDL Desktop rejects fails *silently*.** No `DataModelLoadFailed` dialog —
+- **When Desktop rejects a TMDL model, it fails *silently*.** No `DataModelLoadFailed` dialog —
   Desktop just opens as `Untitled - Power BI Desktop` with the file never loaded.
   A TOM `TmdlSerializer.DeserializeDatabaseFromFolder` pass (and TE2's BPA leg)
   can still be green: the failure is engine *load*, not parse. Bisect by
