@@ -112,7 +112,8 @@ _attach_ to the running process** — every other verb (`status`, `screenshot`,
 
 ```powershell
 $appId = "Microsoft.MicrosoftPowerBIDesktop_8wekyb3d8bbwe!Microsoft.MicrosoftPowerBIDesktop"
-Start-Process "shell:AppsFolder\$appId" -ArgumentList '"D:\projects\cc-otel\powerbi\cc-otel-report.pbip"'
+$pbip  = "<path-to>\cc-otel-report.pbip"       # e.g. powerbi\cc-otel-report.pbip
+Start-Process "shell:AppsFolder\$appId" -ArgumentList $pbip
 powerbi-desktop status --wait-seconds 120      # poll until "status": "ready"
 powerbi-desktop screenshot pg_overview --output shot.png --scale 2
 ```
@@ -128,7 +129,7 @@ Desktop against Azure Postgres; thereafter the gitignored `cache.abf` carries da
 across reopens and the loop runs unattended. **Layout / theme / formatting
 verification needs no data and works immediately.**
 
-Fallback (not used): Fabric/PBI REST `exportToFile` gives unattended auto-fresh
+Fallback (not used): Fabric/PBI REST `exportToFile` gives unattended auto-refresh
 renders but requires a Premium/Embedded/Fabric-capacity workspace — the Service
 stack the report effort (#104) excludes.
 
