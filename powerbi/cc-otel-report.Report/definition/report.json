@@ -33,6 +33,19 @@
           }
         }
       }
+    ],
+    "outspacePane": [
+      {
+        "properties": {
+          "expanded": {
+            "expr": {
+              "Literal": {
+                "Value": "false"
+              }
+            }
+          }
+        }
+      }
     ]
   },
   "resourcePackages": [
@@ -53,8 +66,8 @@
       "items": [
         {
           "name": "AIWorx.json",
-          "type": "CustomTheme",
-          "path": "AIWorx.json"
+          "path": "AIWorx.json",
+          "type": "CustomTheme"
         },
         {
           "name": "AIWorxLogo2607190001.png",

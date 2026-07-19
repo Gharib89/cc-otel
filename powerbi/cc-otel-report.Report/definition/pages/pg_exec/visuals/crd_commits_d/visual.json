@@ -3,11 +3,11 @@
   "name": "crd_commits_d",
   "position": {
     "x": 672,
-    "y": 162,
-    "z": 142,
+    "y": 145,
+    "z": 16000,
     "height": 22,
     "width": 137,
-    "tabOrder": 19
+    "tabOrder": 16000
   },
   "visual": {
     "visualType": "card",
@@ -33,7 +33,6 @@
         }
       }
     },
-    "drillFilterOtherVisuals": true,
     "objects": {
       "labels": [
         {
@@ -139,6 +138,7 @@
           }
         }
       ]
-    }
+    },
+    "drillFilterOtherVisuals": true
   }
 }

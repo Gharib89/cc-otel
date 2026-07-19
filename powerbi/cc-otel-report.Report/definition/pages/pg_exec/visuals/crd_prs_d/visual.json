@@ -3,11 +3,11 @@
   "name": "crd_prs_d",
   "position": {
     "x": 817,
-    "y": 162,
-    "z": 152,
+    "y": 145,
+    "z": 19000,
     "height": 22,
     "width": 137,
-    "tabOrder": 22
+    "tabOrder": 19000
   },
   "visual": {
     "visualType": "card",
@@ -33,7 +33,6 @@
         }
       }
     },
-    "drillFilterOtherVisuals": true,
     "objects": {
       "labels": [
         {
@@ -139,6 +138,7 @@
           }
         }
       ]
-    }
+    },
+    "drillFilterOtherVisuals": true
   }
 }

@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "ab_nav_line",
   "position": {
-    "x": 352,
+    "x": 310,
     "y": 46,
-    "z": 110,
+    "z": 10000,
     "height": 3,
-    "width": 130,
-    "tabOrder": 11
+    "width": 140,
+    "tabOrder": 8000
   },
   "visual": {
     "visualType": "shape",

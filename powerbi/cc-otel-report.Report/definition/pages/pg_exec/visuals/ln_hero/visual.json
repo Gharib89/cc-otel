@@ -3,11 +3,11 @@
   "name": "ln_hero",
   "position": {
     "x": 28,
-    "y": 196,
-    "z": 13,
+    "y": 180,
+    "z": 1000,
     "height": 2,
     "width": 1224,
-    "tabOrder": 13
+    "tabOrder": 10000
   },
   "visual": {
     "visualType": "shape",

@@ -4,10 +4,10 @@
   "position": {
     "x": 16,
     "y": 504,
-    "z": 7,
+    "z": 1000,
     "height": 200,
     "width": 244,
-    "tabOrder": 7
+    "tabOrder": 1000
   },
   "visual": {
     "visualType": "tableEx",
@@ -68,42 +68,5 @@
       ]
     },
     "drillFilterOtherVisuals": true
-  },
-  "filterConfig": {
-    "filters": [
-      {
-        "name": "193a3883c5ddb3b69bab",
-        "field": {
-          "Column": {
-            "Expression": {
-              "SourceRef": {
-                "Entity": "bridge_session_skill"
-              }
-            },
-            "Property": "skill_name"
-          }
-        },
-        "type": "Categorical"
-      },
-      {
-        "name": "043560bc736289dd6dd8",
-        "field": {
-          "Aggregation": {
-            "Expression": {
-              "Column": {
-                "Expression": {
-                  "SourceRef": {
-                    "Entity": "bridge_session_skill"
-                  }
-                },
-                "Property": "activations"
-              }
-            },
-            "Function": 0
-          }
-        },
-        "type": "Advanced"
-      }
-    ]
   }
 }

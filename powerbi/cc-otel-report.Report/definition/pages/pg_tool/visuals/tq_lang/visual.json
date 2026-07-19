@@ -1,13 +1,13 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "tq_lang",
   "position": {
     "x": 16,
     "y": 188,
-    "z": 4,
+    "z": 1000,
     "height": 516,
     "width": 620,
-    "tabOrder": 4
+    "tabOrder": 1000
   },
   "visual": {
     "visualType": "barChart",
@@ -32,24 +32,6 @@
             }
           ]
         },
-        "Y": {
-          "projections": [
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "fact_edit_decision"
-                    }
-                  },
-                  "Property": "decision_count"
-                }
-              },
-              "queryRef": "fact_edit_decision.decision_count",
-              "nativeQueryRef": "decision_count"
-            }
-          ]
-        },
         "Series": {
           "projections": [
             {
@@ -68,10 +50,27 @@
               "active": true
             }
           ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_edit_decision"
+                    }
+                  },
+                  "Property": "decision_count"
+                }
+              },
+              "queryRef": "fact_edit_decision.decision_count",
+              "nativeQueryRef": "decision_count"
+            }
+          ]
         }
       }
     },
-    "drillFilterOtherVisuals": true,
     "visualContainerObjects": {
       "title": [
         {
@@ -86,6 +85,7 @@
           }
         }
       ]
-    }
+    },
+    "drillFilterOtherVisuals": true
   }
 }

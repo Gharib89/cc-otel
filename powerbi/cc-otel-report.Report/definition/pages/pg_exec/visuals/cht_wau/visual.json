@@ -3,11 +3,11 @@
   "name": "cht_wau",
   "position": {
     "x": 28,
-    "y": 216,
-    "z": 220,
-    "height": 476,
+    "y": 193,
+    "z": 26000,
+    "height": 499,
     "width": 800,
-    "tabOrder": 30
+    "tabOrder": 26000
   },
   "visual": {
     "visualType": "lineChart",
@@ -52,7 +52,6 @@
         }
       }
     },
-    "drillFilterOtherVisuals": true,
     "objects": {
       "categoryAxis": [
         {
@@ -306,6 +305,7 @@
           }
         }
       ]
-    }
+    },
+    "drillFilterOtherVisuals": true
   }
 }

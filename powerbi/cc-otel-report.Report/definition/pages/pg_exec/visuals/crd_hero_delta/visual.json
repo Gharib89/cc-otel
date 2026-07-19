@@ -3,11 +3,11 @@
   "name": "crd_hero_delta",
   "position": {
     "x": 304,
-    "y": 152,
-    "z": 130,
-    "height": 22,
-    "width": 340,
-    "tabOrder": 16
+    "y": 143,
+    "z": 13000,
+    "height": 24,
+    "width": 204,
+    "tabOrder": 13000
   },
   "visual": {
     "visualType": "card",
@@ -33,7 +33,6 @@
         }
       }
     },
-    "drillFilterOtherVisuals": true,
     "objects": {
       "labels": [
         {
@@ -139,6 +138,7 @@
           }
         }
       ]
-    }
+    },
+    "drillFilterOtherVisuals": true
   }
 }

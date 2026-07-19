@@ -3,11 +3,11 @@
   "name": "crd_hero_detail",
   "position": {
     "x": 304,
-    "y": 92,
-    "z": 120,
+    "y": 78,
+    "z": 12000,
     "height": 60,
-    "width": 340,
-    "tabOrder": 15
+    "width": 204,
+    "tabOrder": 12000
   },
   "visual": {
     "visualType": "card",
@@ -33,7 +33,6 @@
         }
       }
     },
-    "drillFilterOtherVisuals": true,
     "objects": {
       "labels": [
         {
@@ -152,6 +151,7 @@
           }
         }
       ]
-    }
+    },
+    "drillFilterOtherVisuals": true
   }
 }

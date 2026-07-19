@@ -4,10 +4,10 @@
   "position": {
     "x": 264,
     "y": 504,
-    "z": 8,
+    "z": 2000,
     "height": 200,
     "width": 244,
-    "tabOrder": 8
+    "tabOrder": 2000
   },
   "visual": {
     "visualType": "tableEx",
@@ -63,23 +63,5 @@
       ]
     },
     "drillFilterOtherVisuals": true
-  },
-  "filterConfig": {
-    "filters": [
-      {
-        "name": "0ca6fa6b3e314f3219f2",
-        "field": {
-          "Column": {
-            "Expression": {
-              "SourceRef": {
-                "Entity": "bridge_session_mcp"
-              }
-            },
-            "Property": "mcp_name"
-          }
-        },
-        "type": "Categorical"
-      }
-    ]
   }
 }

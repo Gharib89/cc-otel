@@ -3,11 +3,11 @@
   "name": "crd_loc",
   "position": {
     "x": 962,
-    "y": 124,
-    "z": 161,
+    "y": 107,
+    "z": 21000,
     "height": 36,
     "width": 137,
-    "tabOrder": 24
+    "tabOrder": 21000
   },
   "visual": {
     "visualType": "card",
@@ -33,7 +33,6 @@
         }
       }
     },
-    "drillFilterOtherVisuals": true,
     "objects": {
       "labels": [
         {
@@ -41,7 +40,7 @@
             "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "20D"
+                  "Value": "24D"
                 }
               }
             },
@@ -139,6 +138,7 @@
           }
         }
       ]
-    }
+    },
+    "drillFilterOtherVisuals": true
   }
 }

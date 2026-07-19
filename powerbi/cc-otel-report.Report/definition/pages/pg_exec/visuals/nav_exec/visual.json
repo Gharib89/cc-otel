@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "nav_exec",
   "position": {
-    "x": 345,
+    "x": 300,
     "y": 18,
-    "z": 50,
+    "z": 4000,
     "height": 28,
-    "width": 145,
-    "tabOrder": 5
+    "width": 160,
+    "tabOrder": 2000
   },
   "visual": {
     "visualType": "actionButton",
@@ -88,6 +88,13 @@
               "expr": {
                 "Literal": {
                   "Value": "12D"
+                }
+              }
+            },
+            "fontFamily": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Segoe UI Semibold'"
                 }
               }
             }
