@@ -207,7 +207,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'Lines of code (28d)'"
+                  "Value": "'Lines of code changed · last 28 days'"
                 }
               }
             },

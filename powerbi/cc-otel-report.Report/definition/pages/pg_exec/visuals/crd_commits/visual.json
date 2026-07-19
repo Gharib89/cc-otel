@@ -207,7 +207,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'Commits (28d)'"
+                  "Value": "'Commits · last 28 days'"
                 }
               }
             },

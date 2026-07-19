@@ -244,7 +244,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'Active users vs seats by tier (28d)'"
+                  "Value": "'Active users vs paid seats by tier · last 28 days'"
                 }
               }
             },

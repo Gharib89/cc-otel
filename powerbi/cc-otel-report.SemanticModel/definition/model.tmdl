@@ -29,8 +29,8 @@ ref table bridge_session_plugin
 ref table bridge_session_skill
 ref table mart_refresh_log
 ref table dq_finding
-ref table seat_roster
 ref table _Measures
+ref table seat_roster
 
 ref role OrgScope
 

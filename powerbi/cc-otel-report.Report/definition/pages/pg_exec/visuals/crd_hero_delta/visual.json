@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "crd_hero_delta",
   "position": {
-    "x": 196,
-    "y": 124,
+    "x": 36,
+    "y": 138,
     "z": 130,
-    "height": 24,
-    "width": 116,
+    "height": 26,
+    "width": 244,
     "tabOrder": 13
   },
   "visual": {
@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Seat Utilization Δ"
+                  "Property": "Seat Utilization Δ Label"
                 }
               },
-              "queryRef": "_Measures.Seat Utilization Δ",
-              "nativeQueryRef": "Seat Utilization Δ"
+              "queryRef": "_Measures.Seat Utilization Δ Label",
+              "nativeQueryRef": "Seat Utilization Δ Label"
             }
           ]
         }
@@ -41,7 +41,7 @@
             "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "10D"
+                  "Value": "9D"
                 }
               }
             },

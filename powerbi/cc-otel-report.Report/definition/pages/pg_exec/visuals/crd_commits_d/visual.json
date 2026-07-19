@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Commits Δ"
+                  "Property": "Commits Δ Label"
                 }
               },
-              "queryRef": "_Measures.Commits Δ",
-              "nativeQueryRef": "Commits Δ"
+              "queryRef": "_Measures.Commits Δ Label",
+              "nativeQueryRef": "Commits Δ Label"
             }
           ]
         }

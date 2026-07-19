@@ -207,7 +207,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'Seat utilization (28-day)'"
+                  "Value": "'Seat utilization · last 28 days'"
                 }
               }
             },

@@ -207,7 +207,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'PRs (28d)'"
+                  "Value": "'Pull requests · last 28 days'"
                 }
               }
             },

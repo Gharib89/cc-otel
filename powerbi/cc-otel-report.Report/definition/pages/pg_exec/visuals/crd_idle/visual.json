@@ -207,7 +207,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'Idle seats (28-day)'"
+                  "Value": "'Idle seats · no activity in 28 days'"
                 }
               }
             },

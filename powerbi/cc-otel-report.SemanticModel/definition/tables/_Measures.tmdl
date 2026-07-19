@@ -212,8 +212,8 @@ table _Measures
 			        DATESBETWEEN ( dim_date[date_day], Anchor - 55, Anchor - 28 ),
 			        FILTER ( dim_user, NOT ISBLANK ( RELATED ( seat_roster[user_email] ) ) )
 			    )
-		isHidden
 		formatString: #,##0
+		isHidden
 		displayFolder: Seat ROI\Support
 		lineageTag: 402883f1-9edf-442d-ba50-a3e8e88fb7cd
 
@@ -344,8 +344,8 @@ table _Measures
 			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
 			RETURN
 			    CALCULATE ( [Total Commits], DATESBETWEEN ( dim_date[date_day], Anchor - 55, Anchor - 28 ) )
-		isHidden
 		formatString: #,##0
+		isHidden
 		displayFolder: Overview KPIs\Support
 		lineageTag: cc7641a9-e948-471d-bc5b-101e9390f73e
 
@@ -366,8 +366,8 @@ table _Measures
 			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
 			RETURN
 			    CALCULATE ( [Total PRs], DATESBETWEEN ( dim_date[date_day], Anchor - 55, Anchor - 28 ) )
-		isHidden
 		formatString: #,##0
+		isHidden
 		displayFolder: Overview KPIs\Support
 		lineageTag: e4ef796f-e436-474c-9d57-7537f59ffbda
 
@@ -388,8 +388,8 @@ table _Measures
 			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
 			RETURN
 			    CALCULATE ( [Total Lines of Code], DATESBETWEEN ( dim_date[date_day], Anchor - 55, Anchor - 28 ) )
-		isHidden
 		formatString: #,##0
+		isHidden
 		displayFolder: Overview KPIs\Support
 		lineageTag: 55b53aee-ca99-42a6-91a2-42eb77a22be1
 
@@ -410,8 +410,8 @@ table _Measures
 			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
 			RETURN
 			    CALCULATE ( [Tool Acceptance Rate], DATESBETWEEN ( dim_date[date_day], Anchor - 55, Anchor - 28 ) )
-		isHidden
 		formatString: 0.0%;-0.0%;0.0%
+		isHidden
 		displayFolder: Overview KPIs\Support
 		lineageTag: e5e40f42-c930-42ea-9d45-72334b12cdda
 
@@ -536,8 +536,7 @@ table _Measures
 		lineageTag: ad8752e9-4c15-4182-a3c2-a571460975f0
 
 	/// All-time: telemetry identities (incl. is_unknown) with no roster row.
-	measure 'Roster Mismatch Count' =
-			COUNTROWS ( FILTER ( ALL ( dim_user ), ISBLANK ( RELATED ( seat_roster[user_email] ) ) ) )
+	measure 'Roster Mismatch Count' = COUNTROWS ( FILTER ( ALL ( dim_user ), ISBLANK ( RELATED ( seat_roster[user_email] ) ) ) )
 		formatString: #,##0
 		displayFolder: Data Health
 		lineageTag: 7f426481-4c81-4b6a-9e31-c45412e896fd
@@ -559,6 +558,43 @@ table _Measures
 			    IF ( ISBLANK ( H ), "No data", [Data Freshness Status] & " · " & FORMAT ( H, "#,##0" ) & "h ago" )
 		displayFolder: Ingest Health
 		lineageTag: 5fee9ee6-e3d6-4277-8492-0091cbbbd88a
+
+	/// Report-display helpers: KPI delta sub-lines (#119 polish). Never blank — a first-window
+	/// report shows "— vs prior 28d" instead of "(Blank)" until a prior 28d window exists.
+	measure 'Seat Utilization Δ Label' =
+			VAR D = [Seat Utilization Δ]
+			RETURN
+			    IF ( ISBLANK ( D ), "— vs prior 28d", FORMAT ( D, "+0.0;-0.0" ) & " pp vs prior 28d" )
+		displayFolder: Seat ROI
+		lineageTag: b1190001-0000-4000-8000-000000000119
+
+	measure 'Commits Δ Label' =
+			VAR D = [Commits Δ]
+			RETURN
+			    IF ( ISBLANK ( D ), "— vs prior 28d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior 28d" )
+		displayFolder: Overview KPIs
+		lineageTag: b1190002-0000-4000-8000-000000000119
+
+	measure 'PRs Δ Label' =
+			VAR D = [PRs Δ]
+			RETURN
+			    IF ( ISBLANK ( D ), "— vs prior 28d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior 28d" )
+		displayFolder: Overview KPIs
+		lineageTag: b1190003-0000-4000-8000-000000000119
+
+	measure 'Lines of Code Δ Label' =
+			VAR D = [Lines of Code Δ]
+			RETURN
+			    IF ( ISBLANK ( D ), "— vs prior 28d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior 28d" )
+		displayFolder: Overview KPIs
+		lineageTag: b1190004-0000-4000-8000-000000000119
+
+	measure 'Tool Acceptance Rate Δ Label' =
+			VAR D = [Tool Acceptance Rate Δ]
+			RETURN
+			    IF ( ISBLANK ( D ), "— vs prior 28d", FORMAT ( D, "+0.0;-0.0" ) & " pp vs prior 28d" )
+		displayFolder: Overview KPIs
+		lineageTag: b1190005-0000-4000-8000-000000000119
 
 	column Value
 		dataType: int64

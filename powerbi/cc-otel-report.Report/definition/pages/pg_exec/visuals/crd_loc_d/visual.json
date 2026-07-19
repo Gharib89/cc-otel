@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Lines of Code Δ"
+                  "Property": "Lines of Code Δ Label"
                 }
               },
-              "queryRef": "_Measures.Lines of Code Δ",
-              "nativeQueryRef": "Lines of Code Δ"
+              "queryRef": "_Measures.Lines of Code Δ Label",
+              "nativeQueryRef": "Lines of Code Δ Label"
             }
           ]
         }

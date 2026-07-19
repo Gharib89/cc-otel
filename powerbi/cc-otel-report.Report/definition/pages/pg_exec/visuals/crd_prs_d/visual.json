@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "PRs Δ"
+                  "Property": "PRs Δ Label"
                 }
               },
-              "queryRef": "_Measures.PRs Δ",
-              "nativeQueryRef": "PRs Δ"
+              "queryRef": "_Measures.PRs Δ Label",
+              "nativeQueryRef": "PRs Δ Label"
             }
           ]
         }

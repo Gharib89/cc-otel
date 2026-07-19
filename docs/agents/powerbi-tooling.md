@@ -153,7 +153,11 @@ Findings from driving semantic-model edits through Desktop headlessly:
 - **`reload` does NOT apply TMDL model changes** — it re-reads the *report* layer
   and (with cached data-source credentials) can trigger a full **data refresh**,
   overwriting `cache.abf`. For model-definition changes, close Desktop and reopen
-  the `.pbip`.
+  the `.pbip` — or, faster for measure-only changes, TOM-add the identical
+  measures to the live model (`Table.Measures.Add` + `SaveChanges()`), keeping
+  the TMDL edit as the on-disk source of truth. Note a Desktop **save** then
+  re-serializes the whole pbip (CRLF, property reorder) — expect wide but
+  content-neutral git churn.
 - **Unattended data gate for new tables:** a table-scoped TOM refresh against
   Desktop's embedded AS instance works —
   `Model.Tables["x"].RequestRefresh(RefreshType.Full)` + `SaveChanges()` on

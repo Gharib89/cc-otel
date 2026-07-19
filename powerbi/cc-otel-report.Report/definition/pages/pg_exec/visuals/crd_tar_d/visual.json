@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Tool Acceptance Rate Δ"
+                  "Property": "Tool Acceptance Rate Δ Label"
                 }
               },
-              "queryRef": "_Measures.Tool Acceptance Rate Δ",
-              "nativeQueryRef": "Tool Acceptance Rate Δ"
+              "queryRef": "_Measures.Tool Acceptance Rate Δ Label",
+              "nativeQueryRef": "Tool Acceptance Rate Δ Label"
             }
           ]
         }

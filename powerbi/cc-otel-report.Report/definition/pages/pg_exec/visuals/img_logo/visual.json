@@ -1,34 +1,29 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "txt_wordmark",
+  "name": "img_logo",
   "position": {
     "x": 28,
-    "y": 14,
+    "y": 20,
     "z": 20,
-    "height": 42,
-    "width": 110,
+    "height": 32,
+    "width": 128,
     "tabOrder": 2
   },
   "visual": {
-    "visualType": "textbox",
+    "visualType": "image",
     "objects": {
       "general": [
         {
           "properties": {
-            "paragraphs": [
-              {
-                "textRuns": [
-                  {
-                    "value": "AiWorx",
-                    "textStyle": {
-                      "fontWeight": "bold",
-                      "fontSize": "16pt",
-                      "color": "#00197F"
-                    }
-                  }
-                ]
+            "imageUrl": {
+              "expr": {
+                "ResourcePackageItem": {
+                  "PackageName": "RegisteredResources",
+                  "PackageType": 1,
+                  "ItemName": "AIWorxLogo2607190001.png"
+                }
               }
-            ]
+            }
           }
         }
       ]
@@ -86,6 +81,7 @@
           }
         }
       ]
-    }
+    },
+    "drillFilterOtherVisuals": true
   }
 }

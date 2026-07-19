@@ -55,6 +55,11 @@
           "name": "AIWorx.json",
           "type": "CustomTheme",
           "path": "AIWorx.json"
+        },
+        {
+          "name": "AIWorxLogo2607190001.png",
+          "path": "AIWorxLogo2607190001.png",
+          "type": "Image"
         }
       ]
     }

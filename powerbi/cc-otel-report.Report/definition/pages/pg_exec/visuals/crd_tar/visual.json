@@ -207,7 +207,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'Tool acceptance rate (28d)'"
+                  "Value": "'Edit suggestions accepted · last 28 days'"
                 }
               }
             },
