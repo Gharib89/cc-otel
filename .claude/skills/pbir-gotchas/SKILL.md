@@ -161,44 +161,52 @@ Shape visuals (`visualType: "shape"`) with `fill.fillColor` set produce only the
 {
   "visualType": "actionButton",
   "objects": {
-    "icon": [{ "properties": { "shapeType": { "expr": { "Literal": { "Value": "'blank'" } } } } }]
+    "icon": [{ "properties": { "shapeType": { "expr": { "Literal": { "Value": "'blank'" } } } }, "selector": { "id": "default" } }],
+    "outline": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }],
+    "fill": [
+      { "properties": { "show": { "expr": { "Literal": { "Value": "true" } } } } },
+      {
+        "properties": {
+          "fillColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#1a1a1a'" } } } } },
+          "transparency": { "expr": { "Literal": { "Value": "0D" } } }
+        },
+        "selector": { "id": "default" }
+      }
+    ]
   },
   "visualContainerObjects": {
     "background": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }],
     "border": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }],
     "visualHeader": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }],
-    "dropShadow": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }],
-    "fill": [{
-      "properties": {
-        "show": { "expr": { "Literal": { "Value": "true" } } },
-        "fillColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#1a1a1a'" } } } } },
-        "transparency": { "expr": { "Literal": { "Value": "0D" } } }
-      },
-      "selector": { "id": "default" }
-    }]
+    "dropShadow": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }]
   }
 }
 ```
 
-Reserve `shape` for lines/dividers (where only the outline matters).
+`fill` (like all button formatting) lives under **`objects`**, not `visualContainerObjects` — the 2.9.0 schema rejects `visualContainerObjects.fill` (`must NOT have additional properties`), and the MS conformance CLI names the fix. Reserve `shape` for lines/dividers (where only the outline matters).
 
-## 14. `actionButton` state properties need `selector: { "id": "default" }`
+## 14. `actionButton` formatting: `show` goes selector-less; styling goes under `selector: { "id": "default" }`
 
-Per-state properties (`text`, `fill`, `outline`, `icon` color) on `actionButton` silently no-op unless the `properties` object carries a `selector` indicating which state it applies to:
+Two-part contract, screenshot-verified on the pg_exec nav build (#119). Desktop emits each button formatting object (`text`, `fill`, `outline`, `icon`) as **two entries**:
+
+- the **`show` toggle in its own entry with NO selector** (it is a card-level switch), and
+- the **per-state styling** (`text`, `fontColor`, `fontSize`, `fillColor`, …) in a second entry with `"selector": { "id": "default" }`.
 
 ```json
 "text": [
+  { "properties": { "show": { "expr": { "Literal": { "Value": "true" } } } } },
   {
     "properties": {
       "text": { "expr": { "Literal": { "Value": "'Overview'" } } },
-      "fontColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#ffffff'" } } } } }
+      "fontColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#ffffff'" } } } } },
+      "fontSize": { "expr": { "Literal": { "Value": "10D" } } }
     },
-    "selector": { "id": "default" }     // REQUIRED
+    "selector": { "id": "default" }
   }
 ]
 ```
 
-Valid state IDs: `default`, `hover`, `selected`, `disabled`, `pressed`. Missing selector = property silently ignored at render time. ajv passes, fab-inspector passes, visual stays blank.
+Valid state IDs: `default`, `hover`, `selected`, `disabled`, `pressed`. **Both directions fail silently**: styling without the selector is ignored, and putting `show` *inside* the selector entry disables the whole formatting bag — the button renders as an empty placeholder outline with no fill and no text. ajv, fab-inspector, and the MS conformance CLI all pass either way; only a screenshot catches it. Reference: `pbir-format` skill's `examples/visuals/formatted/actionButton.json` (Desktop-emitted).
 
 ## 15. `pageNavigator` shows every page unless hidden
 

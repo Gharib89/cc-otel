@@ -13,9 +13,6 @@
     "visualType": "donutChart",
     "query": {
       "queryState": {
-        "Category": {
-          "projections": []
-        },
         "Y": {
           "projections": [
             {
@@ -34,7 +31,7 @@
             }
           ]
         },
-        "Legend": {
+        "Category": {
           "projections": [
             {
               "field": {

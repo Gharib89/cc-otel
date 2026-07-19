@@ -28,11 +28,7 @@
               },
               "queryRef": "dq_finding.row_count",
               "nativeQueryRef": "row_count"
-            }
-          ]
-        },
-        "category": {
-          "projections": [
+            },
             {
               "field": {
                 "Column": {
@@ -45,8 +41,7 @@
                 }
               },
               "queryRef": "dq_finding.finding_type",
-              "nativeQueryRef": "finding_type",
-              "active": true
+              "nativeQueryRef": "finding_type"
             },
             {
               "field": {
@@ -60,8 +55,7 @@
                 }
               },
               "queryRef": "dq_finding.detected_at",
-              "nativeQueryRef": "detected_at",
-              "active": true
+              "nativeQueryRef": "detected_at"
             }
           ]
         }

@@ -547,6 +547,19 @@ table _Measures
 		displayFolder: Data Health
 		lineageTag: 62b922f3-1e40-4a6a-8f0e-cabed5dbf026
 
+	/// Report-display helper: Executive Overview hero card sub-line.
+	measure 'Seat Utilization Detail' = [Active Users 28d] & " of " & [Paid Seats] & " paid seats active"
+		displayFolder: Seat ROI
+		lineageTag: 437fa2bc-e7ee-4ba3-ab8b-4499e3ed9cfc
+
+	/// Report-display helper: header data-freshness badge text.
+	measure 'Data Freshness Badge' =
+			VAR H = [Hours Since Last Signal]
+			RETURN
+			    IF ( ISBLANK ( H ), "No data", [Data Freshness Status] & " · " & FORMAT ( H, "#,##0" ) & "h ago" )
+		displayFolder: Ingest Health
+		lineageTag: 5fee9ee6-e3d6-4277-8492-0091cbbbd88a
+
 	column Value
 		dataType: int64
 		isHidden

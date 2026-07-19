@@ -28,11 +28,7 @@
               },
               "queryRef": "bridge_session_mcp.tool_calls",
               "nativeQueryRef": "tool_calls"
-            }
-          ]
-        },
-        "category": {
-          "projections": [
+            },
             {
               "field": {
                 "Column": {
@@ -45,8 +41,7 @@
                 }
               },
               "queryRef": "bridge_session_mcp.mcp_name",
-              "nativeQueryRef": "mcp_name",
-              "active": true
+              "nativeQueryRef": "mcp_name"
             }
           ]
         }
