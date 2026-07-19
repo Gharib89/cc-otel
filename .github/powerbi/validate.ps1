@@ -36,19 +36,15 @@ $failed  = $false   # a validator reported a report/model error -> exit 1
 $tooling = $false   # a tool failed to run/download -> exit 2
 
 function Section($name) { Write-Host ''; Write-Host "== $name ==" -ForegroundColor Cyan }
-function Require($tool) {
-  if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
-    Write-Host "[SKIP] '$tool' not on PATH; see docs/agents/powerbi-tooling.md" -ForegroundColor Yellow
-    return $false
-  }
-  return $true
-}
+# Silent predicate: each leg decides whether a missing tool is a tooling failure
+# (required) or just a skipped non-blocking check, and prints its own message.
+function Have($tool) { [bool](Get-Command $tool -ErrorAction SilentlyContinue) }
 
 New-Item -ItemType Directory -Force -Path $Cache | Out-Null
 
 # --- 1. ajv PBIR schema validation ------------------------------------------
 Section 'ajv PBIR schema'
-if (Require 'node') {
+if ((Have 'node') -and (Have 'npm')) {
   try {
     Push-Location $RepoRoot
     # --no-save + --no-package-lock keep the working tree clean (no package.json
@@ -63,7 +59,10 @@ if (Require 'node') {
   } catch {
     Write-Host "[TOOL] ajv leg failed to run: $_" -ForegroundColor Red; $tooling = $true
   } finally { Pop-Location }
-} else { $tooling = $true }
+} else {
+  Write-Host '[TOOL] node + npm required for the ajv leg; see docs/agents/powerbi-tooling.md' -ForegroundColor Red
+  $tooling = $true
+}
 
 # --- 2. fab-inspector PBIR rules --------------------------------------------
 Section 'fab-inspector PBIR rules'
@@ -115,7 +114,7 @@ try {
 
 # --- 4. Microsoft conformance CLI (NON-BLOCKING, evaluation only) -----------
 Section 'MS conformance CLI (non-blocking)'
-if (Require 'npx') {
+if (Have 'npx') {
   try {
     # Preview first-party validator. Output is informational only for now -- its
     # exit code deliberately does NOT gate this loop (see the evaluation ticket).
@@ -124,7 +123,7 @@ if (Require 'npx') {
     Write-Host "[INFO] MS conformance CLI did not run (preview tool): $_" -ForegroundColor Yellow
   }
 } else {
-  Write-Host '[INFO] npx not on PATH; skipping preview conformance check' -ForegroundColor Yellow
+  Write-Host '[INFO] npx not on PATH; skipping non-blocking preview conformance check' -ForegroundColor Yellow
 }
 
 # --- verdict ----------------------------------------------------------------
