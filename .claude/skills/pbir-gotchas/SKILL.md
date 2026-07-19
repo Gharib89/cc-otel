@@ -233,6 +233,44 @@ Only `actionButton` and `pageNavigator` carry `visualContainerObjects.visualLink
 
 Nav primitives -> `actionButton` (single target) or `pageNavigator` (multi-page strip). Decoration -> `shape` (lines/dividers) or `textbox` (static labels).
 
+## 17. Thin bars (hairlines, underlines): `actionButton` fill doesn't render below ~4px height
+
+The gotcha-13 actionButton-fill pattern silently renders nothing at 1-3px heights (nav underlines, divider rules). For thin solid bars use `shape` with **`visualContainerObjects.background`** — the container background renders even though `objects.fill` doesn't (gotcha 13):
+
+```json
+{
+  "visualType": "shape",
+  "objects": {
+    "shape": [{ "properties": { "tileShape": { "expr": { "Literal": { "Value": "'rectangle'" } } } } }],
+    "fill": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }],
+    "outline": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }]
+  },
+  "visualContainerObjects": {
+    "background": [{ "properties": {
+      "show": { "expr": { "Literal": { "Value": "true" } } },
+      "color": { "solid": { "color": { "expr": { "Literal": { "Value": "'#0E2841'" } } } } },
+      "transparency": { "expr": { "Literal": { "Value": "0D" } } }
+    } }]
+  }
+}
+```
+
+Keep actionButton fill for panels >=~10px tall (gotcha 13's nav backdrop case).
+
+## 18. Theme `visualStyles` property shapes differ from textClasses and PBIR literals
+
+Two traps writing `visualStyles` into a theme JSON (both named precisely by the repo validator):
+
+- Colors are **objects**, not hex strings: `"fontColor": {"solid": {"color": "#FFFFFF"}}` — a bare `"#FFFFFF"` fails `must be object`.
+- The font property is **`fontFamily`** inside `visualStyles` cards (title, subTitle, …); `fontFace` is only valid inside `textClasses` — the conformance CLI flags it `PBIR_THEME_VISUAL_PROP_UNKNOWN`.
+
+`subTitle` is a valid theme/visual card (gray line under a title band) even though Desktop's base themes never emit it.
+
+## 19. Card `wordWrap` is its own formatting object; `labelPrecision` loses to the measure formatString
+
+- `wordWrap` on a `card` is a separate object — `"wordWrap": [{"properties": {"show": ...}}]` — not a `labels` property (`PBIR_FORMATTING_PROP_UNKNOWN` otherwise).
+- `labels.labelPrecision` (an `L`-typed literal, e.g. `"0L"`) is **ignored when the measure's model formatString pins decimals** — a `0.0%` formatString renders `75.0%` no matter what the visual says. Fix the decimals in TMDL (`formatString: 0%`), which is a model change: `reload` won't apply it, reopen the pbip.
+
 ## Validation flow
 
 Run `pwsh .github/powerbi/validate.ps1` before commit — it mirrors the `ci-powerbi` gate locally (ajv schema, fab-inspector rules, Tabular Editor 2 BPA). Setup, the tooling roster, and the exit-code contract: `docs/agents/powerbi-tooling.md`.
