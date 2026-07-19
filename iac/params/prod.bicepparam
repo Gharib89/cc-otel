@@ -24,6 +24,16 @@ param postgresFirewallRules = [
     startIpAddress: '0.0.0.0'
     endIpAddress: '0.0.0.0'
   }
+  // ITWorx corporate network / VPN egress ranges — operator access for ad-hoc psql
+  // and Power BI Desktop publishing over the public endpoint.
+  { name: 'ITWorxVpn1', startIpAddress: '196.201.3.16', endIpAddress: '196.201.3.22' }
+  { name: 'ITWorxVpn2', startIpAddress: '196.219.42.14', endIpAddress: '196.219.42.14' }
+  { name: 'ITWorxVpn3', startIpAddress: '196.22.7.16', endIpAddress: '196.22.7.22' }
+  { name: 'ITWorxVpn4', startIpAddress: '217.52.206.214', endIpAddress: '217.52.206.214' }
+  { name: 'ITWorxVpn5', startIpAddress: '41.33.165.114', endIpAddress: '41.33.165.118' }
+  { name: 'ITWorxVpn6', startIpAddress: '82.129.128.226', endIpAddress: '82.129.128.227' }
+  { name: 'ITWorxVpn7', startIpAddress: '82.129.128.230', endIpAddress: '82.129.128.230' }
+  { name: 'ITWorxVpn8', startIpAddress: '82.129.222.35', endIpAddress: '82.129.222.36' }
 ]
 
 param collectorImage = 'ghcr.io/gharib89/cc-otel-collector:latest'
