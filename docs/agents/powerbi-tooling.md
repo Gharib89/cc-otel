@@ -90,14 +90,15 @@ the evaluation ticket, not assumed here. The broader Microsoft
 
 Claude verifies its own report edits by rendering pages to Desktop-fidelity PNGs
 and reading them back. The tool is **`@microsoft/powerbi-desktop-bridge-cli`**
-(first-party, preview), pinned to **0.1.2**; install `npm i -g
-@microsoft/powerbi-desktop-bridge-cli@0.1.2` and the binary is `powerbi-desktop`.
+(first-party, preview), pinned to **0.1.2**; install
+`npm i -g @microsoft/powerbi-desktop-bridge-cli@0.1.2` and the binary is
+`powerbi-desktop`.
 Command surface: `status`, `manifest`, `open`, `reload`, `screenshot <page-id>`,
 `screenshot-all`. It is **preview** — re-verify the surface on any version bump.
 
-The loop: edit PBIR on disk → `powerbi-desktop reload` → `screenshot-all
---output-dir <dir>` (or `screenshot <page-id> --output <path>`) → Claude reads the
-PNGs → repeat. `--scale` is 1-3 (default 2). Note `screenshot` takes `--output`
+The loop: edit PBIR on disk → `powerbi-desktop reload` →
+`screenshot-all --output-dir <dir>` (or `screenshot <page-id> --output <path>`) →
+Claude reads the PNGs → repeat. `--scale` is 1-3 (default 2). Note `screenshot` takes `--output`
 (a file) while `screenshot-all` takes `--output-dir` (a directory).
 
 **Store-install gotcha (decisive on this fleet).** Power BI Desktop here is the
@@ -125,7 +126,7 @@ this launch step is unnecessary.
 refresh verb. First open blocks on the "loading data model" prompt until the
 canvas is up; `status` reports `Host is not ready to accept operations` until then.
 Data-populated screenshots need a one-time manual credential entry + **Refresh** in
-Desktop against Azure Postgres; thereafter the gitignored `cache.abf` carries data
+Desktop against Azure Postgres; thereafter the gitignored `.pbi/cache.abf` carries data
 across reopens and the loop runs unattended. **Layout / theme / formatting
 verification needs no data and works immediately.**
 
