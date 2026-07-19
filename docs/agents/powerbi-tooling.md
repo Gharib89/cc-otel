@@ -86,6 +86,52 @@ Whether it earns a blocking slot (or replaces a mature validator) is decided by
 the evaluation ticket, not assumed here. The broader Microsoft
 `skills-for-fabric` stack is the strategic successor to re-evaluate at GA.
 
+## Screenshot / visual-verification loop
+
+Claude verifies its own report edits by rendering pages to Desktop-fidelity PNGs
+and reading them back. The tool is **`@microsoft/powerbi-desktop-bridge-cli`**
+(first-party, preview), pinned to **0.1.2**; install `npm i -g
+@microsoft/powerbi-desktop-bridge-cli@0.1.2` and the binary is `powerbi-desktop`.
+Command surface: `status`, `manifest`, `open`, `reload`, `screenshot <page-id>`,
+`screenshot-all`. It is **preview** — re-verify the surface on any version bump.
+
+The loop: edit PBIR on disk → `powerbi-desktop reload` → `screenshot-all
+--output-dir <dir>` (or `screenshot <page-id> --output <path>`) → Claude reads the
+PNGs → repeat. `--scale` is 1-3 (default 2). Note `screenshot` takes `--output`
+(a file) while `screenshot-all` takes `--output-dir` (a directory).
+
+**Store-install gotcha (decisive on this fleet).** Power BI Desktop here is the
+**Microsoft Store (Appx)** build, not the classic MSI. The bridge's `open` verb
+cannot launch it: the real exe lives under the protected
+`C:\Program Files\WindowsApps\...` and spawning it fails `spawn EPERM`, while the
+`PBIDesktopStore.exe` app-execution alias is a zero-byte reparse point the bridge's
+existence check rejects (`DESKTOP_EXE_NOT_FOUND`). Setting `PBI_DESKTOP_PATH` to
+either does not help. **Workaround: launch Desktop yourself, then let the bridge
+_attach_ to the running process** — every other verb (`status`, `screenshot`,
+`screenshot-all`) attaches to a running PID and works fine:
+
+```powershell
+$appId = "Microsoft.MicrosoftPowerBIDesktop_8wekyb3d8bbwe!Microsoft.MicrosoftPowerBIDesktop"
+Start-Process "shell:AppsFolder\$appId" -ArgumentList '"D:\projects\cc-otel\powerbi\cc-otel-report.pbip"'
+powerbi-desktop status --wait-seconds 120      # poll until "status": "ready"
+powerbi-desktop screenshot pg_overview --output shot.png --scale 2
+```
+
+If the classic MSI Desktop is ever installed instead, `open` works directly and
+this launch step is unnecessary.
+
+**Data gate (one-time, HITL).** The model is Import mode and the bridge has no
+refresh verb. First open blocks on the "loading data model" prompt until the
+canvas is up; `status` reports `Host is not ready to accept operations` until then.
+Data-populated screenshots need a one-time manual credential entry + **Refresh** in
+Desktop against Azure Postgres; thereafter the gitignored `cache.abf` carries data
+across reopens and the loop runs unattended. **Layout / theme / formatting
+verification needs no data and works immediately.**
+
+Fallback (not used): Fabric/PBI REST `exportToFile` gives unattended auto-fresh
+renders but requires a Premium/Embedded/Fabric-capacity workspace — the Service
+stack the report effort (#104) excludes.
+
 ## Rejected / out
 
 - **pbir-cli** (data-goblin PyPI) — proprietary Non-Commercial license + no linux
