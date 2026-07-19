@@ -28,11 +28,7 @@
               },
               "queryRef": "bridge_session_agent.invocations",
               "nativeQueryRef": "invocations"
-            }
-          ]
-        },
-        "category": {
-          "projections": [
+            },
             {
               "field": {
                 "Column": {
@@ -45,8 +41,7 @@
                 }
               },
               "queryRef": "bridge_session_agent.agent_name",
-              "nativeQueryRef": "agent_name",
-              "active": true
+              "nativeQueryRef": "agent_name"
             }
           ]
         }

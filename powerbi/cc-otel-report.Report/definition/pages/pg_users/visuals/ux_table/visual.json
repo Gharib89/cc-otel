@@ -154,11 +154,7 @@
               },
               "queryRef": "_Measures.Total Lines of Code",
               "nativeQueryRef": "Total Lines of Code"
-            }
-          ]
-        },
-        "category": {
-          "projections": [
+            },
             {
               "field": {
                 "Column": {
@@ -171,8 +167,7 @@
                 }
               },
               "queryRef": "dim_user.last_seen",
-              "nativeQueryRef": "last_seen",
-              "active": true
+              "nativeQueryRef": "last_seen"
             },
             {
               "field": {
@@ -186,8 +181,7 @@
                 }
               },
               "queryRef": "dim_user.last_cc_version",
-              "nativeQueryRef": "last_cc_version",
-              "active": true
+              "nativeQueryRef": "last_cc_version"
             }
           ]
         }

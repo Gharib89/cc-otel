@@ -15,7 +15,7 @@ Power BI Desktop step.
 | **data-goblin `reports` plugin** (GPL-3.0) | Design canon: the `pbi-report-design` skill (3-30-300, layout, accessibility) | Same marketplace; on-demand (see "Design canon" below) |
 | **`pbir-gotchas` skill** (project-native) | 16 cc-otel PBIR format traps not covered by `pbir-format` | Lives in `.claude/skills/pbir-gotchas/`; source of truth is this repo |
 | **`.github/powerbi/validate.ps1`** | Local mirror of the `ci-powerbi` gate — the edit-then-validate loop | In-repo; downloads its own pinned validators on first run |
-| **@microsoft/powerbi-report-authoring-cli** v0.1.4 (MIT, preview) | Supplemental PBIR conformance check, **non-blocking** | Runs on demand via `npx`; under evaluation (see below) |
+| **@microsoft/powerbi-report-authoring-cli** v0.1.4 (MIT, preview) | PBIR conformance check, **blocking** (promoted by #112) | Runs via `npx` as validate.ps1 leg 4 and a `pbir-schema` CI step |
 
 **Install traps:** `--prerelease=allow` is **required** — 3.11.1 depends on
 `pythonnet==3.1.0rc0`, and without the flag `uv` silently resolves back to 3.10.10.
@@ -62,8 +62,8 @@ CI runs the linux one, and runs everything on one machine where CI splits
 ajv+fab-inspector onto ubuntu and TE2 onto windows — same versions, same rules. fab-inspector and TE2 are cached under `.pbi-tools/`
 (gitignored) and reused; the ajv leg installs into a gitignored `node_modules/`
 in the repo root (`--no-package-lock`, so the tree stays clean). A fourth leg
-runs the Microsoft conformance CLI for comparison and is **non-blocking** — its
-result never changes the exit code.
+runs the Microsoft conformance CLI — **blocking** since #112 promoted it (it
+catches role/theme defects that render silently wrong past the other three).
 
 **Exit-code contract** (the single source of truth for it):
 
@@ -71,20 +71,21 @@ result never changes the exit code.
 - `1` a validation error (a report/model bug)
 - `2` tooling failure (download/env issue — not your report's fault)
 
-Requires `node` + `npm` on PATH for the ajv leg (Node 20+); `npx` is needed only
-for the non-blocking Microsoft check. Runs on Windows (Tabular Editor 2 is
-Windows-only).
+Requires `node` + `npm` on PATH for the ajv leg (Node 20+) and `npx` for the
+Microsoft conformance leg. Runs on Windows (Tabular Editor 2 is Windows-only).
 
-## Microsoft conformance CLI — under evaluation
+## Microsoft conformance CLI — blocking (promoted by #112)
 
-`@microsoft/powerbi-report-authoring-cli` (first-party, MIT) authors on-disk PBIR
-**and** validates conformance — overlapping both pbi-cli and fab-inspector in this
-repo's niche. It is 0.x public preview, so it is wired into `validate.ps1` as a
-**non-blocking** supplemental check only. Its command is
+`@microsoft/powerbi-report-authoring-cli` (first-party, MIT, 0.x preview) validates
+PBIR conformance — role names per visual type, theme registration, formatting-object
+properties — a *renders-but-wrong* defect class none of the incumbent triad can see
+(ajv models `queryState` as an open map; fab-inspector runs repo-custom rules; TE2
+is model-side). The #112 evaluation found 16 errors on the legacy report, all true
+defects with zero false positives, so it gates as `validate.ps1` leg 4 and a step in
+the ubuntu `pbir-schema` CI job. Pinned exactly (`@0.1.4`) to contain preview churn:
 `npx -y @microsoft/powerbi-report-authoring-cli@0.1.4 validate <path> --format text`.
-Whether it earns a blocking slot (or replaces a mature validator) is decided by
-the evaluation ticket, not assumed here. The broader Microsoft
-`skills-for-fabric` stack is the strategic successor to re-evaluate at GA.
+It retires none of the triad. The broader Microsoft `skills-for-fabric` stack is the
+strategic successor to re-evaluate at GA.
 
 ## Screenshot / visual-verification loop
 
@@ -152,7 +153,11 @@ Findings from driving semantic-model edits through Desktop headlessly:
 - **`reload` does NOT apply TMDL model changes** — it re-reads the *report* layer
   and (with cached data-source credentials) can trigger a full **data refresh**,
   overwriting `cache.abf`. For model-definition changes, close Desktop and reopen
-  the `.pbip`.
+  the `.pbip` — or, faster for measure-only changes, TOM-add the identical
+  measures to the live model (`Table.Measures.Add` + `SaveChanges()`), keeping
+  the TMDL edit as the on-disk source of truth. Note a Desktop **save** then
+  re-serializes the whole pbip (CRLF, property reorder) — expect wide but
+  content-neutral git churn.
 - **Unattended data gate for new tables:** a table-scoped TOM refresh against
   Desktop's embedded AS instance works —
   `Model.Tables["x"].RequestRefresh(RefreshType.Full)` + `SaveChanges()` on
@@ -163,6 +168,13 @@ Findings from driving semantic-model edits through Desktop headlessly:
   clamps to the nearest stored date instead of returning empty** — a "prior 28d"
   window before first ingest silently leaks current-window rows. Use
   `DATESBETWEEN` with explicit bounds for fixed rolling windows.
+- **Every `reload` (and fresh open) re-raises the "calculated objects need to be
+  manually refreshed" banner**, which overlays the top ~60px of the canvas in
+  screenshots and blanks roster/calc-column visuals. Clear it headlessly:
+  `Model.RequestRefresh(RefreshType.Calculate)` + `SaveChanges()` over the same
+  TOM connection (add a table-scoped `Full` refresh for `seat_roster` after a
+  fresh open — it re-imports the local CSV, no credentials needed). Local
+  recompute only; the Azure source is never touched.
 
 ## Rejected / out
 

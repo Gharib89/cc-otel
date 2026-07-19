@@ -28,11 +28,7 @@
               },
               "queryRef": "bridge_session_hook.executions",
               "nativeQueryRef": "executions"
-            }
-          ]
-        },
-        "category": {
-          "projections": [
+            },
             {
               "field": {
                 "Column": {
@@ -45,8 +41,7 @@
                 }
               },
               "queryRef": "bridge_session_hook.hook_name",
-              "nativeQueryRef": "hook_name",
-              "active": true
+              "nativeQueryRef": "hook_name"
             }
           ]
         }

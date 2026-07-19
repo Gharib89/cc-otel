@@ -28,11 +28,7 @@
               },
               "queryRef": "bridge_session_plugin.load_count",
               "nativeQueryRef": "load_count"
-            }
-          ]
-        },
-        "category": {
-          "projections": [
+            },
             {
               "field": {
                 "Column": {
@@ -45,8 +41,7 @@
                 }
               },
               "queryRef": "bridge_session_plugin.plugin_name",
-              "nativeQueryRef": "plugin_name",
-              "active": true
+              "nativeQueryRef": "plugin_name"
             }
           ]
         }

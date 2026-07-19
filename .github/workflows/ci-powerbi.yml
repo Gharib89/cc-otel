@@ -39,6 +39,12 @@ jobs:
       - name: Validate PBIR schemas
         run: node .github/powerbi/validate-pbir.mjs powerbi
 
+      # First-party PBIR conformance check, promoted to blocking by issue #112:
+      # it catches role/theme defects that render silently wrong past ajv (whose
+      # schemas model queryState as an open map). Pinned; preview tool.
+      - name: MS conformance CLI
+        run: npx -y @microsoft/powerbi-report-authoring-cli@0.1.4 validate powerbi/cc-otel-report.Report --format text
+
   # fab-inspector runs declarative report-quality rules against the report item.
   # Self-contained linux binary -> ubuntu (1x metered minutes, #32).
   fab-inspector:

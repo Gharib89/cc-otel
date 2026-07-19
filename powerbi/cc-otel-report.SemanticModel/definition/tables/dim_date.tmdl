@@ -96,7 +96,6 @@ table dim_date
 		formatString: Short Date
 		lineageTag: ed644923-e46c-4893-99fe-652e71edeb83
 		summarizeBy: none
-		type: calculated
 
 		annotation SummarizationSetBy = Automatic
 
@@ -106,7 +105,6 @@ table dim_date
 		lineageTag: 62b98f5c-64a0-49a9-8965-8d4299015664
 		summarizeBy: none
 		sortByColumn: week_start
-		type: calculated
 
 		annotation SummarizationSetBy = Automatic
 

@@ -1,9 +1,9 @@
 # Local dev mirror of the ci-powerbi gate: runs the same three validators against
 # the on-disk PBIP/PBIR report and TMDL model so an edit-then-validate loop closes
 # on the dev machine before a push. Pinned to the exact tool versions CI pins
-# (ajv 8.17.1, fab-inspector v3.4.0, Tabular Editor 2 2.28.0). A fourth,
-# NON-BLOCKING leg runs Microsoft's preview conformance CLI for comparison only
-# (evaluated under a separate ticket; it never affects the exit code).
+# (ajv 8.17.1, fab-inspector v3.4.0, Tabular Editor 2 2.28.0). A fourth leg runs
+# Microsoft's conformance CLI, BLOCKING since issue #112 promoted it (it catches
+# renders-but-wrong role/theme defects none of the other three can see).
 #
 # Usage:  pwsh .github/powerbi/validate.ps1
 #
@@ -115,18 +115,20 @@ try {
   Write-Host "[TOOL] Tabular Editor 2 leg failed: $_" -ForegroundColor Red; $tooling = $true
 }
 
-# --- 4. Microsoft conformance CLI (NON-BLOCKING, evaluation only) -----------
-Section 'MS conformance CLI (non-blocking)'
+# --- 4. Microsoft conformance CLI -------------------------------------------
+Section 'MS conformance CLI'
 if (Have 'npx') {
   try {
-    # Preview first-party validator. Output is informational only for now -- its
-    # exit code deliberately does NOT gate this loop (see the evaluation ticket).
+    # First-party PBIR conformance validator, promoted to blocking by issue #112:
+    # it catches role/theme defects that render silently wrong past the other legs.
     & npx -y $MsCliSpec validate $Report --format text 2>&1 | Out-Host
+    if ($LASTEXITCODE -ne 0) { $failed = $true }
   } catch {
-    Write-Host "[INFO] MS conformance CLI did not run (preview tool): $_" -ForegroundColor Yellow
+    Write-Host "[TOOL] MS conformance CLI failed to run: $_" -ForegroundColor Red; $tooling = $true
   }
 } else {
-  Write-Host '[INFO] npx not on PATH; skipping non-blocking preview conformance check' -ForegroundColor Yellow
+  Write-Host '[TOOL] npx required for the MS conformance leg; see docs/agents/powerbi-tooling.md' -ForegroundColor Red
+  $tooling = $true
 }
 
 # --- verdict ----------------------------------------------------------------

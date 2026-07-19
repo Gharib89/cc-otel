@@ -28,11 +28,7 @@
               },
               "queryRef": "mart_refresh_log.row_count",
               "nativeQueryRef": "row_count"
-            }
-          ]
-        },
-        "category": {
-          "projections": [
+            },
             {
               "field": {
                 "Column": {
@@ -45,8 +41,7 @@
                 }
               },
               "queryRef": "mart_refresh_log.mart",
-              "nativeQueryRef": "mart",
-              "active": true
+              "nativeQueryRef": "mart"
             },
             {
               "field": {
@@ -60,8 +55,7 @@
                 }
               },
               "queryRef": "mart_refresh_log.finished",
-              "nativeQueryRef": "finished",
-              "active": true
+              "nativeQueryRef": "finished"
             }
           ]
         }

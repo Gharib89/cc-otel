@@ -33,11 +33,7 @@
               },
               "queryRef": "Sum(bridge_session_skill.activations)",
               "nativeQueryRef": "Sum of activations"
-            }
-          ]
-        },
-        "category": {
-          "projections": [
+            },
             {
               "field": {
                 "Column": {
@@ -50,8 +46,7 @@
                 }
               },
               "queryRef": "bridge_session_skill.skill_name",
-              "nativeQueryRef": "skill_name",
-              "active": true
+              "nativeQueryRef": "skill_name"
             }
           ]
         }

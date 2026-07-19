@@ -11,7 +11,7 @@
       "type": "SharedResources"
     },
     "customTheme": {
-      "name": "AIWorx",
+      "name": "AIWorx.json",
       "reportVersionAtImport": {
         "visual": "2.9.0",
         "report": "3.3.0",
@@ -52,9 +52,14 @@
       "type": "RegisteredResources",
       "items": [
         {
-          "name": "AIWorx",
+          "name": "AIWorx.json",
           "type": "CustomTheme",
-          "path": "AIWorx"
+          "path": "AIWorx.json"
+        },
+        {
+          "name": "AIWorxLogo2607190001.png",
+          "path": "AIWorxLogo2607190001.png",
+          "type": "Image"
         }
       ]
     }
