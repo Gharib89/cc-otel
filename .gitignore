@@ -18,3 +18,7 @@ __pycache__/
 
 # ad-hoc analysis
 .analysis/
+
+# Power BI local validator cache + transient ajv install (.github/powerbi/validate.ps1)
+.pbi-tools/
+node_modules/

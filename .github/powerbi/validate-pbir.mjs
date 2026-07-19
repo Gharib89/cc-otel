@@ -16,8 +16,14 @@ const EXTS = new Set(['.json', '.pbir', '.pbip', '.pbism']);
 async function walk(dir, out = []) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const p = join(dir, entry.name);
-    if (entry.isDirectory()) await walk(p, out);
-    else if (EXTS.has(extname(entry.name))) out.push(p);
+    // `.pbi/` holds per-machine Power BI Desktop local settings — gitignored, so
+    // absent from the CI checkout, and it can declare unpublished `$schema`
+    // versions that 404. Never a validation target; skip it so a local run
+    // mirrors CI.
+    if (entry.isDirectory()) {
+      if (entry.name === '.pbi') continue;
+      await walk(p, out);
+    } else if (EXTS.has(extname(entry.name))) out.push(p);
   }
   return out;
 }

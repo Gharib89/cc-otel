@@ -25,8 +25,8 @@ Dependency closure: a skill that composes another (referenced as `/other` or
 the clone. So after seeding from SYNC, the tool transitively pulls every
 referenced skill in too. Auto-pulled deps keep their upstream flag.
 
-Skills NOT reachable from this list (ship, cloud-ship) are project-native and
-never touched.
+Skills NOT reachable from this list (ship, cloud-ship, pbir-gotchas) are
+project-native and never touched.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ EXCLUDE = {"setup-matt-pocock-skills"}
 # Hand-authored in this repo — `.claude/skills/` IS their source of truth. Never
 # vendor over these: a same-named personal skill (via SYNC or a dependency
 # reference) must never `rmtree` the tracked copy and destroy project edits.
-PROJECT_NATIVE = {"ship", "cloud-ship"}
+PROJECT_NATIVE = {"ship", "cloud-ship", "pbir-gotchas"}
 
 # A backticked `/name` / `name` token, or a plain-text /name slash-command
 # mention. False positives (URL path segments etc.) are harmless: only tokens

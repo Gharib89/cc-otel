@@ -1,0 +1,15 @@
+{
+  "extraKnownMarketplaces": {
+    "power-bi-agentic-development": {
+      "source": {
+        "source": "github",
+        "repo": "data-goblin/power-bi-agentic-development",
+        "ref": "v26.25"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "pbip@power-bi-agentic-development": true,
+    "reports@power-bi-agentic-development": true
+  }
+}
