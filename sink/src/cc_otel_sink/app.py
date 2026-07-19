@@ -11,6 +11,7 @@ import gzip
 import hashlib
 import json
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
@@ -28,14 +29,15 @@ logger = logging.getLogger("cc_otel_sink")
 
 
 def get_store(request: Request) -> Store:
-    store = request.app.state.store
+    store: Store | None = request.app.state.store
     if store is None:
         raise HTTPException(503, "sink not configured with a database")
     return store
 
 
 def get_blob(request: Request) -> BlobReservoir | None:
-    return request.app.state.blob
+    blob: BlobReservoir | None = request.app.state.blob
+    return blob
 
 
 # Annotated deps keep the Depends() call out of the parameter default (ruff B008).
@@ -93,7 +95,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         store = Store.from_dsn(settings.database_url) if settings.database_url else None
         if store is not None:
             await store.open()

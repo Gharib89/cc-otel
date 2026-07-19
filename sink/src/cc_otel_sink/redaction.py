@@ -21,6 +21,7 @@ key-name pattern matching.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -50,7 +51,7 @@ def _value_is_nonempty(value: dict[str, Any]) -> bool:
         return False
     sv = value.get("stringValue")
     if sv is not None:
-        return sv != ""
+        return bool(sv != "")
     # Any non-string typed value present counts as content.
     return any(
         k in value for k in ("intValue", "doubleValue", "boolValue", "arrayValue", "kvlistValue")
@@ -74,7 +75,7 @@ def _sweep_tool_parameters(value: dict[str, Any]) -> None:
             _sweep_tool_parameters(e)
 
 
-def _walk_attribute_lists(node: Any):
+def _walk_attribute_lists(node: Any) -> Iterator[list[dict[str, Any]]]:
     """Yield every ``attributes`` list anywhere in the OTLP tree."""
     if isinstance(node, dict):
         for key, val in node.items():
@@ -87,7 +88,7 @@ def _walk_attribute_lists(node: Any):
             yield from _walk_attribute_lists(item)
 
 
-def _iter_log_records(payload: dict[str, Any]):
+def _iter_log_records(payload: dict[str, Any]) -> Iterator[dict[str, Any]]:
     for rl in payload.get("resourceLogs", []) or []:
         for sl in rl.get("scopeLogs", []) or []:
             yield from sl.get("logRecords", []) or []
@@ -100,8 +101,8 @@ def _event_name(record: dict[str, Any]) -> str | None:
 def redact(payload: dict[str, Any]) -> RedactionResult:
     """Redact ``payload`` in place, returning it plus the drift-strip count."""
     # 1. Denylist strip on every attribute list, wherever it sits.
-    for attributes in _walk_attribute_lists(payload):
-        _strip_denylist(attributes)
+    for attr_list in _walk_attribute_lists(payload):
+        _strip_denylist(attr_list)
 
     gate_leaks = 0
     for record in _iter_log_records(payload):
