@@ -24,7 +24,7 @@ table seat_roster
 		source =
 				let
 				  Drops = Table.SelectRows(Folder.Files("D:\projects\cc-otel\powerbi\data\seat_roster"), each Text.StartsWith([Name], "seat_roster_") and Text.EndsWith([Name], ".csv")),
-				  Latest = Table.Sort(Drops, {{"Name", Order.Descending}}){0},
+				  Latest = if Table.IsEmpty(Drops) then error "No seat_roster_YYYY-MM-DD.csv drop found in powerbi/data/seat_roster - see the README there" else Table.Sort(Drops, {{"Name", Order.Descending}}){0},
 				  Raw = Csv.Document(Latest[Content], [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
 				  Promoted = Table.PromoteHeaders(Raw, [PromoteAllScalars = true]),
 				  Typed = Table.TransformColumnTypes(Promoted, {{"user_email", type text}, {"seat_tier", type text}})
