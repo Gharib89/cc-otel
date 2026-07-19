@@ -85,7 +85,7 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 | `powerbi/` | `.pbip` semantic model + report + branding |
 | `tools/` | Curation + ops tooling over the blob reservoir (sweep, data dictionary, replay, scrub) |
 | `tests/integration/` | end-to-end suite |
-| `scripts/` | skill-sync + cloud-ship bootstrap + dev-migrate |
+| `scripts/` | skill-sync + cloud-ship bootstrap + dev-migrate + `backfill/` (one-shot POC→interim backfill, ADR-0006) |
 | `.claude/skills/` | tracked agent skills (vendored + project-native) |
 
 - **Standards are enforced by config, not prose** — ruff (`pyproject.toml`, line 100), mypy (`--strict`, `sink/src` only), sqlfluff (`db/`), PSScriptAnalyzer (`bootstrap/`, ASCII + zero findings), Bicep/PSRule (`iac/`); Python 3.13. The config *is* the spec; this file never restates a rule the linter already owns. Rule changes land in the config first.

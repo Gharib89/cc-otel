@@ -38,7 +38,7 @@ The slim daily-refresh Power BI report (successor to the POC report). Focus: pro
 _Avoid_: dashboard v2, current report
 
 **Non-empty session**:
-A session with at least one `user_prompt` event — a human actually typed something. Sessions without one (statusline-only launches, `/resume` browsing) are empty and excluded from session counts and duration averages.
+A session with at least one `prompt_id` — a human-initiated prompt turn, carried on `api_request` and related events. Sessions without one (statusline-only launches, `/resume` browsing) are empty and excluded from session counts and duration averages. (Counted as `COUNT(DISTINCT prompt_id)`, not the `user_prompt` event, which older Claude Code builds rarely emitted.)
 _Avoid_: active session (that means something else — see `active_session_count`)
 
 **Session duration**:

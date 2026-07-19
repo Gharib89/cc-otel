@@ -580,9 +580,9 @@ CREATE MATERIALIZED VIEW marts.fact_session_daily AS
          SELECT events.session_id,
             (events.event_time)::date AS activity_date,
             (array_agg(events.user_email ORDER BY (events.user_email ~~ '%@itworx.com'::text) DESC NULLS LAST, events.user_email) FILTER (WHERE (events.user_email IS NOT NULL)))[1] AS user_email,
-            count(*) AS prompts
+            count(DISTINCT events.prompt_id) AS prompts
            FROM raw.events
-          WHERE ((events.event_name = 'user_prompt'::text) AND (events.session_id IS NOT NULL))
+          WHERE ((events.prompt_id IS NOT NULL) AND (events.session_id IS NOT NULL))
           GROUP BY events.session_id, ((events.event_time)::date)
         )
  SELECT COALESCE(m.session_id, p.session_id) AS session_id,
@@ -984,4 +984,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260713170011'),
     ('20260713170012'),
     ('20260713170013'),
-    ('20260716153503');
+    ('20260716153503'),
+    ('20260720120000');

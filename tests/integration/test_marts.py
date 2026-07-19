@@ -10,6 +10,9 @@ from _helpers import ins_event, ins_metric
 
 S1 = "11111111-1111-1111-1111-111111111111"
 S2 = "22222222-2222-2222-2222-222222222222"
+P1 = "aaaaaaaa-1111-1111-1111-111111111111"
+P2 = "bbbbbbbb-2222-2222-2222-222222222222"
+P3 = "cccccccc-3333-3333-3333-333333333333"
 
 
 def refresh(conn):
@@ -170,32 +173,63 @@ def test_fact_session_daily_counts_deltas_and_prompts(conn):
         user_email="a@x.com",
         type_label="user",
     )
-    ins_event(
-        conn,
-        event_time="2026-07-01T10:00:00Z",
-        event_name="user_prompt",
-        session_id=S1,
-        user_email="a@x.com",
-    )
+    # Non-empty signal is DISTINCT prompt_id (not the user_prompt event): two turns,
+    # each on an api_request carrying a prompt_id, and no user_prompt event at all.
+    for pid in (P1, P2):
+        ins_event(
+            conn,
+            event_time="2026-07-01T10:00:00Z",
+            event_name="api_request",
+            session_id=S1,
+            user_email="a@x.com",
+            prompt_id=pid,
+        )
     refresh(conn)
     assert one(
         conn,
         "SELECT commits, loc_added, active_time_user_s, active_time_total_s, prompts "
         f"FROM marts.fact_session_daily WHERE session_id='{S1}'",
-    ) == (2, 40, 30, 30, 1)
+    ) == (2, 40, 30, 30, 2)
+
+
+def test_fact_session_daily_prompts_count_distinct_prompt_id(conn):
+    """Many events can share one prompt turn (api_request, tool_result, ... all carry
+    the same prompt_id) — the prompt count is DISTINCT prompt_id, so one turn counts once."""
+    for name in ("api_request", "tool_result", "api_request"):
+        ins_event(
+            conn,
+            event_time="2026-07-01T10:00:00Z",
+            event_name=name,
+            session_id=S1,
+            user_email="a@x.com",
+            prompt_id=P1,
+        )
+    # An event with no prompt_id (e.g. a statusline ping) must not count as a turn.
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:00:00Z",
+        event_name="tool_result",
+        session_id=S1,
+        user_email="a@x.com",
+    )
+    refresh(conn)
+    assert one(
+        conn, f"SELECT prompts FROM marts.fact_session_daily WHERE session_id='{S1}'"
+    ) == (1,)
 
 
 def test_fact_session_daily_multi_email_collapses_and_flags(conn):
     """A session-day logged under a corp + a personal account must not break
     REFRESH CONCURRENTLY (the duplicate-key incident on 2026-07-16): the fact keeps
     one corp-preferred row and the split is captured as a multi_email_session finding."""
-    for email in ("dev@itworx.com", "dev.personal@gmail.com"):
+    for email, pid in (("dev@itworx.com", P1), ("dev.personal@gmail.com", P2)):
         ins_event(
             conn,
             event_time="2026-07-01T10:00:00Z",
-            event_name="user_prompt",
+            event_name="api_request",
             session_id=S2,
             user_email=email,
+            prompt_id=pid,
         )
     # Cross-source disagreement: metrics carry only the personal email, prompts the corp
     # one — the fact must still prefer corp across the m/p join, not just within a source.
