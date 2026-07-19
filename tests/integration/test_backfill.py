@@ -195,6 +195,11 @@ def test_sum_cumulative_rows_retained(bf):
     ) == ("sum_cumulative",)
 
 
+# Note: idempotency (the meta.processed_batches sentinel) is intentionally NOT
+# automated here — issue #131's Testing Decisions assign it to the manual
+# verification gate. load.sql claims `poc-backfill:interim:v1` and no-ops on re-run.
+
+
 def test_window_excludes_out_of_range_rows(bf):
     for ts in ("2026-05-23T10:00:00Z", IN_WINDOW, "2026-07-17T10:00:00Z"):
         ins_poc_metric(
@@ -204,15 +209,3 @@ def test_window_excludes_out_of_range_rows(bf):
     run_backfill(bf)
     rows = bf.execute("SELECT ts::date::text FROM raw.metrics ORDER BY ts").fetchall()
     assert rows == [("2026-06-15",)]
-
-
-def test_idempotent_second_load_is_noop(bf):
-    ins_poc_metric(
-        bf, ts=IN_WINDOW, metric_name="m", metric_type="sum", value=1,
-        session_id=S_HIST, scope_name="com.anthropic.claude_code",
-    )
-    run_backfill(bf)
-    assert one(bf, "SELECT count(*) FROM raw.metrics") == (1,)
-    # Re-running the load with the sentinel already claimed must not re-insert.
-    bf.execute(_read("load.sql"))
-    assert one(bf, "SELECT count(*) FROM raw.metrics") == (1,)
