@@ -36,6 +36,7 @@ uv run pytest                # unit (sink/tests) + integration (tests/integratio
 uv run pytest -m "not integration"  # unit only — the `python` CI job
 uv run pytest -m integration # integration only (needs Docker) — the `integration` CI job
 uv run ruff check .          # Python lint — the `python` CI job
+uv run mypy                  # strict type-check, sink/src only — the `python` CI job
 uv run sqlfluff lint db/     # SQL lint — the `python` CI job
 az bicep build --file iac/main.bicep --stdout >/dev/null  # Bicep lint (the `iac` CI job)
 Assert-PSRule -InputPath ./iac/ -Module PSRule.Rules.Azure  # Bicep static analysis (pwsh; see iac/README.md)
@@ -87,7 +88,7 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 | `scripts/` | skill-sync + cloud-ship bootstrap + dev-migrate |
 | `.claude/skills/` | tracked agent skills (vendored + project-native) |
 
-- **Standards are enforced by config, not prose** — ruff (`pyproject.toml`, line 100), sqlfluff (`db/`), PSScriptAnalyzer (`bootstrap/`, ASCII + zero findings), Bicep/PSRule (`iac/`); Python 3.13. The config *is* the spec; this file never restates a rule the linter already owns. Rule changes land in the config first.
+- **Standards are enforced by config, not prose** — ruff (`pyproject.toml`, line 100), mypy (`--strict`, `sink/src` only), sqlfluff (`db/`), PSScriptAnalyzer (`bootstrap/`, ASCII + zero findings), Bicep/PSRule (`iac/`); Python 3.13. The config *is* the spec; this file never restates a rule the linter already owns. Rule changes land in the config first.
 - **Everything is a migration** — views, grants, matviews, column-registry rows all land via dbmate; CI checks schema drift; never edit the schema out-of-band.
 - CI is path-filtered per concern — a new top-level concern needs a workflow filter.
 - `.pbip` is the Power BI source of truth; publishing is manual via Desktop.
