@@ -12,7 +12,9 @@
 #   1  a validation error (a report/model bug)
 #   2  tooling failure (download/env issue) -- not your report's fault
 #
-# Tools are cached under .pbi-tools/ (gitignored) and reused across runs.
+# fab-inspector and TE2 are cached under .pbi-tools/ (gitignored) and reused
+# across runs; the ajv leg installs into a gitignored node_modules/ in the repo
+# root (ESM bare-import resolution requires it there).
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -49,10 +51,15 @@ Section 'ajv PBIR schema'
 if (Require 'node') {
   try {
     Push-Location $RepoRoot
-    # --no-save keeps repo package state clean; node_modules is gitignored.
-    & npm install --no-save "ajv@$AjvVersion" 2>&1 | Out-Host
-    & node $ValidMjs 'powerbi' 2>&1 | Out-Host
-    if ($LASTEXITCODE -ne 0) { $failed = $true }
+    # --no-save + --no-package-lock keep the working tree clean (no package.json
+    # or package-lock.json written); only the gitignored node_modules/ appears.
+    & npm install --no-save --no-package-lock "ajv@$AjvVersion" 2>&1 | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+      Write-Host '[TOOL] npm install ajv failed' -ForegroundColor Red; $tooling = $true
+    } else {
+      & node $ValidMjs 'powerbi' 2>&1 | Out-Host
+      if ($LASTEXITCODE -ne 0) { $failed = $true }
+    }
   } catch {
     Write-Host "[TOOL] ajv leg failed to run: $_" -ForegroundColor Red; $tooling = $true
   } finally { Pop-Location }

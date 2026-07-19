@@ -57,9 +57,11 @@ pwsh .github/powerbi/validate.ps1
 
 Mirrors `ci-powerbi` byte-for-byte on the same pinned versions (ajv 8.17.1,
 fab-inspector v3.4.0, Tabular Editor 2 2.28.0), reusing the rule files in
-`.github/powerbi/`. Validators are cached under `.pbi-tools/` (gitignored) and
-reused. A fourth leg runs the Microsoft conformance CLI for comparison and is
-**non-blocking** — its result never changes the exit code.
+`.github/powerbi/`. fab-inspector and TE2 are cached under `.pbi-tools/`
+(gitignored) and reused; the ajv leg installs into a gitignored `node_modules/`
+in the repo root (`--no-package-lock`, so the tree stays clean). A fourth leg
+runs the Microsoft conformance CLI for comparison and is **non-blocking** — its
+result never changes the exit code.
 
 **Exit-code contract** (the single source of truth for it):
 
