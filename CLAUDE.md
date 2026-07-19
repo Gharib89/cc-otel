@@ -18,6 +18,15 @@ Pipeline: Claude Code OTel exporter → OTel Collector (bearer auth) → FastAPI
 - **HITL**: `ready-for-human` issues and anything touching schema, scope, or architecture resolve only through live exchange with Ahmed — never self-answered.
 - **Ad-hoc exemption**: small fixes spotted along the way (typos, one-liners, doc nits) ride along in the current PR or get a plain commit — no issue ceremony.
 
+## Branch & worktree discipline
+
+The main checkout is shared — Ahmed runs commands in it concurrently. Rules:
+
+- **Never yank the shared checkout's branch.** If it moves under you mid-session (switched to `main` or another branch), don't `git checkout` it back — spin a dedicated sibling worktree (`git worktree add <path> <branch>`) and do all build/test/PR work isolated. Copy gitignored env files (`.env.interim`) in if the work needs cloud access; they won't be committed.
+- **Before any git mutation:** `git branch --show-current && git status --short` first.
+- **Stage explicit paths, never `git add -A`.** Operator tools regenerate tracked files (`db/schema.sql` re-dumped by `dbmate up`, lockfiles) — `-A` sweeps a stray `schema.sql` change into the PR and trips the CI schema-drift gate. Stage only what this task changed.
+- **"Merge" means land-and-clean, end to end:** copy gitignored env files out of the worktree first → squash-merge, confirm the issue closed → delete the remote branch explicitly (`git push origin --delete <branch>`; `gh --delete-branch` fails its local step while `main` is checked out) → remove the worktree + delete the local branch → `git pull --ff-only` main.
+
 ## Commands
 
 ```sh
@@ -37,6 +46,15 @@ psql "$DATABASE_URL"         # ad-hoc DB access (Azure otel real data / cc_otel)
 
 - Integration tests use **testcontainers** (throwaway Docker Postgres) — never the shared dev DB.
 - No MCP servers for Postgres/Azure/GitHub — use the CLIs (`psql`, `az`/Bicep, `gh`).
+
+## Driving PowerShell — output-capture traps
+
+The shell here is **PowerShell** (pwsh primary, WinPS 5.1 on the fleet). Four traps silently corrupt captured results or CI — each reads like a code bug when it's really PS semantics or the harness lying:
+
+- **Empty `[string[]]` return unrolls to `$null`.** `return [string[]]$x` yields `$null` when `$x` is empty; the caller then fails a `Mandatory` bind or throws on `$null.Count` under `Set-StrictMode`. Use `return , [string[]]$x` (unary comma preserves the array). Tests that pipe the array through `Should` mask it — assert the return **without** piping.
+- **Native stdout leaks into the return value.** A function calling `dbmate`/`psql`/any native exe returns `@(<tool output>, $rc)`, not `$rc` — a downstream `if ($rc -ne 0)` then evaluates a truthy array and false-halts a step that succeeded. Pipe native output to `| Out-Host` (shown, not returned).
+- **Multi-line stdout captures as a `string[]`, one element per line.** `$body = gh issue view N --json body --jq .body` becomes a line array; `.Replace()` member-enumerates and `Set-Content -NoNewline` concatenates with no separator, wiping newlines. Edit large GH issue/PR bodies in **bash** via `--body-file`, never a PS variable round-trip.
+- **`.ps1` files must be pure ASCII.** The `bootstrap` job throws on **any** PSScriptAnalyzer finding, Warnings included; `PSUseBOMForUnicodeEncodedFile` fires on a single non-ASCII byte (one em-dash `-` in a comment) while local `-Severity Error` stays green. Use ASCII; grep the diff with a literal-tab bracket so tab indentation isn't a false positive: `LC_ALL=C grep -n $'[^ -~\t]' file.ps1`.
 
 ## Dev database
 
@@ -68,14 +86,21 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 | `scripts/` | skill-sync + cloud-ship bootstrap + dev-migrate |
 | `.claude/skills/` | tracked agent skills (vendored + project-native) |
 
-- Python 3.13; ruff (line 100); sqlfluff for SQL; PSScriptAnalyzer for PowerShell.
+- **Standards are enforced by config, not prose** — ruff (`pyproject.toml`, line 100), sqlfluff (`db/`), PSScriptAnalyzer (`bootstrap/`, ASCII + zero findings), Bicep/PSRule (`iac/`); Python 3.13. The config *is* the spec; this file never restates a rule the linter already owns. Rule changes land in the config first.
 - **Everything is a migration** — views, grants, matviews, column-registry rows all land via dbmate; CI checks schema drift; never edit the schema out-of-band.
 - CI is path-filtered per concern — a new top-level concern needs a workflow filter.
 - `.pbip` is the Power BI source of truth; publishing is manual via Desktop.
 
-## Maintenance
+## Keep docs in sync with code
 
-If your PR changes a command, convention, or environment fact stated in this file, update this file in the same PR.
+Every behavior/command/convention change ships its docs in the **same** PR. Coupled artifacts:
+
+- **This file (`CLAUDE.md`)** — any command, layout, convention, or environment fact stated here.
+- **`CONTEXT.md`** — glossary; new domain terms use its vocabulary, never a drifting synonym.
+- **`docs/adr/`** — a decision conflicting with a settled ADR is surfaced, never silently overridden; a new settled decision gets a new ADR.
+- **Map issue #1** — the locked design/decision log; a scope or design shift updates the relevant bullet.
+- **`db/schema.sql`** — never hand-edited; regenerated only via `scripts/dev-migrate.sh` (everything is a migration).
+- **CI path filters** — a new top-level concern needs its own workflow filter; validate `.github/workflows/**` edits with **actionlint**, not just a YAML parse (`matrix` context is invalid in a step's `shell:` key and fails at startup with no PR check).
 
 ## Agent skills
 
