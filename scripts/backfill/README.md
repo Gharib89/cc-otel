@@ -47,7 +47,12 @@ The load prints the inserted row counts and the overlap-complement session list
 
 ## Rollback (disposable interim; no `raw` schema change)
 
-Backfilled rows are everything before the overlap plus the printed overlap sessions:
+Backfilled rows are everything before the overlap plus the printed overlap sessions.
+
+> **Assumption:** interim's own live telemetry starts `2026-07-14` (the staggered-rollout
+> start), so the `< 2026-07-14` predicate deletes only backfilled rows. If live interim data
+> ever predates that date, raise the cutoff to interim's true first-live day before running
+> the `DELETE` — otherwise it would remove legitimate live rows.
 
 ```sql
 DELETE FROM raw.metrics

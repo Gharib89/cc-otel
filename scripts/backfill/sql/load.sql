@@ -70,8 +70,9 @@ BEGIN
     ) q;
 
     RAISE NOTICE 'poc-backfill: inserted % metric rows, % event rows', n_metrics, n_events;
+    -- COALESCE so an empty overlap prints '{}' (a paste-ready uuid[]) rather than NULL.
     RAISE NOTICE 'poc-backfill: overlap-complement sessions (>= 2026-07-14, for rollback): %',
-        overlap_sessions;
+        COALESCE(overlap_sessions, '{}'::UUID []);
 END $$;
 
 COMMIT;
