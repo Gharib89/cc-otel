@@ -134,6 +134,36 @@ Fallback (not used): Fabric/PBI REST `exportToFile` gives unattended auto-refres
 renders but requires a Premium/Embedded/Fabric-capacity workspace — the Service
 stack the report effort (#104) excludes.
 
+## Model-layer (TMDL) verification loop — traps from #118
+
+Findings from driving semantic-model edits through Desktop headlessly:
+
+- **When Desktop rejects a TMDL model, it fails *silently*.** No `DataModelLoadFailed` dialog —
+  Desktop just opens as `Untitled - Power BI Desktop` with the file never loaded.
+  A TOM `TmdlSerializer.DeserializeDatabaseFromFolder` pass (and TE2's BPA leg)
+  can still be green: the failure is engine *load*, not parse. Bisect by
+  reverting change groups.
+- **Known silent killer: a `fromCardinality: one` (1:1) relationship into a table
+  on an RLS security-filter chain** (here `dim_user`, security-filtered from
+  `vw_UserBasicInfo`'s `OrgScope` rule). `securityFilteringBehavior: oneDirection`
+  does not rescue it. Express the join as plain many:1 with the roster/lookup
+  table on the *to* side — same filter flow, `RELATED()` still works, and the
+  to-side uniqueness is enforced at refresh.
+- **`reload` does NOT apply TMDL model changes** — it re-reads the *report* layer
+  and (with cached data-source credentials) can trigger a full **data refresh**,
+  overwriting `cache.abf`. For model-definition changes, close Desktop and reopen
+  the `.pbip`.
+- **Unattended data gate for new tables:** a table-scoped TOM refresh against
+  Desktop's embedded AS instance works —
+  `Model.Tables["x"].RequestRefresh(RefreshType.Full)` + `SaveChanges()` on
+  `localhost:<port>` (port via `Get-NetTCPConnection` on the `msmdsrv` process).
+  Same connection answers ad-hoc DAX through ADOMD — measure values verify
+  headlessly, no report visuals needed.
+- **DAX trap: `DATESINPERIOD` with an anchor outside the date column's range
+  clamps to the nearest stored date instead of returning empty** — a "prior 28d"
+  window before first ingest silently leaks current-window rows. Use
+  `DATESBETWEEN` with explicit bounds for fixed rolling windows.
+
 ## Rejected / out
 
 - **pbir-cli** (data-goblin PyPI) — proprietary Non-Commercial license + no linux

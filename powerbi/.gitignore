@@ -1,2 +1,5 @@
 # Power BI project (.pbip) — local, user-specific Desktop state, not source of truth
 **/.pbi/
+
+# Seat roster drops carry employee emails — stay off the repo (data/seat_roster/README.md)
+data/seat_roster/*.csv

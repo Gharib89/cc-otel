@@ -89,3 +89,7 @@ relationship dim_user_to_vw_UserBasicInfo
 	fromColumn: dim_user.user_email
 	toColumn: vw_UserBasicInfo.Email
 
+relationship dim_user_to_seat_roster
+	fromColumn: dim_user.user_email
+	toColumn: seat_roster.user_email
+

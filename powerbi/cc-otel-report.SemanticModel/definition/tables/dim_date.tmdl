@@ -4,6 +4,7 @@ table dim_date
 
 	column date_day
 		dataType: dateTime
+		isKey
 		formatString: Short Date
 		lineageTag: dddd719d-ab3f-4517-b733-e62165de55aa
 		summarizeBy: none
@@ -86,6 +87,26 @@ table dim_date
 		lineageTag: 6e0005e0-5f6f-45d6-a478-352961f2b5be
 		summarizeBy: none
 		sourceColumn: iso_week
+
+		annotation SummarizationSetBy = Automatic
+
+	/// ISO week bucket (Mon start) for the WAU trend — model-side calc column per #117, no migration.
+	column week_start = dim_date[date_day] - ( dim_date[iso_dow] - 1 )
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: ed644923-e46c-4893-99fe-652e71edeb83
+		summarizeBy: none
+		type: calculated
+
+		annotation SummarizationSetBy = Automatic
+
+	/// Week axis label; carries the week-start date because the ISO week number alone collides across years (#117).
+	column week_label = FORMAT ( dim_date[week_start], "d mmm yy" )
+		dataType: string
+		lineageTag: 62b98f5c-64a0-49a9-8965-8d4299015664
+		summarizeBy: none
+		sortByColumn: week_start
+		type: calculated
 
 		annotation SummarizationSetBy = Automatic
 
