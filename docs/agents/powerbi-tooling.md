@@ -10,12 +10,18 @@ Power BI Desktop step.
 
 | Tool | Role | Install |
 |---|---|---|
-| **pbi-cli** v3.11.1 (MinaSaad1, MIT) | The authoring engine: offline PBIR Report-layer edits (visuals, pages, filters, themes, bookmarks) with `--no-sync` | `pipx install pbi-cli-tool==3.11.1`, then `pbi-cli skills install` and keep only the 6 offline Report skills (see below) |
+| **pbi-cli** v3.11.1 (MinaSaad1, MIT) | The authoring engine: offline PBIR Report-layer edits (visuals, pages, filters, themes, bookmarks) with `--no-sync` | `uv tool install --prerelease=allow pbi-cli-tool==3.11.1`, then `pbi-cli skills install` and keep only the 6 offline Report skills (see below) |
 | **data-goblin `pbip` plugin** (GPL-3.0) | On-disk format reference: `pbip`, `pbir-format`, `tmdl` skills | Enabled in `.claude/settings.json`, marketplace pinned to tag `v26.25` |
 | **data-goblin `reports` plugin** (GPL-3.0) | Design canon: the `pbi-report-design` skill (3-30-300, layout, accessibility) | Same marketplace; on-demand (see "Design canon" below) |
 | **`pbir-gotchas` skill** (project-native) | 16 cc-otel PBIR format traps not covered by `pbir-format` | Lives in `.claude/skills/pbir-gotchas/`; source of truth is this repo |
 | **`.github/powerbi/validate.ps1`** | Local mirror of the `ci-powerbi` gate — the edit-then-validate loop | In-repo; downloads its own pinned validators on first run |
 | **@microsoft/powerbi-report-authoring-cli** v0.1.4 (MIT, preview) | Supplemental PBIR conformance check, **non-blocking** | Runs on demand via `npx`; under evaluation (see below) |
+
+**Install traps:** `--prerelease=allow` is **required** — 3.11.1 depends on
+`pythonnet==3.1.0rc0`, and without the flag `uv` silently resolves back to 3.10.10.
+And `pbi-cli --version` misreports **3.10.10** even on a correct 3.11.1 install
+(stale hardcoded version string upstream); trust `uv tool list` (shows `v3.11.1`),
+not `--version`.
 
 ## pbi-cli skills — keep offline, drop live
 
