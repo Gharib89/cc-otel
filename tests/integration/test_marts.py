@@ -212,9 +212,9 @@ def test_fact_session_daily_prompts_count_distinct_prompt_id(conn):
         user_email="a@x.com",
     )
     refresh(conn)
-    assert one(
-        conn, f"SELECT prompts FROM marts.fact_session_daily WHERE session_id='{S1}'"
-    ) == (1,)
+    assert one(conn, f"SELECT prompts FROM marts.fact_session_daily WHERE session_id='{S1}'") == (
+        1,
+    )
 
 
 def test_fact_session_daily_multi_email_collapses_and_flags(conn):

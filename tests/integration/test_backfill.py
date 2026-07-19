@@ -105,8 +105,7 @@ def test_metrics_rename_and_attr_derivation(bf):
     run_backfill(bf)
     assert one(
         bf,
-        "SELECT type_label, usage_window, source FROM raw.metrics "
-        f"WHERE session_id='{S_HIST}'",
+        f"SELECT type_label, usage_window, source FROM raw.metrics WHERE session_id='{S_HIST}'",
     ) == ("input", "5h", "user_temporary")
 
 
@@ -138,20 +137,36 @@ def test_events_attr_derivation(bf):
 
 def test_scope_excludes_copilot_metrics_and_tracing_events(bf):
     ins_poc_metric(
-        bf, ts=IN_WINDOW, metric_name="m", metric_type="sum", value=1,
-        session_id=S_HIST, scope_name="github.copilot",
+        bf,
+        ts=IN_WINDOW,
+        metric_name="m",
+        metric_type="sum",
+        value=1,
+        session_id=S_HIST,
+        scope_name="github.copilot",
     )
     ins_poc_metric(
-        bf, ts=IN_WINDOW, metric_name="m", metric_type="sum", value=1,
-        session_id=S_HIST, scope_name="com.anthropic.claude_code",
+        bf,
+        ts=IN_WINDOW,
+        metric_name="m",
+        metric_type="sum",
+        value=1,
+        session_id=S_HIST,
+        scope_name="com.anthropic.claude_code",
     )
     ins_poc_event(
-        bf, event_time=IN_WINDOW, event_name="gen_ai.request.attempt",
-        session_id=S_HIST, scope_name="com.anthropic.claude_code.tracing",
+        bf,
+        event_time=IN_WINDOW,
+        event_name="gen_ai.request.attempt",
+        session_id=S_HIST,
+        scope_name="com.anthropic.claude_code.tracing",
     )
     ins_poc_event(
-        bf, event_time=IN_WINDOW, event_name="api_request",
-        session_id=S_HIST, scope_name="com.anthropic.claude_code.events",
+        bf,
+        event_time=IN_WINDOW,
+        event_name="api_request",
+        session_id=S_HIST,
+        scope_name="com.anthropic.claude_code.events",
     )
     run_backfill(bf)
     assert one(bf, "SELECT count(*) FROM raw.metrics WHERE scope_name='github.copilot'") == (0,)
@@ -168,12 +183,20 @@ def test_dedup_drops_sessions_already_in_interim(bf):
     # POC rows for the same session (must be dropped) and a POC-only session (must land).
     for sess in (S_LIVE, S_HIST):
         ins_poc_metric(
-            bf, ts=IN_WINDOW, metric_name="m", metric_type="sum", value=1,
-            session_id=sess, scope_name="com.anthropic.claude_code",
+            bf,
+            ts=IN_WINDOW,
+            metric_name="m",
+            metric_type="sum",
+            value=1,
+            session_id=sess,
+            scope_name="com.anthropic.claude_code",
         )
         ins_poc_event(
-            bf, event_time=IN_WINDOW, event_name="api_request",
-            session_id=sess, scope_name="com.anthropic.claude_code.events",
+            bf,
+            event_time=IN_WINDOW,
+            event_name="api_request",
+            session_id=sess,
+            scope_name="com.anthropic.claude_code.events",
         )
     run_backfill(bf)
     assert one(bf, f"SELECT count(*) FROM raw.metrics WHERE session_id='{S_LIVE}'") == (0,)
@@ -185,14 +208,19 @@ def test_dedup_drops_sessions_already_in_interim(bf):
 
 def test_sum_cumulative_rows_retained(bf):
     ins_poc_metric(
-        bf, ts=IN_WINDOW, metric_name="claude_code.commit.count", metric_type="sum",
-        value=99, value_kind="sum_cumulative", session_id=S_HIST,
+        bf,
+        ts=IN_WINDOW,
+        metric_name="claude_code.commit.count",
+        metric_type="sum",
+        value=99,
+        value_kind="sum_cumulative",
+        session_id=S_HIST,
         scope_name="com.anthropic.claude_code",
     )
     run_backfill(bf)
-    assert one(
-        bf, f"SELECT value_kind FROM raw.metrics WHERE session_id='{S_HIST}'"
-    ) == ("sum_cumulative",)
+    assert one(bf, f"SELECT value_kind FROM raw.metrics WHERE session_id='{S_HIST}'") == (
+        "sum_cumulative",
+    )
 
 
 # Note: idempotency (the meta.processed_batches sentinel) is intentionally NOT
@@ -203,8 +231,13 @@ def test_sum_cumulative_rows_retained(bf):
 def test_window_excludes_out_of_range_rows(bf):
     for ts in ("2026-05-23T10:00:00Z", IN_WINDOW, "2026-07-17T10:00:00Z"):
         ins_poc_metric(
-            bf, ts=ts, metric_name="m", metric_type="sum", value=1,
-            session_id=S_HIST, scope_name="com.anthropic.claude_code",
+            bf,
+            ts=ts,
+            metric_name="m",
+            metric_type="sum",
+            value=1,
+            session_id=S_HIST,
+            scope_name="com.anthropic.claude_code",
         )
     run_backfill(bf)
     rows = bf.execute("SELECT ts::date::text FROM raw.metrics ORDER BY ts").fetchall()
