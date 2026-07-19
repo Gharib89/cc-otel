@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "nav_exec",
   "position": {
-    "x": 28,
-    "y": 62,
+    "x": 450,
+    "y": 18,
     "z": 50,
-    "height": 30,
-    "width": 160,
+    "height": 28,
+    "width": 125,
     "tabOrder": 5
   },
   "visual": {
@@ -45,7 +45,7 @@
             "tileShape": {
               "expr": {
                 "Literal": {
-                  "Value": "'pill'"
+                  "Value": "'rectangle'"
                 }
               }
             }
@@ -78,7 +78,7 @@
                 "color": {
                   "expr": {
                     "Literal": {
-                      "Value": "'#FFFFFF'"
+                      "Value": "'#0E2841'"
                     }
                   }
                 }
@@ -103,35 +103,10 @@
             "show": {
               "expr": {
                 "Literal": {
-                  "Value": "true"
+                  "Value": "false"
                 }
               }
             }
-          }
-        },
-        {
-          "properties": {
-            "fillColor": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#3A44D4'"
-                    }
-                  }
-                }
-              }
-            },
-            "transparency": {
-              "expr": {
-                "Literal": {
-                  "Value": "0D"
-                }
-              }
-            }
-          },
-          "selector": {
-            "id": "default"
           }
         }
       ],

@@ -1,13 +1,13 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "txt_title",
+  "name": "lbl_commits",
   "position": {
-    "x": 176,
-    "y": 16,
-    "z": 30,
-    "height": 38,
-    "width": 640,
-    "tabOrder": 3
+    "x": 672,
+    "y": 86,
+    "z": 140,
+    "height": 48,
+    "width": 137,
+    "tabOrder": 17
   },
   "visual": {
     "visualType": "textbox",
@@ -19,14 +19,15 @@
               {
                 "textRuns": [
                   {
-                    "value": "Claude Code Adoption — Executive Overview",
+                    "value": "COMMITS (28D)",
                     "textStyle": {
                       "fontWeight": "bold",
-                      "fontSize": "13pt",
-                      "color": "#0E2841"
+                      "fontSize": "8pt",
+                      "color": "#5A6473"
                     }
                   }
-                ]
+                ],
+                "horizontalTextAlignment": "center"
               }
             ]
           }
@@ -74,6 +75,19 @@
         }
       ],
       "visualHeader": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "dropShadow": [
         {
           "properties": {
             "show": {

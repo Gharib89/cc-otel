@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "crd_loc_d",
   "position": {
-    "x": 818,
-    "y": 224,
-    "z": 190,
-    "height": 24,
-    "width": 186,
-    "tabOrder": 20
+    "x": 962,
+    "y": 174,
+    "z": 162,
+    "height": 22,
+    "width": 137,
+    "tabOrder": 25
   },
   "visual": {
     "visualType": "card",
@@ -41,7 +41,7 @@
             "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "10D"
+                  "Value": "8D"
                 }
               }
             },
@@ -50,7 +50,7 @@
                 "color": {
                   "expr": {
                     "Literal": {
-                      "Value": "'#44566B'"
+                      "Value": "'#5A6473'"
                     }
                   }
                 }
@@ -114,6 +114,19 @@
         }
       ],
       "visualHeader": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "dropShadow": [
         {
           "properties": {
             "show": {

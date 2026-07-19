@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "nav_eco",
   "position": {
-    "x": 638,
-    "y": 62,
+    "x": 943,
+    "y": 18,
     "z": 90,
-    "height": 30,
-    "width": 105,
+    "height": 28,
+    "width": 80,
     "tabOrder": 9
   },
   "visual": {
@@ -45,7 +45,7 @@
             "tileShape": {
               "expr": {
                 "Literal": {
-                  "Value": "'pill'"
+                  "Value": "'rectangle'"
                 }
               }
             }
@@ -78,7 +78,7 @@
                 "color": {
                   "expr": {
                     "Literal": {
-                      "Value": "'#44566B'"
+                      "Value": "'#5A6473'"
                     }
                   }
                 }
@@ -107,31 +107,6 @@
                 }
               }
             }
-          }
-        },
-        {
-          "properties": {
-            "fillColor": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#3A44D4'"
-                    }
-                  }
-                }
-              }
-            },
-            "transparency": {
-              "expr": {
-                "Literal": {
-                  "Value": "0D"
-                }
-              }
-            }
-          },
-          "selector": {
-            "id": "default"
           }
         }
       ],

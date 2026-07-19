@@ -1,74 +1,35 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "crd_commits_d",
+  "name": "lbl_loc",
   "position": {
-    "x": 672,
-    "y": 174,
-    "z": 142,
-    "height": 22,
+    "x": 962,
+    "y": 86,
+    "z": 160,
+    "height": 48,
     "width": 137,
-    "tabOrder": 19
+    "tabOrder": 23
   },
   "visual": {
-    "visualType": "card",
-    "query": {
-      "queryState": {
-        "Values": {
-          "projections": [
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "_Measures"
-                    }
-                  },
-                  "Property": "Commits Δ Label"
-                }
-              },
-              "queryRef": "_Measures.Commits Δ Label",
-              "nativeQueryRef": "Commits Δ Label"
-            }
-          ]
-        }
-      }
-    },
-    "drillFilterOtherVisuals": true,
+    "visualType": "textbox",
     "objects": {
-      "labels": [
+      "general": [
         {
           "properties": {
-            "fontSize": {
-              "expr": {
-                "Literal": {
-                  "Value": "8D"
-                }
-              }
-            },
-            "color": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#5A6473'"
+            "paragraphs": [
+              {
+                "textRuns": [
+                  {
+                    "value": "LINES OF CODE (28D)",
+                    "textStyle": {
+                      "fontWeight": "bold",
+                      "fontSize": "8pt",
+                      "color": "#5A6473"
                     }
                   }
-                }
+                ],
+                "horizontalTextAlignment": "center"
               }
-            }
-          }
-        }
-      ],
-      "categoryLabels": [
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "false"
-                }
-              }
-            }
+            ]
           }
         }
       ]

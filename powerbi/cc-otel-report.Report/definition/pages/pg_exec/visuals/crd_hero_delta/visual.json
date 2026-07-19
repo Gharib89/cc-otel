@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "crd_hero_delta",
   "position": {
-    "x": 36,
-    "y": 138,
+    "x": 304,
+    "y": 184,
     "z": 130,
-    "height": 26,
-    "width": 244,
-    "tabOrder": 13
+    "height": 24,
+    "width": 340,
+    "tabOrder": 16
   },
   "visual": {
     "visualType": "card",
@@ -50,7 +50,7 @@
                 "color": {
                   "expr": {
                     "Literal": {
-                      "Value": "'#44566B'"
+                      "Value": "'#5A6473'"
                     }
                   }
                 }
@@ -114,6 +114,19 @@
         }
       ],
       "visualHeader": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "dropShadow": [
         {
           "properties": {
             "show": {
