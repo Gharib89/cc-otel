@@ -182,6 +182,371 @@ table _Measures
 		displayFolder: Ingest Health
 		lineageTag: a1c00007-0000-4000-8000-000000000028
 
+	/// #117 measure layer. All 28d windows end at the mart-refresh anchor MAX(dim_date[date_day]);
+	/// "Prior 28d" = days 29-56 back. Headline (Seat ROI) numerators are roster-matched only;
+	/// plain [Active Users] stays for non-ROI contexts.
+	measure 'Paid Seats' = COUNTROWS ( seat_roster )
+		formatString: #,##0
+		displayFolder: Seat ROI
+		lineageTag: b9365732-93a2-497e-b49d-0215e0fe0d5e
+
+	/// Roster-matched distinct actives, 28d window ending at the refresh anchor (#117: off-roster
+	/// identities excluded from the headline, surfaced on Data Health instead).
+	measure 'Active Users 28d' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			RETURN
+			    CALCULATE (
+			        DISTINCTCOUNT ( fact_session_daily[user_email] ),
+			        DATESBETWEEN ( dim_date[date_day], Anchor - 27, Anchor ),
+			        FILTER ( dim_user, NOT ISBLANK ( RELATED ( seat_roster[user_email] ) ) )
+			    )
+		formatString: #,##0
+		displayFolder: Seat ROI
+		lineageTag: cda3f313-b54b-4371-84fe-ca61eb65e058
+
+	measure 'Active Users Prior 28d' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			RETURN
+			    CALCULATE (
+			        DISTINCTCOUNT ( fact_session_daily[user_email] ),
+			        DATESBETWEEN ( dim_date[date_day], Anchor - 55, Anchor - 28 ),
+			        FILTER ( dim_user, NOT ISBLANK ( RELATED ( seat_roster[user_email] ) ) )
+			    )
+		isHidden
+		formatString: #,##0
+		displayFolder: Seat ROI\Support
+		lineageTag: 402883f1-9edf-442d-ba50-a3e8e88fb7cd
+
+	/// The seat-ROI hero KPI: 28d roster-matched actives / paid seats.
+	measure 'Seat Utilization %' = DIVIDE ( [Active Users 28d], [Paid Seats] )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Seat ROI
+		lineageTag: 5f25b658-d758-494e-bab7-cae193ccf083
+
+	/// Percentage-point delta vs the prior 28d window (#117: pp for ratio KPIs, % for count KPIs).
+	/// BLANK unless both windows have data — a delta against an empty prior window is meaningless.
+	measure 'Seat Utilization Δ' =
+			VAR Cur = [Seat Utilization %]
+			VAR Prior = DIVIDE ( [Active Users Prior 28d], [Paid Seats] )
+			RETURN
+			    IF ( NOT ISBLANK ( Cur ) && NOT ISBLANK ( Prior ), ( Cur - Prior ) * 100 )
+		formatString: +0.0 "pp";-0.0 "pp";0.0 "pp"
+		displayFolder: Seat ROI
+		lineageTag: 7d3fb1ad-3b35-4a81-ae17-112bd15b133a
+
+	/// Roster seats with no activity in the 28d window, incl. never-seen seats.
+	measure 'Idle Seats' = [Paid Seats] - [Active Users 28d]
+		formatString: #,##0
+		displayFolder: Seat ROI
+		lineageTag: bd969746-a64b-4bec-a015-c34ffbc8417c
+
+	/// Row-level flag for roster tables: TRUE when this seat had no activity in the 28d window.
+	measure 'Is Idle Seat' =
+			IF (
+			    NOT ISBLANK ( SELECTEDVALUE ( seat_roster[user_email] ) ),
+			    COALESCE ( [Active Users 28d], 0 ) = 0
+			)
+		displayFolder: Seat ROI
+		lineageTag: 2f215bf4-5930-4fc4-8ba5-8602e4c8a432
+
+	/// Distinct actives per calendar ISO week (all telemetry, #117 decision 5); the incomplete
+	/// current week returns BLANK so the trend never ends in a fake dip.
+	measure 'Weekly Active Users' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			VAR WeekEnd = MAX ( dim_date[week_start] ) + 6
+			RETURN
+			    IF ( WeekEnd <= Anchor, DISTINCTCOUNT ( fact_session_daily[user_email] ) )
+		formatString: #,##0
+		displayFolder: Seat ROI
+		lineageTag: a233816c-5328-45ad-8f54-a9d9399761fe
+
+	/// Cohorts (#117): growth-accounting semantics, leadership labels, roster-scoped, exhaustive
+	/// with [Idle Seats]: New + Retained + Reactivated + Idle = Paid Seats.
+	measure 'New Users 28d' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			VAR WindowStart = Anchor - 27
+			RETURN
+			    COUNTROWS (
+			        FILTER (
+			            dim_user,
+			            NOT ISBLANK ( RELATED ( seat_roster[user_email] ) )
+			                && dim_user[first_seen] >= WindowStart
+			                && dim_user[first_seen] < Anchor + 1
+			        )
+			    )
+		formatString: #,##0
+		displayFolder: Cohorts
+		lineageTag: 21e7484a-8148-4f90-aed1-3e48a518cba9
+
+	measure 'Retained Users 28d' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			VAR Roster =
+			    CALCULATETABLE (
+			        VALUES ( dim_user[user_email] ),
+			        FILTER ( dim_user, NOT ISBLANK ( RELATED ( seat_roster[user_email] ) ) )
+			    )
+			VAR Cur =
+			    CALCULATETABLE (
+			        VALUES ( fact_session_daily[user_email] ),
+			        DATESBETWEEN ( dim_date[date_day], Anchor - 27, Anchor )
+			    )
+			VAR Prior =
+			    CALCULATETABLE (
+			        VALUES ( fact_session_daily[user_email] ),
+			        DATESBETWEEN ( dim_date[date_day], Anchor - 55, Anchor - 28 )
+			    )
+			RETURN
+			    COUNTROWS ( INTERSECT ( INTERSECT ( Cur, Prior ), Roster ) )
+		formatString: #,##0
+		displayFolder: Cohorts
+		lineageTag: a8c1cffb-b47a-4ce8-9b3e-345296387e63
+
+	/// Framework term "resurrected": active now, idle the prior window, first_seen older than the window.
+	measure 'Reactivated Users 28d' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			VAR WindowStart = Anchor - 27
+			VAR Roster =
+			    CALCULATETABLE (
+			        VALUES ( dim_user[user_email] ),
+			        FILTER ( dim_user, NOT ISBLANK ( RELATED ( seat_roster[user_email] ) ) )
+			    )
+			VAR OldUsers =
+			    CALCULATETABLE (
+			        VALUES ( dim_user[user_email] ),
+			        FILTER ( dim_user, dim_user[first_seen] < WindowStart )
+			    )
+			VAR Cur =
+			    CALCULATETABLE (
+			        VALUES ( fact_session_daily[user_email] ),
+			        DATESBETWEEN ( dim_date[date_day], Anchor - 27, Anchor )
+			    )
+			VAR Prior =
+			    CALCULATETABLE (
+			        VALUES ( fact_session_daily[user_email] ),
+			        DATESBETWEEN ( dim_date[date_day], Anchor - 55, Anchor - 28 )
+			    )
+			RETURN
+			    COUNTROWS ( INTERSECT ( INTERSECT ( EXCEPT ( Cur, Prior ), Roster ), OldUsers ) )
+		formatString: #,##0
+		displayFolder: Cohorts
+		lineageTag: f1be67b7-e0b0-429e-bb70-d6026e48640b
+
+	/// Overview KPI delta triplets (#117): 28d / hidden Prior 28d / Δ (% change for counts).
+	measure 'Commits 28d' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			RETURN
+			    CALCULATE ( [Total Commits], DATESBETWEEN ( dim_date[date_day], Anchor - 27, Anchor ) )
+		formatString: #,##0
+		displayFolder: Overview KPIs
+		lineageTag: 84263533-5cfe-4a93-995c-f0cba6f2aaf4
+
+	measure 'Commits Prior 28d' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			RETURN
+			    CALCULATE ( [Total Commits], DATESBETWEEN ( dim_date[date_day], Anchor - 55, Anchor - 28 ) )
+		isHidden
+		formatString: #,##0
+		displayFolder: Overview KPIs\Support
+		lineageTag: cc7641a9-e948-471d-bc5b-101e9390f73e
+
+	measure 'Commits Δ' = DIVIDE ( [Commits 28d] - [Commits Prior 28d], [Commits Prior 28d] )
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: Overview KPIs
+		lineageTag: bcb9dfe6-9f39-4788-9a62-73ef9773093d
+
+	measure 'PRs 28d' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			RETURN
+			    CALCULATE ( [Total PRs], DATESBETWEEN ( dim_date[date_day], Anchor - 27, Anchor ) )
+		formatString: #,##0
+		displayFolder: Overview KPIs
+		lineageTag: e65451b2-67c7-4c4d-8de6-b1e3a2499235
+
+	measure 'PRs Prior 28d' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			RETURN
+			    CALCULATE ( [Total PRs], DATESBETWEEN ( dim_date[date_day], Anchor - 55, Anchor - 28 ) )
+		isHidden
+		formatString: #,##0
+		displayFolder: Overview KPIs\Support
+		lineageTag: e4ef796f-e436-474c-9d57-7537f59ffbda
+
+	measure 'PRs Δ' = DIVIDE ( [PRs 28d] - [PRs Prior 28d], [PRs Prior 28d] )
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: Overview KPIs
+		lineageTag: 39ab83fd-bee3-4e7a-b30c-f46bffd29f62
+
+	measure 'Lines of Code 28d' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			RETURN
+			    CALCULATE ( [Total Lines of Code], DATESBETWEEN ( dim_date[date_day], Anchor - 27, Anchor ) )
+		formatString: #,##0
+		displayFolder: Overview KPIs
+		lineageTag: ab354d98-8942-4160-bf05-4c2b92e6985b
+
+	measure 'Lines of Code Prior 28d' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			RETURN
+			    CALCULATE ( [Total Lines of Code], DATESBETWEEN ( dim_date[date_day], Anchor - 55, Anchor - 28 ) )
+		isHidden
+		formatString: #,##0
+		displayFolder: Overview KPIs\Support
+		lineageTag: 55b53aee-ca99-42a6-91a2-42eb77a22be1
+
+	measure 'Lines of Code Δ' = DIVIDE ( [Lines of Code 28d] - [Lines of Code Prior 28d], [Lines of Code Prior 28d] )
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: Overview KPIs
+		lineageTag: f61d1735-ecdc-4ad6-85b5-372579854154
+
+	measure 'Tool Acceptance Rate 28d' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			RETURN
+			    CALCULATE ( [Tool Acceptance Rate], DATESBETWEEN ( dim_date[date_day], Anchor - 27, Anchor ) )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Overview KPIs
+		lineageTag: e968d201-ba5c-412e-b46d-d17473dacd99
+
+	measure 'Tool Acceptance Rate Prior 28d' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			RETURN
+			    CALCULATE ( [Tool Acceptance Rate], DATESBETWEEN ( dim_date[date_day], Anchor - 55, Anchor - 28 ) )
+		isHidden
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Overview KPIs\Support
+		lineageTag: e5e40f42-c930-42ea-9d45-72334b12cdda
+
+	/// Ratio KPI, so the delta is percentage points (#117).
+	/// BLANK unless both windows have data — a delta against an empty prior window is meaningless.
+	measure 'Tool Acceptance Rate Δ' =
+			VAR Cur = [Tool Acceptance Rate 28d]
+			VAR Prior = [Tool Acceptance Rate Prior 28d]
+			RETURN
+			    IF ( NOT ISBLANK ( Cur ) && NOT ISBLANK ( Prior ), ( Cur - Prior ) * 100 )
+		formatString: +0.0 "pp";-0.0 "pp";0.0 "pp"
+		displayFolder: Overview KPIs
+		lineageTag: 16c383c8-71a0-47ed-9fad-43c923c3eabe
+
+	/// input + output only — cache tokens excluded from volume and mix (#117 decision 8).
+	measure 'Total Tokens' = [Total Input Tokens] + [Total Output Tokens]
+		formatString: #,##0
+		displayFolder: Usage & Capacity
+		lineageTag: 51f7073b-03db-45ee-b074-84b07fe59ab5
+
+	/// cache_read / all prompt-side tokens (#117 decision 7) — no precomputed rate exists in the marts.
+	measure 'Cache Hit Ratio' =
+			DIVIDE (
+			    SUM ( fact_api_usage[cache_read_tokens] ),
+			    SUM ( fact_api_usage[input_tokens] )
+			        + SUM ( fact_api_usage[cache_read_tokens] )
+			        + SUM ( fact_api_usage[cache_creation_tokens] )
+			)
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Usage & Capacity
+		lineageTag: f8d88307-ec8d-404f-a322-2e30a4736193
+
+	/// Mix share for model/effort visuals: this slice's tokens over everything selected.
+	measure 'Token Share' = DIVIDE ( [Total Tokens], CALCULATE ( [Total Tokens], ALLSELECTED () ) )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Usage & Capacity
+		lineageTag: 35a220a4-bc51-4995-a524-893794e3e0f5
+
+	/// Ecosystem pattern (#117), one pair per bridge: distinct bridge sessions / [Total Sessions],
+	/// and distinct users whose sessions used the capability.
+	measure 'Sessions Using Agents %' = DIVIDE ( DISTINCTCOUNT ( bridge_session_agent[session_id] ), [Total Sessions] )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Ecosystem
+		lineageTag: 6892ec47-1a29-495e-9156-45e46be4cf8e
+
+	measure 'Users Using Agents' =
+			CALCULATE (
+			    DISTINCTCOUNT ( fact_session[user_email] ),
+			    KEEPFILTERS ( TREATAS ( VALUES ( bridge_session_agent[session_id] ), fact_session[session_id] ) )
+			)
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: 6655c7df-d933-4068-a2cd-417338416c76
+
+	measure 'Sessions Using Skills %' = DIVIDE ( DISTINCTCOUNT ( bridge_session_skill[session_id] ), [Total Sessions] )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Ecosystem
+		lineageTag: 60ce71f5-fa8d-426d-a90a-5964b00d9dc2
+
+	measure 'Users Using Skills' =
+			CALCULATE (
+			    DISTINCTCOUNT ( fact_session[user_email] ),
+			    KEEPFILTERS ( TREATAS ( VALUES ( bridge_session_skill[session_id] ), fact_session[session_id] ) )
+			)
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: 52c5fda2-8fe1-48d0-9346-66d442c3b9fa
+
+	measure 'Sessions Using MCP %' = DIVIDE ( DISTINCTCOUNT ( bridge_session_mcp[session_id] ), [Total Sessions] )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Ecosystem
+		lineageTag: 50e9feac-a17b-4627-aa2a-34f20e25608a
+
+	measure 'Users Using MCP' =
+			CALCULATE (
+			    DISTINCTCOUNT ( fact_session[user_email] ),
+			    KEEPFILTERS ( TREATAS ( VALUES ( bridge_session_mcp[session_id] ), fact_session[session_id] ) )
+			)
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: 6b545f99-6015-4de5-a187-0d2dac007698
+
+	measure 'Sessions Using Hooks %' = DIVIDE ( DISTINCTCOUNT ( bridge_session_hook[session_id] ), [Total Sessions] )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Ecosystem
+		lineageTag: 60963357-d909-4212-a47b-d5f0b193c94e
+
+	measure 'Users Using Hooks' =
+			CALCULATE (
+			    DISTINCTCOUNT ( fact_session[user_email] ),
+			    KEEPFILTERS ( TREATAS ( VALUES ( bridge_session_hook[session_id] ), fact_session[session_id] ) )
+			)
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: 00255e33-7c8c-43ed-85bc-04bbb13e9835
+
+	measure 'Sessions Using Plugins %' = DIVIDE ( DISTINCTCOUNT ( bridge_session_plugin[session_id] ), [Total Sessions] )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Ecosystem
+		lineageTag: c0813387-b0a0-4ab3-935a-a1a5d8cda398
+
+	measure 'Users Using Plugins' =
+			CALCULATE (
+			    DISTINCTCOUNT ( fact_session[user_email] ),
+			    KEEPFILTERS ( TREATAS ( VALUES ( bridge_session_plugin[session_id] ), fact_session[session_id] ) )
+			)
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: a2a7369f-0c07-4f9e-8dc0-b716f8e8484e
+
+	/// Actives in the 28d window with no roster row — the headline exclusion, surfaced (#117 decision 2).
+	measure 'Off-Roster Active Users 28d' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			RETURN
+			    CALCULATE (
+			        DISTINCTCOUNT ( fact_session_daily[user_email] ),
+			        DATESBETWEEN ( dim_date[date_day], Anchor - 27, Anchor ),
+			        FILTER ( dim_user, ISBLANK ( RELATED ( seat_roster[user_email] ) ) )
+			    )
+		formatString: #,##0
+		displayFolder: Data Health
+		lineageTag: ad8752e9-4c15-4182-a3c2-a571460975f0
+
+	/// All-time: telemetry identities (incl. is_unknown) with no roster row.
+	measure 'Roster Mismatch Count' =
+			COUNTROWS ( FILTER ( ALL ( dim_user ), ISBLANK ( RELATED ( seat_roster[user_email] ) ) ) )
+		formatString: #,##0
+		displayFolder: Data Health
+		lineageTag: 7f426481-4c81-4b6a-9e31-c45412e896fd
+
+	measure 'DQ Findings' = COUNTROWS ( dq_finding )
+		formatString: #,##0
+		displayFolder: Data Health
+		lineageTag: 62b922f3-1e40-4a6a-8f0e-cabed5dbf026
+
 	column Value
 		dataType: int64
 		isHidden
