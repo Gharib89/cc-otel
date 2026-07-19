@@ -16,13 +16,16 @@ from typing import TYPE_CHECKING
 from .config import Settings
 
 if TYPE_CHECKING:
+    from azure.identity import DefaultAzureCredential
     from azure.storage.blob import ContainerClient
 
 logger = logging.getLogger("cc_otel_sink.blob")
 
 
 class BlobReservoir:
-    def __init__(self, container_client: ContainerClient, credential=None) -> None:
+    def __init__(
+        self, container_client: ContainerClient, credential: DefaultAzureCredential | None = None
+    ) -> None:
         self._container = container_client
         # Kept so close() can release the credential's own transport (managed
         # identity holds a token-cache HTTP session distinct from the client's).

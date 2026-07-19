@@ -61,4 +61,4 @@ def event_name(attributes: list[dict[str, Any]] | None, fallback: Any = None) ->
         name = fallback if isinstance(fallback, str) else None
     if isinstance(name, str):
         return name.removeprefix("claude_code.")
-    return name
+    return None
