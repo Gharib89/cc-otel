@@ -93,10 +93,27 @@ Single-context layout — `CONTEXT.md` + `docs/adr/` at the repo root. See `docs
 
 ### Shipping
 
-`ship` (issue → merge-ready PR, human merge gate) and `cloud-ship` (unattended
-routine fire) are **project-native** skills in `.claude/skills/` — their source
-of truth is this repo. Everything else under `.claude/skills/` is **vendored**
-from the operator's personal skills by `uv run python scripts/sync-skills.py`
-(run locally, commit the result; never edit vendored copies by hand). The
-scheduled routine that drives `cloud-ship` over the `ready-for-agent` frontier:
-`docs/agents/cloud-ship-routine.md`.
+`ship` (issue → merge-ready PR, human merge gate), `cloud-ship` (unattended
+routine fire), and `pbir-gotchas` (Power BI format traps) are **project-native**
+skills in `.claude/skills/` — their source of truth is this repo. Every other
+skill under `.claude/skills/` is **vendored** from the operator's personal skills
+by `uv run python scripts/sync-skills.py` (run locally, commit the result; never
+edit vendored copies by hand). The scheduled routine that drives `cloud-ship`
+over the `ready-for-agent` frontier: `docs/agents/cloud-ship-routine.md`.
+
+### Power BI authoring
+
+The report under `powerbi/` is authored **on disk** (PBIR/TMDL); on-disk PBIP is
+the source of truth and publishing is manual from Desktop. Route Power BI work:
+
+| Task | Reach for |
+|---|---|
+| Edit report visuals, pages, filters, themes, bookmarks (PBIR) | `pbi-cli` Report-layer commands with `--no-sync`; check the `pbir-gotchas` skill first |
+| PBIR / TMDL / pbip format reference | data-goblin `pbip` plugin (`pbip`, `pbir-format`, `tmdl`) |
+| Report design / layout / accessibility | data-goblin `reports:pbi-report-design` (invoke on demand) |
+| Semantic-model measures | edit TMDL on disk directly — no live connection |
+| Validate before commit | `pwsh .github/powerbi/validate.ps1` (mirrors the `ci-powerbi` gate) |
+
+Do **not** use the `pbir-cli` / `create-pbi-report` skills (rejected: license +
+no linux wheel) — author with `pbi-cli`. Full roster, setup, and the plugin set:
+`docs/agents/powerbi-tooling.md`.
