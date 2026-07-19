@@ -1,13 +1,13 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "eco_plugin",
   "position": {
     "x": 860,
     "y": 72,
-    "z": 7,
+    "z": 2000,
     "height": 300,
     "width": 404,
-    "tabOrder": 7
+    "tabOrder": 2000
   },
   "visual": {
     "visualType": "barChart",
@@ -52,7 +52,6 @@
         }
       }
     },
-    "drillFilterOtherVisuals": true,
     "visualContainerObjects": {
       "title": [
         {
@@ -67,6 +66,7 @@
           }
         }
       ]
-    }
+    },
+    "drillFilterOtherVisuals": true
   }
 }

@@ -219,7 +219,7 @@ table _Measures
 
 	/// The seat-ROI hero KPI: 28d roster-matched actives / paid seats.
 	measure 'Seat Utilization %' = DIVIDE ( [Active Users 28d], [Paid Seats] )
-		formatString: 0.0%;-0.0%;0.0%
+		formatString: 0%;-0%;0%
 		displayFolder: Seat ROI
 		lineageTag: 5f25b658-d758-494e-bab7-cae193ccf083
 

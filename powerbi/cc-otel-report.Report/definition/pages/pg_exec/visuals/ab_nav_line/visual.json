@@ -1,16 +1,16 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "bg_header",
+  "name": "ab_nav_line",
   "position": {
-    "x": 0,
-    "y": 0,
-    "z": 10,
-    "height": 104,
-    "width": 1280,
-    "tabOrder": 1
+    "x": 310,
+    "y": 46,
+    "z": 10000,
+    "height": 3,
+    "width": 140,
+    "tabOrder": 8000
   },
   "visual": {
-    "visualType": "actionButton",
+    "visualType": "shape",
     "objects": {
       "shape": [
         {
@@ -25,34 +25,7 @@
           }
         }
       ],
-      "icon": [
-        {
-          "properties": {
-            "shapeType": {
-              "expr": {
-                "Literal": {
-                  "Value": "'blank'"
-                }
-              }
-            }
-          },
-          "selector": {
-            "id": "default"
-          }
-        },
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "false"
-                }
-              }
-            }
-          }
-        }
-      ],
-      "text": [
+      "fill": [
         {
           "properties": {
             "show": {
@@ -77,8 +50,10 @@
             }
           }
         }
-      ],
-      "fill": [
+      ]
+    },
+    "visualContainerObjects": {
+      "background": [
         {
           "properties": {
             "show": {
@@ -87,17 +62,13 @@
                   "Value": "true"
                 }
               }
-            }
-          }
-        },
-        {
-          "properties": {
-            "fillColor": {
+            },
+            "color": {
               "solid": {
                 "color": {
                   "expr": {
                     "Literal": {
-                      "Value": "'#FFFFFF'"
+                      "Value": "'#0198CB'"
                     }
                   }
                 }
@@ -110,28 +81,10 @@
                 }
               }
             }
-          },
-          "selector": {
-            "id": "default"
-          }
-        }
-      ]
-    },
-    "visualContainerObjects": {
-      "title": [
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "false"
-                }
-              }
-            }
           }
         }
       ],
-      "background": [
+      "title": [
         {
           "properties": {
             "show": {

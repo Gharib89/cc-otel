@@ -15,11 +15,11 @@
   "background": "#FFFFFF",
   "backgroundLight": "#F3F4F6",
   "backgroundNeutral": "#E8E8E8",
-  "tableAccent": "#171B8E",
+  "tableAccent": "#00197F",
   "good": "#6E9A21",
   "neutral": "#A17E00",
   "bad": "#B61E24",
-  "maximum": "#171B8E",
+  "maximum": "#00197F",
   "center": "#A17E00",
   "minimum": "#E8E8E8",
   "hyperlink": "#2A2D7F",
@@ -28,7 +28,138 @@
       "*": {
         "*": [
           {
-            "fontFamily": "Century Gothic"
+            "fontFamily": "Segoe UI"
+          }
+        ],
+        "title": [
+          {
+            "titleWrap": true,
+            "fontColor": {
+              "solid": {
+                "color": "#0E2841"
+              }
+            },
+            "fontFamily": "Segoe UI Semibold"
+          }
+        ],
+        "background": [
+          {
+            "show": false
+          }
+        ],
+        "dropShadow": [
+          {
+            "show": false
+          }
+        ]
+      }
+    },
+    "lineChart": {
+      "*": {
+        "title": [
+          {
+            "show": true,
+            "alignment": "center",
+            "background": {
+              "solid": {
+                "color": "#00197F"
+              }
+            },
+            "fontColor": {
+              "solid": {
+                "color": "#FFFFFF"
+              }
+            },
+            "fontSize": 10,
+            "fontFamily": "Segoe UI Semibold"
+          }
+        ]
+      }
+    },
+    "clusteredBarChart": {
+      "*": {
+        "title": [
+          {
+            "show": true,
+            "alignment": "center",
+            "background": {
+              "solid": {
+                "color": "#00197F"
+              }
+            },
+            "fontColor": {
+              "solid": {
+                "color": "#FFFFFF"
+              }
+            },
+            "fontSize": 10,
+            "fontFamily": "Segoe UI Semibold"
+          }
+        ]
+      }
+    },
+    "barChart": {
+      "*": {
+        "title": [
+          {
+            "show": true,
+            "alignment": "center",
+            "background": {
+              "solid": {
+                "color": "#00197F"
+              }
+            },
+            "fontColor": {
+              "solid": {
+                "color": "#FFFFFF"
+              }
+            },
+            "fontSize": 10,
+            "fontFamily": "Segoe UI Semibold"
+          }
+        ]
+      }
+    },
+    "columnChart": {
+      "*": {
+        "title": [
+          {
+            "show": true,
+            "alignment": "center",
+            "background": {
+              "solid": {
+                "color": "#00197F"
+              }
+            },
+            "fontColor": {
+              "solid": {
+                "color": "#FFFFFF"
+              }
+            },
+            "fontSize": 10,
+            "fontFamily": "Segoe UI Semibold"
+          }
+        ]
+      }
+    },
+    "clusteredColumnChart": {
+      "*": {
+        "title": [
+          {
+            "show": true,
+            "alignment": "center",
+            "background": {
+              "solid": {
+                "color": "#00197F"
+              }
+            },
+            "fontColor": {
+              "solid": {
+                "color": "#FFFFFF"
+              }
+            },
+            "fontSize": 10,
+            "fontFamily": "Segoe UI Semibold"
           }
         ]
       }
@@ -36,19 +167,19 @@
   },
   "textClasses": {
     "label": {
-      "fontFace": "Century Gothic",
+      "fontFace": "Segoe UI",
       "color": "#0E2841"
     },
     "callout": {
-      "fontFace": "Century Gothic",
-      "color": "#171B8E"
+      "fontFace": "Segoe UI Semibold",
+      "color": "#0E2841"
     },
     "title": {
-      "fontFace": "Century Gothic",
-      "color": "#171B8E"
+      "fontFace": "Segoe UI Semibold",
+      "color": "#0E2841"
     },
     "header": {
-      "fontFace": "Century Gothic",
+      "fontFace": "Segoe UI Semibold",
       "color": "#0E2841"
     }
   }

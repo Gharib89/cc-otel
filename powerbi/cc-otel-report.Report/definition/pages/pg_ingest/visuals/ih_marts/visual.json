@@ -1,13 +1,13 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "ih_marts",
   "position": {
     "x": 652,
     "y": 188,
-    "z": 11,
+    "z": 5000,
     "height": 516,
     "width": 612,
-    "tabOrder": 11
+    "tabOrder": 5000
   },
   "visual": {
     "visualType": "tableEx",
@@ -61,7 +61,6 @@
         }
       }
     },
-    "drillFilterOtherVisuals": true,
     "visualContainerObjects": {
       "title": [
         {
@@ -76,6 +75,7 @@
           }
         }
       ]
-    }
+    },
+    "drillFilterOtherVisuals": true
   }
 }

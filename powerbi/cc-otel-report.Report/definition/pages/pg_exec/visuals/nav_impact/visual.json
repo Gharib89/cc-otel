@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "nav_impact",
   "position": {
-    "x": 388,
-    "y": 62,
-    "z": 70,
-    "height": 30,
-    "width": 80,
-    "tabOrder": 7
+    "x": 673,
+    "y": 18,
+    "z": 6000,
+    "height": 28,
+    "width": 75,
+    "tabOrder": 4000
   },
   "visual": {
     "visualType": "actionButton",
@@ -45,7 +45,7 @@
             "tileShape": {
               "expr": {
                 "Literal": {
-                  "Value": "'pill'"
+                  "Value": "'rectangle'"
                 }
               }
             }
@@ -78,7 +78,7 @@
                 "color": {
                   "expr": {
                     "Literal": {
-                      "Value": "'#44566B'"
+                      "Value": "'#5A6473'"
                     }
                   }
                 }
@@ -87,7 +87,14 @@
             "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "10D"
+                  "Value": "12D"
+                }
+              }
+            },
+            "fontFamily": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Segoe UI Semibold'"
                 }
               }
             }
@@ -107,31 +114,6 @@
                 }
               }
             }
-          }
-        },
-        {
-          "properties": {
-            "fillColor": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#3A44D4'"
-                    }
-                  }
-                }
-              }
-            },
-            "transparency": {
-              "expr": {
-                "Literal": {
-                  "Value": "0D"
-                }
-              }
-            }
-          },
-          "selector": {
-            "id": "default"
           }
         }
       ],

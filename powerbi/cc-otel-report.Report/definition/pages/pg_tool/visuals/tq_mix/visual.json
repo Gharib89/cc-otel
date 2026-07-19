@@ -1,36 +1,18 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "tq_mix",
   "position": {
     "x": 652,
     "y": 188,
-    "z": 5,
+    "z": 2000,
     "height": 516,
     "width": 612,
-    "tabOrder": 5
+    "tabOrder": 2000
   },
   "visual": {
     "visualType": "donutChart",
     "query": {
       "queryState": {
-        "Y": {
-          "projections": [
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "fact_edit_decision"
-                    }
-                  },
-                  "Property": "decision_count"
-                }
-              },
-              "queryRef": "fact_edit_decision.decision_count",
-              "nativeQueryRef": "decision_count"
-            }
-          ]
-        },
         "Category": {
           "projections": [
             {
@@ -49,10 +31,27 @@
               "active": true
             }
           ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_edit_decision"
+                    }
+                  },
+                  "Property": "decision_count"
+                }
+              },
+              "queryRef": "fact_edit_decision.decision_count",
+              "nativeQueryRef": "decision_count"
+            }
+          ]
         }
       }
     },
-    "drillFilterOtherVisuals": true,
     "visualContainerObjects": {
       "title": [
         {
@@ -67,6 +66,7 @@
           }
         }
       ]
-    }
+    },
+    "drillFilterOtherVisuals": true
   }
 }

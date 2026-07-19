@@ -1,73 +1,35 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "crd_hero",
+  "name": "lbl_loc",
   "position": {
-    "x": 28,
-    "y": 65,
-    "z": 11000,
-    "height": 101,
-    "width": 260,
-    "tabOrder": 11000
+    "x": 962,
+    "y": 76,
+    "z": 20000,
+    "height": 36,
+    "width": 137,
+    "tabOrder": 20000
   },
   "visual": {
-    "visualType": "card",
-    "query": {
-      "queryState": {
-        "Values": {
-          "projections": [
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "_Measures"
-                    }
-                  },
-                  "Property": "Seat Utilization %"
-                }
-              },
-              "queryRef": "_Measures.Seat Utilization %",
-              "nativeQueryRef": "Seat Utilization %"
-            }
-          ]
-        }
-      }
-    },
+    "visualType": "textbox",
     "objects": {
-      "labels": [
+      "general": [
         {
           "properties": {
-            "fontSize": {
-              "expr": {
-                "Literal": {
-                  "Value": "54D"
-                }
-              }
-            },
-            "color": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#0198CB'"
+            "paragraphs": [
+              {
+                "textRuns": [
+                  {
+                    "value": "LINES OF CODE (28D)",
+                    "textStyle": {
+                      "fontWeight": "bold",
+                      "fontSize": "8pt",
+                      "color": "#5A6473"
                     }
                   }
-                }
+                ],
+                "horizontalTextAlignment": "center"
               }
-            }
-          }
-        }
-      ],
-      "categoryLabels": [
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "false"
-                }
-              }
-            }
+            ]
           }
         }
       ]
@@ -138,7 +100,6 @@
           }
         }
       ]
-    },
-    "drillFilterOtherVisuals": true
+    }
   }
 }

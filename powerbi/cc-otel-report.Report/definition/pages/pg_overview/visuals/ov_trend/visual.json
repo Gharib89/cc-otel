@@ -1,13 +1,13 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "ov_trend",
   "position": {
     "x": 16,
     "y": 188,
-    "z": 16,
+    "z": 6000,
     "height": 340,
     "width": 812,
-    "tabOrder": 16
+    "tabOrder": 6000
   },
   "visual": {
     "visualType": "lineChart",
@@ -52,7 +52,6 @@
         }
       }
     },
-    "drillFilterOtherVisuals": true,
     "visualContainerObjects": {
       "title": [
         {
@@ -67,6 +66,7 @@
           }
         }
       ]
-    }
+    },
+    "drillFilterOtherVisuals": true
   }
 }

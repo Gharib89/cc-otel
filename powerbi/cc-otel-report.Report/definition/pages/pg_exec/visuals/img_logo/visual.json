@@ -3,11 +3,11 @@
   "name": "img_logo",
   "position": {
     "x": 28,
-    "y": 20,
-    "z": 20,
+    "y": 16,
+    "z": 2000,
     "height": 32,
     "width": 128,
-    "tabOrder": 2
+    "tabOrder": 0
   },
   "visual": {
     "visualType": "image",

@@ -1,13 +1,13 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "sd_plugin",
   "position": {
     "x": 512,
     "y": 504,
-    "z": 9,
+    "z": 3000,
     "height": 200,
     "width": 244,
-    "tabOrder": 9
+    "tabOrder": 3000
   },
   "visual": {
     "visualType": "tableEx",
@@ -47,7 +47,6 @@
         }
       }
     },
-    "drillFilterOtherVisuals": true,
     "visualContainerObjects": {
       "title": [
         {
@@ -62,6 +61,7 @@
           }
         }
       ]
-    }
+    },
+    "drillFilterOtherVisuals": true
   }
 }
