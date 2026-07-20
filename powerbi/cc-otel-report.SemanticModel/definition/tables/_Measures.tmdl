@@ -627,6 +627,32 @@ table _Measures
 		displayFolder: Tool Quality
 		lineageTag: 46f2bd60-c99d-4f35-a572-db29e80cb5e4
 
+	/// Ecosystem depth-bar values (#123): raw usage intensity per bridge entity, summed over the session-x-name grain.
+	measure 'Skill Activations' = SUM ( bridge_session_skill[activations] )
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: e1c2a3b4-0001-4a11-9c01-aa0000000001
+
+	measure 'MCP Calls' = SUM ( bridge_session_mcp[tool_calls] )
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: e1c2a3b4-0002-4a11-9c01-aa0000000002
+
+	measure 'Subagent Invocations' = SUM ( bridge_session_agent[invocations] )
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: e1c2a3b4-0003-4a11-9c01-aa0000000003
+
+	measure 'Hook Executions' = SUM ( bridge_session_hook[executions] )
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: e1c2a3b4-0004-4a11-9c01-aa0000000004
+
+	measure 'Plugin Loads' = SUM ( bridge_session_plugin[load_count] )
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: e1c2a3b4-0005-4a11-9c01-aa0000000005
+
 	column Value
 		dataType: int64
 		isHidden
