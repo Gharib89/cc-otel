@@ -78,7 +78,16 @@ fi
 git branch -D "$branch" >&2 2>/dev/null || true
 
 if [ "$(git branch --show-current)" = "main" ]; then
-  git pull --ff-only >&2 && main_updated=true
+  # The shared main checkout races a concurrent git status (core.fscache takes
+  # index.lock to write back the stat cache), which can leave a transient lock
+  # that fails the ff-pull. The racing status finishes in <1s, so retry with
+  # backoff clears it without touching the filesystem. Never auto-delete the
+  # lock — a 0-byte lock is only safe to remove with no git process running,
+  # which this script can't prove. Exhausted retries degrade to main_updated:false.
+  for attempt in 1 2 3; do
+    git pull --ff-only >&2 && main_updated=true && break
+    [ "$attempt" -lt 3 ] && sleep "$attempt"
+  done
 else
   echo "main checkout is not on main — skipping pull" >&2
 fi
