@@ -7,12 +7,13 @@ table _Measures
 		displayFolder: Thresholds
 		lineageTag: ab03459a-9aaa-4ecf-b90c-81c378d024fc
 
-	measure 'Freshness Amber Hours' = 8
+	/// Fresh under 24h (daily refresh); Delayed 24h-7d; Stale beyond. Thresholds in DAX, not marts (#9/#27).
+	measure 'Freshness Amber Hours' = 24
 		formatString: 0
 		displayFolder: Thresholds
 		lineageTag: 54b2239c-b99d-45ef-bae6-41bcdef482b4
 
-	measure 'Freshness Red Hours' = 24
+	measure 'Freshness Red Hours' = 168
 		formatString: 0
 		displayFolder: Thresholds
 		lineageTag: b6055541-5d85-4a6a-b268-5f526649c39f
@@ -564,10 +565,20 @@ table _Measures
 		lineageTag: 437fa2bc-e7ee-4ba3-ab8b-4499e3ed9cfc
 
 	/// Report-display helper: header data-freshness badge text.
+	/// Self-explanatory display label (Fresh/Delayed/Stale) — the internal status keys (Fresh/Amber/Red)
+	/// stay untouched so [Freshness Color] keeps mapping the pill colour.
 	measure 'Data Freshness Badge' =
 			VAR H = [Hours Since Last Signal]
+			VAR Label =
+			    SWITCH (
+			        [Data Freshness Status],
+			        "Fresh", "Fresh",
+			        "Amber", "Delayed",
+			        "Red", "Stale",
+			        [Data Freshness Status]
+			    )
 			RETURN
-			    IF ( ISBLANK ( H ), "No data", [Data Freshness Status] & " · " & FORMAT ( H, "#,##0" ) & "h ago" )
+			    IF ( ISBLANK ( H ), "No data", Label & " · " & FORMAT ( H, "#,##0" ) & "h ago" )
 		displayFolder: Ingest Health
 		lineageTag: 5fee9ee6-e3d6-4277-8492-0091cbbbd88a
 
