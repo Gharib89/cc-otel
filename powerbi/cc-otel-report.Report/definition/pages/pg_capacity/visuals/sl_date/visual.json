@@ -1,19 +1,19 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "uc_trend",
+  "name": "sl_date",
   "position": {
-    "x": 16,
-    "y": 188,
-    "z": 4000,
-    "height": 516,
-    "width": 620,
-    "tabOrder": 4000
+    "x": 788,
+    "y": 64,
+    "z": 200,
+    "height": 76,
+    "width": 150,
+    "tabOrder": 788
   },
   "visual": {
-    "visualType": "lineChart",
+    "visualType": "slicer",
     "query": {
       "queryState": {
-        "Category": {
+        "Values": {
           "projections": [
             {
               "field": {
@@ -31,35 +31,48 @@
               "active": true
             }
           ]
-        },
-        "Y": {
-          "projections": [
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "_Measures"
-                    }
-                  },
-                  "Property": "Utilization Intensity"
-                }
-              },
-              "queryRef": "_Measures.Utilization Intensity",
-              "nativeQueryRef": "Utilization Intensity"
-            }
-          ]
         }
       }
     },
-    "visualContainerObjects": {
-      "title": [
+    "objects": {
+      "data": [
         {
           "properties": {
+            "mode": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Dropdown'"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "header": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'Utilization intensity trend'"
+                  "Value": "'Date'"
+                }
+              }
+            },
+            "fontColor": {
+              "solid": {
+                "color": {
+                  "expr": {
+                    "Literal": {
+                      "Value": "'#5A6473'"
+                    }
+                  }
                 }
               }
             }

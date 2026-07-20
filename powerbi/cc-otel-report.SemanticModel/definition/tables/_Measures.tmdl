@@ -77,22 +77,24 @@ table _Measures
 		displayFolder: Utilization
 		lineageTag: d69a9564-55ce-4b96-b926-f5ec8ea4c795
 
-	/// Σ segment end_pct ÷ distinct window instances. Reset-split segments sum and may exceed 100% — reported as-is (#9).
-	/// A window instance is user × window_type × window_end (window_end alone is shared across users), so count
-	/// the distinct triple, not DISTINCTCOUNT(window_end) which would collapse instances and inflate the metric.
-	/// v1 does not yet restrict to windows fully inside the report period ("full windows"); refine at report level.
+	/// Mean closing utilization across window instances. end_pct/peak_pct are stored 0-100 (percent points), so
+	/// collapse each window's reset-split segments to its closing reading — MAX(end_pct); segments are cumulative
+	/// snapshots within the window, so their sum grossly overstates and the old Σ-of-segments produced 1000%+ values.
+	/// A window instance is user × window_type × window_end. Divide by 100 to a ratio for the 0.0% format.
+	/// (Corrects the #117/#9 "sum segments, report >100% as-is" stance — impossible values, per live review.)
 	measure 'Utilization Intensity' =
-			DIVIDE (
-			    SUM ( fact_usage_window[end_pct] ),
-			    COUNTROWS (
+			VAR PerWindow =
+			    ADDCOLUMNS (
 			        SUMMARIZE (
 			            fact_usage_window,
 			            fact_usage_window[user_email],
 			            fact_usage_window[window_type],
 			            fact_usage_window[window_end]
-			        )
+			        ),
+			        "@CloseEndPct", CALCULATE ( MAX ( fact_usage_window[end_pct] ) )
 			    )
-			)
+			RETURN
+			    DIVIDE ( AVERAGEX ( PerWindow, [@CloseEndPct] ), 100 )
 		formatString: 0.0%;-0.0%;0.0%
 		displayFolder: Utilization
 		lineageTag: 81068fa0-8934-4b90-aa99-797baea5d229
