@@ -32,22 +32,27 @@
             }
           ]
         },
-        "Y": {
+        "Series": {
           "projections": [
             {
               "field": {
-                "Measure": {
+                "Column": {
                   "Expression": {
                     "SourceRef": {
-                      "Entity": "_Measures"
+                      "Entity": "fact_usage_window"
                     }
                   },
-                  "Property": "Limit-Hit Rate"
+                  "Property": "window_type"
                 }
               },
-              "queryRef": "_Measures.Limit-Hit Rate",
-              "nativeQueryRef": "Limit-Hit Rate"
-            },
+              "queryRef": "fact_usage_window.window_type",
+              "nativeQueryRef": "window_type",
+              "active": true
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
             {
               "field": {
                 "Measure": {
@@ -176,7 +181,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'CAPACITY PRESSURE BY WEEK'"
+                  "Value": "'UTILIZATION INTENSITY BY WEEK (5H vs 7D)'"
                 }
               }
             },
@@ -293,5 +298,69 @@
       ]
     },
     "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "flt_window_5h7d",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "fact_usage_window"
+              }
+            },
+            "Property": "window_type"
+          }
+        },
+        "type": "Categorical",
+        "filter": {
+          "Version": 2,
+          "From": [
+            {
+              "Name": "f",
+              "Entity": "fact_usage_window",
+              "Type": 0
+            }
+          ],
+          "Where": [
+            {
+              "Condition": {
+                "In": {
+                  "Expressions": [
+                    {
+                      "Column": {
+                        "Expression": {
+                          "SourceRef": {
+                            "Source": "f"
+                          }
+                        },
+                        "Property": "window_type"
+                      }
+                    }
+                  ],
+                  "Values": [
+                    [
+                      {
+                        "Literal": {
+                          "Value": "'5h'"
+                        }
+                      }
+                    ],
+                    [
+                      {
+                        "Literal": {
+                          "Value": "'7d'"
+                        }
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
   }
 }
