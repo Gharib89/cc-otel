@@ -162,6 +162,18 @@ table _Measures
 		displayFolder: Adoption
 		lineageTag: a1c00005-0000-4000-8000-000000000028
 
+	/// Mean per active day of time the user was actively prompting (active_time.user), in hours.
+	measure 'Avg Active User Hours per Day' = DIVIDE(SUM(fact_session_daily[active_time_user_s]), [Active Days]) / 3600
+		formatString: #,##0.0 "h"
+		displayFolder: Adoption
+		lineageTag: a1c00030-0000-4000-8000-000000000028
+
+	/// Mean per active day of time the CLI was running (active_time.cli), in hours. Distinct from user-active time.
+	measure 'Avg Active CLI Hours per Day' = DIVIDE(SUM(fact_session_daily[active_time_cli_s]), [Active Days]) / 3600
+		formatString: #,##0.0 "h"
+		displayFolder: Adoption
+		lineageTag: a1c00031-0000-4000-8000-000000000028
+
 	/// Drives the Overview freshness KPI card background (#28): green/amber/red per [Data Freshness Status],
 	/// grey for no data. Hex values mirror theme.json good/neutral/bad + tertiary-grey.
 	measure 'Freshness Color' =
@@ -273,7 +285,7 @@ table _Measures
 			                && dim_user[first_seen] >= WindowStart
 			                && dim_user[first_seen] < Anchor + 1
 			        )
-			    )
+			    ) + 0
 		formatString: #,##0
 		displayFolder: Cohorts
 		lineageTag: 21e7484a-8148-4f90-aed1-3e48a518cba9
@@ -326,7 +338,7 @@ table _Measures
 			        DATESBETWEEN ( dim_date[date_day], Anchor - 55, Anchor - 28 )
 			    )
 			RETURN
-			    COUNTROWS ( INTERSECT ( INTERSECT ( EXCEPT ( Cur, Prior ), Roster ), OldUsers ) )
+			    COUNTROWS ( INTERSECT ( INTERSECT ( EXCEPT ( Cur, Prior ), Roster ), OldUsers ) ) + 0
 		formatString: #,##0
 		displayFolder: Cohorts
 		lineageTag: f1be67b7-e0b0-429e-bb70-d6026e48640b
