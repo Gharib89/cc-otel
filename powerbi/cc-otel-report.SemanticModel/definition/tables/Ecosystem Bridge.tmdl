@@ -1,0 +1,16 @@
+/// Disconnected 5-row helper for the ecosystem-mix bar charts (#125): clusteredBarChart requires a
+/// Category role, and the five bridge measures live on separate tables — this gives them one axis.
+/// No relationships by design; [Ecosystem Intensity] switches on the selected row.
+table 'Ecosystem Bridge'
+	lineageTag: d1250100-0000-4000-8000-000000000125
+
+	column Bridge
+		dataType: string
+		lineageTag: d1250101-0000-4000-8000-000000000125
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Bridge]
+
+	partition 'Ecosystem Bridge' = calculated
+		mode: import
+		source = DATATABLE ( "Bridge", STRING, { { "Skills" }, { "MCP" }, { "Subagents" }, { "Hooks" }, { "Plugins" } } )
