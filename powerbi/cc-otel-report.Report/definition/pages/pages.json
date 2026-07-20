@@ -6,11 +6,11 @@
     "pg_impact",
     "pg_capacity",
     "pg_eco",
+    "pg_health",
     "pg_overview",
     "pg_users",
     "pg_session",
-    "pg_tool",
-    "pg_ingest"
+    "pg_tool"
   ],
   "activePageName": "pg_exec"
 }
