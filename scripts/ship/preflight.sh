@@ -19,7 +19,8 @@ emit() { # emit <true|false> <reason>
 
 state=$(gh issue view "$n" --json state --jq .state) \
   || { emit false "gh issue view $n failed"; exit 2; }
-assignees=$(gh issue view "$n" --json assignees --jq '[.assignees[].login]')
+assignees=$(gh issue view "$n" --json assignees --jq '[.assignees[].login]') \
+  || { emit false "gh issue view $n --json assignees failed"; exit 2; }
 
 if [ "$state" != "OPEN" ]; then
   emit false "issue #$n is $state"
@@ -28,7 +29,8 @@ fi
 
 # A non-closed PR on a `…-<issue>` branch means in flight (OPEN) or shipped (MERGED).
 pr=$(gh pr list --state all --json number,state,headRefName \
-  --jq "[.[] | select(.headRefName | test(\"-$n\$\")) | select(.state != \"CLOSED\")] | first | if . then \"PR #\(.number) (\(.state)) on \(.headRefName)\" else \"\" end")
+  --jq "[.[] | select(.headRefName | test(\"-$n\$\")) | select(.state != \"CLOSED\")] | first | if . then \"PR #\(.number) (\(.state)) on \(.headRefName)\" else \"\" end") \
+  || { emit false "gh pr list failed"; exit 2; }
 if [ -n "$pr" ]; then
   emit false "$pr already exists"
   exit 1

@@ -3,8 +3,8 @@
 # so its checks sit pending forever — never wait on it), then block until every
 # check completes.
 #
-# stdout: {"status": "green" | "no-checks" | "conflict" | "checks-failed" | "timeout",
-#          "failing": [names]}
+# stdout: {"status": "green" | "no-checks" | "conflict" | "checks-failed"
+#                    | "timeout" | "tooling", "failing": [names]}
 # exit:   0 green/no-checks · 1 conflict or a check failed · 2 timeout/tooling
 #
 # Usage: scripts/ship/ci-wait.sh <pr-number> [--timeout <seconds>]

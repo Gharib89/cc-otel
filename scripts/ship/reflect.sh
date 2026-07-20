@@ -11,5 +11,6 @@ set -euo pipefail
 n=${1:?usage: scripts/ship/reflect.sh <issue> <pr-url>}
 url=${2:?usage: scripts/ship/reflect.sh <issue> <pr-url>}
 
-gh issue comment "$n" --body "PR: $url" >/dev/null
+gh issue comment "$n" --body "PR: $url" >/dev/null \
+  || { printf '{"issue":%s,"error":"gh issue comment failed"}\n' "$n"; exit 2; }
 printf '{"issue":%s,"reflected":"%s"}\n' "$n" "$url"

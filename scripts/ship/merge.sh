@@ -17,8 +17,12 @@ issue=${2:?usage: scripts/ship/merge.sh <pr> <issue> [--worktree <path>]}
 wt=""
 [ "${3:-}" = "--worktree" ] && wt=${4:?--worktree needs a path}
 
-root=$(git rev-parse --show-toplevel)
-cd "$root"
+# NB: intentionally no `set -e` — the cleanup steps below use explicit
+# `|| finish 1` / `|| true`, and `git ls-remote --exit-code` returning non-zero
+# is a *success* signal (branch gone); `-e` would abort the ritual mid-clean.
+# The one command whose failure must halt is the cd, guarded here.
+root=$(git rev-parse --show-toplevel) || { echo '{"error":"not a git repo"}'; exit 1; }
+cd "$root" || { echo '{"error":"cd to repo root failed"}'; exit 1; }
 
 merged=false issue_closed=false remote_deleted=false wt_removed=false main_updated=false
 
