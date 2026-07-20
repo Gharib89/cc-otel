@@ -653,6 +653,97 @@ table _Measures
 		displayFolder: Ecosystem
 		lineageTag: e1c2a3b4-0005-4a11-9c01-aa0000000005
 
+	/// User-detail drillthrough header (#125): the drilled user's identity, shown as cards.
+	measure 'Selected User' = SELECTEDVALUE ( dim_user[user_email], "All users" )
+		displayFolder: User Detail
+		lineageTag: d1250001-0000-4000-8000-000000000125
+
+	/// RELATED walks dim_user (many) -> seat_roster (one); blank means the user is not on the paid-seat roster.
+	measure 'Selected User Tier' =
+			VAR T = MAXX ( dim_user, RELATED ( seat_roster[seat_tier] ) )
+			RETURN
+			    COALESCE ( T, "Off-roster" )
+		displayFolder: User Detail
+		lineageTag: d1250002-0000-4000-8000-000000000125
+
+	measure 'User First Seen' = FORMAT ( MIN ( dim_user[first_seen] ), "d MMM yyyy" )
+		displayFolder: User Detail
+		lineageTag: d1250003-0000-4000-8000-000000000125
+
+	measure 'User Last Seen' = FORMAT ( MAX ( dim_user[last_seen] ), "d MMM yyyy" )
+		displayFolder: User Detail
+		lineageTag: d1250004-0000-4000-8000-000000000125
+
+	/// Session-detail measures (#125). fact_api_usage / fact_edit_decision / fact_session_daily relate to
+	/// fact_session[session_id] via INACTIVE relationships; USERELATIONSHIP routes the drillthrough filter
+	/// (which lands on fact_session) into each fact. Without it these would ignore the drilled session.
+	measure 'Session User' = SELECTEDVALUE ( fact_session[user_email], "—" )
+		displayFolder: Session Detail
+		lineageTag: d1250005-0000-4000-8000-000000000125
+
+	measure 'Session Started' = FORMAT ( MIN ( fact_session[started_at] ), "d MMM yyyy HH:mm" )
+		displayFolder: Session Detail
+		lineageTag: d1250006-0000-4000-8000-000000000125
+
+	measure 'Session Start Type' = SELECTEDVALUE ( fact_session[start_type], "—" )
+		displayFolder: Session Detail
+		lineageTag: d1250007-0000-4000-8000-000000000125
+
+	measure 'Session CC Version' = SELECTEDVALUE ( fact_session[cc_version], "—" )
+		displayFolder: Session Detail
+		lineageTag: d1250008-0000-4000-8000-000000000125
+
+	measure 'Session Duration' =
+			VAR S = SUM ( fact_session[duration_s] )
+			RETURN
+			    IF ( ISBLANK ( S ), BLANK (), INT ( S / 3600 ) & "h " & INT ( MOD ( S, 3600 ) / 60 ) & "m" )
+		displayFolder: Session Detail
+		lineageTag: d1250009-0000-4000-8000-000000000125
+
+	measure 'Session Tokens' = CALCULATE ( [Total Tokens], USERELATIONSHIP ( fact_api_usage[session_id], fact_session[session_id] ) )
+		formatString: #,##0
+		displayFolder: Session Detail
+		lineageTag: d125000a-0000-4000-8000-000000000125
+
+	measure 'Session Requests' = CALCULATE ( [Total Requests], USERELATIONSHIP ( fact_api_usage[session_id], fact_session[session_id] ) )
+		formatString: #,##0
+		displayFolder: Session Detail
+		lineageTag: d125000b-0000-4000-8000-000000000125
+
+	measure 'Session Cache Hit Ratio' = CALCULATE ( [Cache Hit Ratio], USERELATIONSHIP ( fact_api_usage[session_id], fact_session[session_id] ) )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Session Detail
+		lineageTag: d125000c-0000-4000-8000-000000000125
+
+	measure 'Session Prompts' = CALCULATE ( [Total Prompts], USERELATIONSHIP ( fact_session_daily[session_id], fact_session[session_id] ) )
+		formatString: #,##0
+		displayFolder: Session Detail
+		lineageTag: d125000d-0000-4000-8000-000000000125
+
+	measure 'Session Tool Acceptance Rate' = CALCULATE ( [Tool Acceptance Rate], USERELATIONSHIP ( fact_edit_decision[session_id], fact_session[session_id] ) )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Session Detail
+		lineageTag: d125000e-0000-4000-8000-000000000125
+
+	measure 'Session Edit Decisions' = CALCULATE ( [Edit Decisions], USERELATIONSHIP ( fact_edit_decision[session_id], fact_session[session_id] ) )
+		formatString: #,##0
+		displayFolder: Session Detail
+		lineageTag: d125000f-0000-4000-8000-000000000125
+
+	/// Axis measure for the 'Ecosystem Bridge' disconnected table (#125): one bar per bridge.
+	measure 'Ecosystem Intensity' =
+			SWITCH (
+			    SELECTEDVALUE ( 'Ecosystem Bridge'[Bridge] ),
+			    "Skills", [Skill Activations],
+			    "MCP", [MCP Calls],
+			    "Subagents", [Subagent Invocations],
+			    "Hooks", [Hook Executions],
+			    "Plugins", [Plugin Loads]
+			)
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: d1250010-0000-4000-8000-000000000125
+
 	column Value
 		dataType: int64
 		isHidden

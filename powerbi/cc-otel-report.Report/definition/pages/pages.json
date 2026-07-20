@@ -7,10 +7,8 @@
     "pg_capacity",
     "pg_eco",
     "pg_health",
-    "pg_overview",
-    "pg_users",
-    "pg_session",
-    "pg_tool"
+    "pg_user_detail",
+    "pg_session_detail"
   ],
   "activePageName": "pg_exec"
 }
