@@ -11,10 +11,10 @@ test). On top of that:
 
 - **Skip the phase-4 self-review** — the phase-7 review loop is the review gate
   for a small change.
-- **Local gate (phase 5) = the secret/security scan + the one regression test
-  node** (run that node locally for red→green proof). Lean on CI for the rest of
-  the suite, lint, and type-check — CI re-runs them, and a red CI on a small
-  change is a cheap round-trip.
+- **Local gate (phase 5) = `scripts/ship/local-gate.sh --small <test-node>`** —
+  the secrets grep + that one regression node (run locally for red→green proof).
+  Lean on CI for the rest of the suite, lint, and type-check — CI re-runs them,
+  and a red CI on a small change is a cheap round-trip.
 - **One `copilot-pr-review-loop` round is the whole review gate** — disposition
   it once and go; re-request only if it flagged a real bug (metered CI —
   [cc-otel.md](cc-otel.md)).
