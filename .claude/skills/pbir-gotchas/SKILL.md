@@ -15,7 +15,24 @@ For general PBIR format reference, defer to the `pbir-format` skill (data-goblin
 
 ## 1. Drillthrough — the runtime half
 
-The lint catches `"type": "Drillthrough"` in `filterConfig` (only `pageBinding` takes that type; the filter is `Passthrough`). What it can't catch: schema correctness is necessary but not sufficient. The user must add the same column to the page's "Drill through" field in Desktop UI for filter propagation to fire at runtime — data-model awareness of the filter slot isn't enough. pbi-cli does **not** author drillthrough (see the tooling doc) — hand-write `pageBinding` or set it once in Desktop.
+The lint catches `"type": "Drillthrough"` in `filterConfig` (only `pageBinding` takes that type; the filter is `Passthrough`). pbi-cli does **not** author drillthrough (see the tooling doc) — hand-write it. The working on-disk shape (#125, drill verified live in Desktop with **no** Desktop-side wiring needed — an earlier version of this trap wrongly claimed the field must also be added in Desktop's UI):
+
+```json
+"visibility": "HiddenInViewMode",
+"pageBinding": {
+  "name": "pb_<page>", "type": "Drillthrough",
+  "parameters": [{ "name": "p_<page>", "boundFilter": "flt_drill_<page>",
+                   "fieldExpr": { "Column": { "Expression": { "SourceRef": { "Entity": "<table>" } }, "Property": "<column>" } } }]
+},
+"filterConfig": { "filters": [{ "name": "flt_drill_<page>", "field": { ...same column... },
+                                "type": "Passthrough", "howCreated": "Drillthrough" }] }
+```
+
+Right-click → Drill through then appears on any visual projecting that column, report-wide — no source-visual edits. Mind relationship direction on the target page: a drill filter lands on the bound table only; facts behind **inactive** relationships need `USERELATIONSHIP` measures (see the `Session *` measures).
+
+## 21. Measure-only bar charts fail the conformance gate — give them a disconnected axis
+
+`clusteredBarChart`/`clusteredColumnChart` with only `Y` measure projections and no `Category` renders fine in Desktop but fails the (blocking) MS conformance CLI: `PBIR_ROLE_REQUIRED_MISSING`. When the "categories" are N measures living on different tables (the five ecosystem bridges), add a disconnected N-row calculated table (`DATATABLE`, no relationships) plus one `SWITCH ( SELECTEDVALUE (...) )` measure, and bind that as Category + Y. Bonus: real axis labels instead of a color legend.
 
 ## 2. `card` visual needs a Measure, not a Column
 
