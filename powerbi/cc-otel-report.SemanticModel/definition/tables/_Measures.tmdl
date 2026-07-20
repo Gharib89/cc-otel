@@ -165,18 +165,6 @@ table _Measures
 		displayFolder: Adoption
 		lineageTag: a1c00005-0000-4000-8000-000000000028
 
-	/// Mean per active day of time the user was actively prompting (active_time.user), in hours.
-	measure 'Avg Active User Hours per Day' = DIVIDE(SUM(fact_session_daily[active_time_user_s]), [Active Days]) / 3600
-		formatString: #,##0.0 "h"
-		displayFolder: Adoption
-		lineageTag: a1c00030-0000-4000-8000-000000000028
-
-	/// Mean per active day of time the CLI was running (active_time.cli), in hours. Distinct from user-active time.
-	measure 'Avg Active CLI Hours per Day' = DIVIDE(SUM(fact_session_daily[active_time_cli_s]), [Active Days]) / 3600
-		formatString: #,##0.0 "h"
-		displayFolder: Adoption
-		lineageTag: a1c00031-0000-4000-8000-000000000028
-
 	/// Drives the Overview freshness KPI card background (#28): green/amber/red per [Data Freshness Status],
 	/// grey for no data. Hex values mirror theme.json good/neutral/bad + tertiary-grey.
 	measure 'Freshness Color' =
@@ -621,11 +609,38 @@ table _Measures
 		displayFolder: Overview KPIs
 		lineageTag: b1190005-0000-4000-8000-000000000119
 
+	/// Mean per active day of time the user was actively prompting (active_time.user), in hours.
+	measure 'Avg Active User Hours per Day' = DIVIDE(SUM(fact_session_daily[active_time_user_s]), [Active Days]) / 3600
+		formatString: #,##0.0 "h"
+		displayFolder: Adoption
+		lineageTag: a1c00030-0000-4000-8000-000000000028
+
+	/// Mean per active day of time the CLI was running (active_time.cli), in hours. Distinct from user-active time.
+	measure 'Avg Active CLI Hours per Day' = DIVIDE(SUM(fact_session_daily[active_time_cli_s]), [Active Days]) / 3600
+		formatString: #,##0.0 "h"
+		displayFolder: Adoption
+		lineageTag: a1c00031-0000-4000-8000-000000000028
+
+	/// 28d-anchored token volume for the Exec Top Users bar (#152) — same window pattern as the Overview KPI triplets.
+	measure 'Tokens 28d' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			RETURN
+			    CALCULATE ( [Total Tokens], DATESBETWEEN ( dim_date[date_day], Anchor - 27, Anchor ) )
+		formatString: #,##0
+		displayFolder: Usage & Capacity
+		lineageTag: 3c1a7b2e-9f41-4d6a-8c05-7e2b64d9a318
+
 	/// Total edit-decision events (accept/reject/...) from fact_edit_decision; powers the Impact decision-mix (#121).
 	measure 'Edit Decisions' = SUM ( fact_edit_decision[decision_count] )
 		formatString: #,##0
 		displayFolder: Tool Quality
 		lineageTag: 46f2bd60-c99d-4f35-a572-db29e80cb5e4
+
+	/// Rejected-edit volume; replaces the two-bar decision-mix chart with a KPI on Impact (#152).
+	measure 'Rejected Edits' = CALCULATE ( [Edit Decisions], fact_edit_decision[decision] = "reject" )
+		formatString: #,##0
+		displayFolder: Tool Quality
+		lineageTag: 8d4f2a61-5b3c-47e9-a1d2-90c8e7b5f426
 
 	/// Ecosystem depth-bar values (#123): raw usage intensity per bridge entity, summed over the session-x-name grain.
 	measure 'Skill Activations' = SUM ( bridge_session_skill[activations] )

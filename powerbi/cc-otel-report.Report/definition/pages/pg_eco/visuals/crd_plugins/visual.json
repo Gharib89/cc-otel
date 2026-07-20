@@ -2,7 +2,7 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "crd_plugins",
   "position": {
-    "x": 1004,
+    "x": 516,
     "y": 182,
     "z": 309,
     "height": 48,

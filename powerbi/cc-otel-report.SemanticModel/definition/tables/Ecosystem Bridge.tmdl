@@ -14,3 +14,4 @@ table 'Ecosystem Bridge'
 	partition 'Ecosystem Bridge' = calculated
 		mode: import
 		source = DATATABLE ( "Bridge", STRING, { { "Skills" }, { "MCP" }, { "Subagents" }, { "Hooks" }, { "Plugins" } } )
+

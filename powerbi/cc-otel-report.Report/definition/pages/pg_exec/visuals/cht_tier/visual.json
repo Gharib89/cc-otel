@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "cht_tier",
   "position": {
-    "x": 852,
-    "y": 193,
+    "x": 28,
+    "y": 483,
     "z": 27000,
-    "height": 293,
-    "width": 400,
+    "height": 209,
+    "width": 480,
     "tabOrder": 27000
   },
   "visual": {

@@ -6,7 +6,7 @@
     "y": 478,
     "z": 520,
     "height": 226,
-    "width": 1224,
+    "width": 800,
     "tabOrder": 520
   },
   "visual": {
@@ -27,7 +27,8 @@
                 }
               },
               "queryRef": "dim_user.user_email",
-              "nativeQueryRef": "user_email"
+              "nativeQueryRef": "user_email",
+              "displayName": "User"
             },
             {
               "field": {
@@ -55,7 +56,8 @@
                 }
               },
               "queryRef": "dim_user.last_seen",
-              "nativeQueryRef": "last_seen"
+              "nativeQueryRef": "last_seen",
+              "displayName": "Last Seen"
             }
           ]
         }
@@ -77,6 +79,57 @@
           }
         ]
       }
+    },
+    "objects": {
+      "columnWidth": [
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "340D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "dim_user.user_email"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "160D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "dim_user.Roster Status"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "180D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "dim_user.last_seen"
+          }
+        }
+      ],
+      "columnHeaders": [
+        {
+          "properties": {}
+        }
+      ]
     },
     "visualContainerObjects": {
       "title": [

@@ -27,7 +27,8 @@
                 }
               },
               "queryRef": "dim_user.user_email",
-              "nativeQueryRef": "user_email"
+              "nativeQueryRef": "user_email",
+              "displayName": "User"
             },
             {
               "field": {
@@ -41,7 +42,8 @@
                 }
               },
               "queryRef": "seat_roster.seat_tier",
-              "nativeQueryRef": "seat_tier"
+              "nativeQueryRef": "seat_tier",
+              "displayName": "Tier"
             },
             {
               "field": {
@@ -83,7 +85,8 @@
                 }
               },
               "queryRef": "_Measures.Avg Active User Hours per Day",
-              "nativeQueryRef": "Avg Active User Hours per Day"
+              "nativeQueryRef": "Avg Active User Hours per Day",
+              "displayName": "User Hours/Day"
             },
             {
               "field": {
@@ -97,7 +100,8 @@
                 }
               },
               "queryRef": "_Measures.Avg Active CLI Hours per Day",
-              "nativeQueryRef": "Avg Active CLI Hours per Day"
+              "nativeQueryRef": "Avg Active CLI Hours per Day",
+              "displayName": "CLI Hours/Day"
             },
             {
               "field": {
@@ -125,21 +129,8 @@
                 }
               },
               "queryRef": "_Measures.Avg Session Duration",
-              "nativeQueryRef": "Avg Session Duration"
-            },
-            {
-              "field": {
-                "Column": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "dim_user"
-                    }
-                  },
-                  "Property": "last_cc_version"
-                }
-              },
-              "queryRef": "dim_user.last_cc_version",
-              "nativeQueryRef": "last_cc_version"
+              "nativeQueryRef": "Avg Session Duration",
+              "displayName": "Avg Duration"
             },
             {
               "field": {
@@ -153,11 +144,164 @@
                 }
               },
               "queryRef": "dim_user.last_seen",
-              "nativeQueryRef": "last_seen"
+              "nativeQueryRef": "last_seen",
+              "displayName": "Last Seen"
             }
           ]
         }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Column": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "dim_user"
+                  }
+                },
+                "Property": "last_seen"
+              }
+            },
+            "direction": "Descending"
+          }
+        ]
       }
+    },
+    "objects": {
+      "columnWidth": [
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "270D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "dim_user.user_email"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "80D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "seat_roster.seat_tier"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "95D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "_Measures.Active Days"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "105D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "_Measures.Total Prompts"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "125D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "_Measures.Avg Active User Hours per Day"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "125D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "_Measures.Avg Active CLI Hours per Day"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "100D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "_Measures.Total Sessions"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "120D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "_Measures.Avg Session Duration"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "140D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "dim_user.last_seen"
+          }
+        }
+      ],
+      "columnHeaders": [
+        {
+          "properties": {}
+        }
+      ]
     },
     "visualContainerObjects": {
       "title": [

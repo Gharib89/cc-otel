@@ -27,7 +27,8 @@
                 }
               },
               "queryRef": "mart_refresh_log.mart",
-              "nativeQueryRef": "mart"
+              "nativeQueryRef": "mart",
+              "displayName": "Mart"
             },
             {
               "field": {
@@ -41,7 +42,8 @@
                 }
               },
               "queryRef": "mart_refresh_log.finished",
-              "nativeQueryRef": "finished"
+              "nativeQueryRef": "finished",
+              "displayName": "Finished"
             },
             {
               "field": {
@@ -55,7 +57,8 @@
                 }
               },
               "queryRef": "mart_refresh_log.row_count",
-              "nativeQueryRef": "row_count"
+              "nativeQueryRef": "row_count",
+              "displayName": "Rows"
             }
           ]
         }
@@ -77,6 +80,57 @@
           }
         ]
       }
+    },
+    "objects": {
+      "columnWidth": [
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "230D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "mart_refresh_log.mart"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "170D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "mart_refresh_log.finished"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "90D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "mart_refresh_log.row_count"
+          }
+        }
+      ],
+      "columnHeaders": [
+        {
+          "properties": {}
+        }
+      ]
     },
     "visualContainerObjects": {
       "title": [

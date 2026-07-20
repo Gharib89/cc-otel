@@ -1,6 +1,6 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "cht_decision_mix",
+  "name": "cht_loc_trend",
   "position": {
     "x": 842,
     "y": 148,
@@ -10,7 +10,7 @@
     "tabOrder": 410
   },
   "visual": {
-    "visualType": "clusteredColumnChart",
+    "visualType": "lineChart",
     "query": {
       "queryState": {
         "Category": {
@@ -20,14 +20,14 @@
                 "Column": {
                   "Expression": {
                     "SourceRef": {
-                      "Entity": "fact_edit_decision"
+                      "Entity": "dim_date"
                     }
                   },
-                  "Property": "decision"
+                  "Property": "week_label"
                 }
               },
-              "queryRef": "fact_edit_decision.decision",
-              "nativeQueryRef": "decision",
+              "queryRef": "dim_date.week_label",
+              "nativeQueryRef": "week_label",
               "active": true
             }
           ]
@@ -42,11 +42,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Edit Decisions"
+                  "Property": "Total Lines of Code"
                 }
               },
-              "queryRef": "_Measures.Edit Decisions",
-              "nativeQueryRef": "Edit Decisions"
+              "queryRef": "_Measures.Total Lines of Code",
+              "nativeQueryRef": "Total Lines of Code"
             }
           ]
         }
@@ -68,7 +68,7 @@
                 "color": {
                   "expr": {
                     "Literal": {
-                      "Value": "'#44566B'"
+                      "Value": "'#7E8CA0'"
                     }
                   }
                 }
@@ -114,31 +114,26 @@
           }
         }
       ],
+      "lineStyles": [
+        {
+          "properties": {
+            "showMarker": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            }
+          }
+        }
+      ],
       "labels": [
         {
           "properties": {
             "show": {
               "expr": {
                 "Literal": {
-                  "Value": "true"
-                }
-              }
-            },
-            "color": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#7E8CA0'"
-                    }
-                  }
-                }
-              }
-            },
-            "fontSize": {
-              "expr": {
-                "Literal": {
-                  "Value": "9D"
+                  "Value": "false"
                 }
               }
             }
@@ -160,7 +155,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'EDIT DECISIONS'"
+                  "Value": "'LINES OF CODE BY WEEK'"
                 }
               }
             },
@@ -277,61 +272,5 @@
       ]
     },
     "drillFilterOtherVisuals": true
-  },
-  "filterConfig": {
-    "filters": [
-      {
-        "name": "flt_decision_notblank",
-        "field": {
-          "Column": {
-            "Expression": {
-              "SourceRef": {
-                "Entity": "fact_edit_decision"
-              }
-            },
-            "Property": "decision"
-          }
-        },
-        "type": "Categorical",
-        "filter": {
-          "Version": 2,
-          "From": [
-            {
-              "Name": "f",
-              "Entity": "fact_edit_decision",
-              "Type": 0
-            }
-          ],
-          "Where": [
-            {
-              "Condition": {
-                "Not": {
-                  "Expression": {
-                    "Comparison": {
-                      "ComparisonKind": 0,
-                      "Left": {
-                        "Column": {
-                          "Expression": {
-                            "SourceRef": {
-                              "Source": "f"
-                            }
-                          },
-                          "Property": "decision"
-                        }
-                      },
-                      "Right": {
-                        "Literal": {
-                          "Value": "null"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          ]
-        }
-      }
-    ]
   }
 }

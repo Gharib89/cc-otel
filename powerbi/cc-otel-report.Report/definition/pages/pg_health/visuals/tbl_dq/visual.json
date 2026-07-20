@@ -27,7 +27,8 @@
                 }
               },
               "queryRef": "dq_finding.finding_type",
-              "nativeQueryRef": "finding_type"
+              "nativeQueryRef": "finding_type",
+              "displayName": "Finding Type"
             },
             {
               "field": {
@@ -41,7 +42,8 @@
                 }
               },
               "queryRef": "dq_finding.detected_at",
-              "nativeQueryRef": "detected_at"
+              "nativeQueryRef": "detected_at",
+              "displayName": "Detected At"
             },
             {
               "field": {
@@ -55,7 +57,8 @@
                 }
               },
               "queryRef": "dq_finding.row_count",
-              "nativeQueryRef": "row_count"
+              "nativeQueryRef": "row_count",
+              "displayName": "Rows"
             },
             {
               "field": {
@@ -69,7 +72,8 @@
                 }
               },
               "queryRef": "dq_finding.details",
-              "nativeQueryRef": "details"
+              "nativeQueryRef": "details",
+              "displayName": "Details"
             }
           ]
         }
