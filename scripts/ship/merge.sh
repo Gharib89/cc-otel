@@ -63,7 +63,11 @@ if [ "$issue_closed" = false ]; then
 fi
 
 git push origin --delete "$branch" >&2 2>/dev/null || true
-git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1 || remote_deleted=true
+# --exit-code: 0 = ref still present, 2 = no matching ref (deleted), other = a
+# transient/auth error. Only exit 2 proves deletion — don't let a network blip
+# read as success.
+git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1
+[ $? -eq 2 ] && remote_deleted=true
 
 if [ -n "$wt" ] && [ -e "$wt" ]; then
   git worktree remove --force "$wt" >&2 && wt_removed=true

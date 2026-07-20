@@ -19,7 +19,7 @@
 # Exit: 0 all selected gates pass · 1 a gate failed · 2 a tool was unavailable
 set -uo pipefail
 
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../.." || { echo '{"error":"cd to repo root failed","verdict":"tool-unavailable"}'; exit 2; }
 
 BASE=origin/main ALL=0 NO_DOCKER=0 SMALL=""
 while [ $# -gt 0 ]; do
@@ -72,17 +72,23 @@ docker_gate() { # docker_gate <name> <cmd...>  (deferred if no docker)
 }
 
 # --- secrets grep (always) ---------------------------------------------------
-# Added diff lines plus full content of untracked files; the throwaway container
-# creds (postgres:postgres) are the one sanctioned literal (dev-migrate.sh,
-# testcontainers).
+# Scans added diff lines plus untracked files. The throwaway container creds
+# (postgres:postgres) are the one sanctioned literal (dev-migrate.sh,
+# testcontainers) — IGNORE_RE; the scanner also excludes itself (its own
+# pattern line is a guaranteed hit).
+SECRET_RE='postgres(ql)?://[^ "'"'"']+:[^ "'"'"'@]+@|bearer +[a-z0-9._~+/=-]{25,}|AKIA[A-Z0-9]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|client_secret[^a-z_]|sig=[a-z0-9%]{30,}'
+IGNORE_RE='postgres://postgres:postgres@'
 secrets_hits() {
-  # The scanner excludes itself: its own pattern line is a guaranteed hit.
-  { git diff "$MB" -- . ':(exclude)uv.lock' ':(exclude)scripts/ship/local-gate.sh' \
-      | grep '^+' | grep -vE '^\+\+\+';
-    git ls-files --others --exclude-standard -z | grep -vzF 'scripts/ship/local-gate.sh' \
-      | xargs -0 -r grep -sh ''; } \
-    | grep -viE 'postgres://postgres:postgres@' \
-    | grep -nEi 'postgres(ql)?://[^ "'"'"']+:[^ "'"'"'@]+@|bearer +[a-z0-9._~+/=-]{25,}|AKIA[A-Z0-9]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|client_secret[^a-z_]|sig=[a-z0-9%]{30,}'
+  # Diff scan: added lines, tagged "diff:<n>" (real file lines aren't recoverable
+  # from a combined diff, so label the source instead of emitting a bogus number).
+  git diff "$MB" -- . ':(exclude)uv.lock' ':(exclude)scripts/ship/local-gate.sh' \
+    | grep '^+' | grep -vE '^\+\+\+' | grep -vE "$IGNORE_RE" | grep -nEi "$SECRET_RE" \
+    | sed 's/^/diff:/'
+  # Untracked scan: grep files by name so hits carry real path:line (-I skips
+  # binaries; -H forces the filename even for a single file).
+  git ls-files --others --exclude-standard -z \
+    | grep -zvF 'scripts/ship/local-gate.sh' \
+    | xargs -0 -r grep -IHnEi "$SECRET_RE" 2>/dev/null | grep -vE "$IGNORE_RE" || true
 }
 if hits=$(secrets_hits) && [ -n "$hits" ]; then
   record secrets fail; FAILED=1

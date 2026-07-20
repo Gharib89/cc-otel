@@ -44,8 +44,11 @@ fi
 rm -f "$watch_log"
 
 if [ "$rc" -ne 0 ]; then
+  # --watch's non-zero could be a check failure OR a tooling/auth blip; if this
+  # follow-up read also fails, don't let its stderr pollute the failing list —
+  # report tooling instead.
   failing=$(gh pr checks "$pr" --json name,bucket \
-    --jq '[.[] | select(.bucket == "fail") | .name]')
+    --jq '[.[] | select(.bucket == "fail") | .name]') || { emit tooling; exit 2; }
   emit checks-failed "$failing"
   exit 1
 fi

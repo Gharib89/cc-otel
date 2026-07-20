@@ -71,7 +71,13 @@ if ((Have 'node') -and (Have 'npm')) {
 
 # --- 1b. pbir-gotchas lint (no deps, plain node) ------------------------------
 Section 'pbir-gotchas lint'
-if (Have 'node') {
+if (-not (Test-Path $GotchaMjs)) {
+  # Guard before running: node exits 1 for "cannot find module" too, which would
+  # misread a missing/renamed script as report violations. A missing script is
+  # a tooling failure (exit 2), not a report bug.
+  Write-Host "[TOOL] gotchas-lint script not found at ${GotchaMjs}" -ForegroundColor Red
+  $tooling = $true
+} elseif (Have 'node') {
   try {
     & node $GotchaMjs (Join-Path $RepoRoot 'powerbi/cc-otel-report.Report') 2>&1 | Out-Host
     if ($LASTEXITCODE -eq 1) { $failed = $true }
