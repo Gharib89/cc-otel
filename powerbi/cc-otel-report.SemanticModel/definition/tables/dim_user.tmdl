@@ -59,6 +59,15 @@ table dim_user
 
 		annotation SummarizationSetBy = Automatic
 
+	/// Roster/telemetry reconciliation bucket for the Data Health mismatch table (#124), model-side calc column, no migration.
+	/// Unknown-id first (spoofed/blank emails, #8); then off-roster (telemetry email absent from the seat_roster snapshot, #116).
+	column 'Roster Status' = SWITCH ( TRUE (), dim_user[is_unknown] = TRUE (), "Unknown id", ISBLANK ( RELATED ( seat_roster[user_email] ) ), "Off-roster", "On-roster" )
+		dataType: string
+		lineageTag: b1d70001-0000-4000-8000-000000000124
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
 	partition dim_user = m
 		mode: import
 		source =
