@@ -3,6 +3,7 @@
   "pageOrder": [
     "pg_exec",
     "pg_adopt",
+    "pg_impact",
     "pg_overview",
     "pg_users",
     "pg_session",

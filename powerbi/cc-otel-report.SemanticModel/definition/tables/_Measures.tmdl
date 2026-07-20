@@ -619,6 +619,12 @@ table _Measures
 		displayFolder: Overview KPIs
 		lineageTag: b1190005-0000-4000-8000-000000000119
 
+	/// Total edit-decision events (accept/reject/...) from fact_edit_decision; powers the Impact decision-mix (#121).
+	measure 'Edit Decisions' = SUM ( fact_edit_decision[decision_count] )
+		formatString: #,##0
+		displayFolder: Tool Quality
+		lineageTag: 46f2bd60-c99d-4f35-a572-db29e80cb5e4
+
 	column Value
 		dataType: int64
 		isHidden
