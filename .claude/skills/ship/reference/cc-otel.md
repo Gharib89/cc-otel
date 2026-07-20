@@ -44,8 +44,16 @@ applied, never against the shared dev DB.
 
 ## Claim ops
 
-Claim (phase 1) = `gh issue edit <n> --add-assignee @me`; the frontier query
-skips assigned issues, so the assignee **is** the claim. Reflect the PR (phase 6)
-with an issue comment linking it. If you claimed and then stopped blocked,
-remove the assignee (`--remove-assignee @me`) so the issue re-enters the
-frontier — or hand it to a human per the cloud routine's rules when in a fire.
+Claim (phase 1) = `scripts/ship/claim.sh <n>`; the frontier query skips assigned
+issues, so the assignee **is** the claim. Reflect the PR (phase 6) with
+`scripts/ship/reflect.sh <n> <pr-url>`. If you claimed and then stopped blocked,
+release (`claim.sh <n> --release`) so the issue re-enters the frontier — or hand
+it to a human per the cloud routine's rules when in a fire.
+
+## local-gate.sh's path→gate map is coupled to CI
+
+`scripts/ship/local-gate.sh` mirrors CI by lifting the path filters from
+`.github/workflows/*.yml` (python, integration, schema-drift, iac, installer,
+bootstrap, docker, powerbi) into its `touches` selectors. A new workflow or a
+path-filter change must update the script's map in the **same** PR — otherwise
+"local gate green" stops meaning "CI green".

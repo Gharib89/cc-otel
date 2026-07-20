@@ -43,6 +43,7 @@ Assert-PSRule -InputPath ./iac/ -Module PSRule.Rules.Azure  # Bicep static analy
 uv run pre-commit run -a     # all hooks
 dbmate new <name>            # new migration in db/migrations/
 scripts/dev-migrate.sh       # apply migrations + regenerate schema.sql on throwaway Docker Postgres (the authoring loop)
+scripts/ship/local-gate.sh   # path-aware local mirror of CI (JSON verdict; the ship skill's phase-5 gate)
 psql "$DATABASE_URL"         # ad-hoc DB access (Azure otel real data / cc_otel)
 ```
 
@@ -85,7 +86,7 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 | `powerbi/` | `.pbip` semantic model + report + branding |
 | `tools/` | Curation + ops tooling over the blob reservoir (sweep, data dictionary, replay, scrub) |
 | `tests/integration/` | end-to-end suite |
-| `scripts/` | skill-sync + cloud-ship bootstrap + dev-migrate + `backfill/` (one-shot POC→interim backfill, ADR-0006) |
+| `scripts/` | skill-sync + cloud-ship bootstrap + dev-migrate + `ship/` (the ship skill's deterministic mechanics: preflight, isolate, claim, local-gate, ci-wait, merge) + `backfill/` (one-shot POC→interim backfill, ADR-0006) |
 | `.claude/skills/` | tracked agent skills (vendored + project-native) |
 
 - **Standards are enforced by config, not prose** — ruff (`pyproject.toml`, line 100), mypy (`--strict`, `sink/src` only), sqlfluff (`db/`), PSScriptAnalyzer (`bootstrap/`, ASCII + zero findings), Bicep/PSRule (`iac/`); Python 3.13. The config *is* the spec; this file never restates a rule the linter already owns. Rule changes land in the config first.
@@ -102,7 +103,7 @@ Every behavior/command/convention change ships its docs in the **same** PR. Coup
 - **`docs/adr/`** — a decision conflicting with a settled ADR is surfaced, never silently overridden; a new settled decision gets a new ADR.
 - **Map issue #1** — the locked design/decision log; a scope or design shift updates the relevant bullet.
 - **`db/schema.sql`** — never hand-edited; regenerated only via `scripts/dev-migrate.sh` (everything is a migration).
-- **CI path filters** — a new top-level concern needs its own workflow filter; validate `.github/workflows/**` edits with **actionlint**, not just a YAML parse (`matrix` context is invalid in a step's `shell:` key and fails at startup with no PR check).
+- **CI path filters** — a new top-level concern needs its own workflow filter; validate `.github/workflows/**` edits with **actionlint**, not just a YAML parse (`matrix` context is invalid in a step's `shell:` key and fails at startup with no PR check). `scripts/ship/local-gate.sh` mirrors these filters in its path→gate map — a filter change updates the script in the same PR.
 
 ## Agent skills
 

@@ -9,25 +9,13 @@ Hard-won lessons authoring `powerbi/cc-otel-report.Report/`. Most cost >=20 min 
 
 For general PBIR format reference, defer to the `pbir-format` skill (data-goblin). This file only documents traps **not** covered there.
 
-## 1. Drillthrough filter type — most painful
+## Statically checkable traps are enforced, not documented
 
-On a drillthrough target page (`pages/<page>/page.json`):
+`.github/powerbi/gotchas-lint.mjs` (a `validate.ps1` / `ci-powerbi` leg, #135) fails the gate on the machine-checkable traps: Drillthrough-as-filter-type (1), `visualLink` under `objects` (4), folder naming (7), multi-projection cards (10), theme subtype cascade (11), `shape` fill (13), the actionButton show/selector contract + state ids (14), `textbox` visualLink (16), thin actionButton fill (17), theme `visualStyles` property shapes (18), `wordWrap` inside `labels` (19). Fix what a lint message names — the rule text travels with it. Below are only the traps a linter can't catch, keeping their original numbers.
 
-```json
-"pageBinding": { "type": "Drillthrough" },          // CORRECT — valid BindingType enum
-"filterConfig": {
-  "filters": [
-    { "type": "Passthrough", ... }                  // CORRECT
-    // NOT { "type": "Drillthrough" } — that fails schema validation silently
-  ]
-}
-```
+## 1. Drillthrough — the runtime half
 
-Filter `type` enum: `Categorical | Range | Advanced | Passthrough | TopN | Include | Exclude | RelativeDate | Tuple | RelativeTime | VisualTopN`.
-
-`Drillthrough` is **not** a valid filter type — only a `pageBinding` type. Mixing them up was the worst trap of the build.
-
-**Also:** schema correctness is necessary but not sufficient. The user must add the same column to the page's "Drill through" field in Desktop UI for filter propagation to fire at runtime. Data model awareness of the filter slot isn't enough. pbi-cli does **not** author drillthrough (see the tooling doc) — hand-write `pageBinding` or set it once in Desktop.
+The lint catches `"type": "Drillthrough"` in `filterConfig` (only `pageBinding` takes that type; the filter is `Passthrough`). What it can't catch: schema correctness is necessary but not sufficient. The user must add the same column to the page's "Drill through" field in Desktop UI for filter propagation to fire at runtime — data-model awareness of the filter slot isn't enough. pbi-cli does **not** author drillthrough (see the tooling doc) — hand-write `pageBinding` or set it once in Desktop.
 
 ## 2. `card` visual needs a Measure, not a Column
 
@@ -48,29 +36,6 @@ Then bind the measure. Works.
 - Date slicer range -> `'Between'`
 
 These are literal strings with single quotes inside the JSON string value, e.g. `"Value": "'Dropdown'"`. Easy to set the wrong one and end up with a list slicer where a dropdown was wanted.
-
-## 4. `actionButton` (back-button) PBIR canonical shape
-
-Don't put the link config under `objects.visualLink` — it has to go under **`visualContainerObjects.visualLink`**.
-
-```json
-{
-  "name": "...",
-  "visualType": "actionButton",
-  "objects": {
-    "icon": [
-      { "properties": { "shapeType": "'back'" } }
-    ]
-  },
-  "visualContainerObjects": {           // NOT objects
-    "visualLink": [
-      { "properties": { "type": "'Back'" } }
-    ]
-  }
-}
-```
-
-Reference template: any Desktop-emitted `actionButton` under `powerbi/cc-otel-report.Report/` — Desktop writes this shape correctly; copy from a verified one rather than hand-building.
 
 ## 5. Sort syntax inside `visualConfiguration`
 
@@ -93,11 +58,9 @@ Requires auto-datetime hierarchy enabled on the column. Off by default for impor
 - Enable auto-datetime hierarchy on the column in TMDL, OR
 - Define a calculated column: `'Started Hour' = HOUR([started_at])` and bind that
 
-## 7. PBIR file/folder naming
+## 7. Renaming page folders: close Desktop first
 
-Folder names: `[a-zA-Z0-9_-]+`. No dots, spaces, or special chars. Desktop emits this convention.
-
-**Critical:** Desktop must be **CLOSED** before renaming page folders. Desktop holds an open file handle on the open `.pbip` and rename will fail or corrupt state.
+Folder naming itself is linted. The runtime trap: Desktop must be **CLOSED** before renaming page folders. Desktop holds an open file handle on the open `.pbip` and rename will fail or corrupt state.
 
 ## 8. Unpublished `$schema` version -> ajv fetch failure
 
@@ -120,18 +83,6 @@ Theme wins when both target the same property. Fix theme first, then trust per-v
 }
 ```
 
-## 10. `card` visualType renders one projection only
-
-Two `Values.projections` entries on a `card` -> Power BI shows "See details" error icon, not the second measure.
-
-Use multi-row card (`multiRowCard`) when you need two measures stacked, or split into two `card` visuals.
-
-## 11. Theme `visualStyles` don't cascade across chart subtypes
-
-`barChart` style doesn't apply to `clusteredBarChart`; `columnChart` doesn't apply to `clusteredColumnChart`; `matrix` is separate from `pivotTable`. Each is its own `visualStyles.<type>` entry.
-
-Mirror parent style into every subtype Desktop emits.
-
 ## 12. Tables/matrices need per-visual `title.text` — theme alone insufficient
 
 Setting `tableEx.title.show: true` in the theme does NOT make tables render a title strip. You also need a per-visual block:
@@ -153,60 +104,32 @@ Setting `tableEx.title.show: true` in the theme does NOT make tables render a ti
 
 Theme defines style. Per-visual carries the string.
 
-## 13. `shape` `fill` doesn't render in current Desktop build
+## 13/17. Solid fills: which primitive actually renders
 
-Shape visuals (`visualType: "shape"`) with `fill.fillColor` set produce only the outline — no solid fill. Workaround for solid dark panels (nav backdrop, header strip): use `actionButton` with chrome killed.
+The lint bans the two dead ends (`shape` `objects.fill`, actionButton fill under ~4px height). What to use instead:
+
+- **Panels >=~10px tall** (nav backdrop, header strip): `actionButton` with chrome killed — `icon.shapeType 'blank'`, `outline.show false`, `objects.fill` show+fillColor (with `selector: {"id": "default"}` on the styling entry), and `visualContainerObjects` background/border/visualHeader/dropShadow all off. Copy a Desktop-emitted one rather than hand-building.
+- **Thin bars 1-3px** (hairlines, nav underlines, dividers): `shape` with **`visualContainerObjects.background`** — the container background renders even though `objects.fill` doesn't:
 
 ```json
 {
-  "visualType": "actionButton",
+  "visualType": "shape",
   "objects": {
-    "icon": [{ "properties": { "shapeType": { "expr": { "Literal": { "Value": "'blank'" } } } }, "selector": { "id": "default" } }],
-    "outline": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }],
-    "fill": [
-      { "properties": { "show": { "expr": { "Literal": { "Value": "true" } } } } },
-      {
-        "properties": {
-          "fillColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#1a1a1a'" } } } } },
-          "transparency": { "expr": { "Literal": { "Value": "0D" } } }
-        },
-        "selector": { "id": "default" }
-      }
-    ]
+    "shape": [{ "properties": { "tileShape": { "expr": { "Literal": { "Value": "'rectangle'" } } } } }],
+    "fill": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }],
+    "outline": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }]
   },
   "visualContainerObjects": {
-    "background": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }],
-    "border": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }],
-    "visualHeader": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }],
-    "dropShadow": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }]
+    "background": [{ "properties": {
+      "show": { "expr": { "Literal": { "Value": "true" } } },
+      "color": { "solid": { "color": { "expr": { "Literal": { "Value": "'#0E2841'" } } } } },
+      "transparency": { "expr": { "Literal": { "Value": "0D" } } }
+    } }]
   }
 }
 ```
 
-`fill` (like all button formatting) lives under **`objects`**, not `visualContainerObjects` — the 2.9.0 schema rejects `visualContainerObjects.fill` (`must NOT have additional properties`), and the MS conformance CLI names the fix. Reserve `shape` for lines/dividers (where only the outline matters).
-
-## 14. `actionButton` formatting: `show` goes selector-less; styling goes under `selector: { "id": "default" }`
-
-Two-part contract, screenshot-verified on the pg_exec nav build (#119). Desktop emits each button formatting object (`text`, `fill`, `outline`, `icon`) as **two entries**:
-
-- the **`show` toggle in its own entry with NO selector** (it is a card-level switch), and
-- the **per-state styling** (`text`, `fontColor`, `fontSize`, `fillColor`, …) in a second entry with `"selector": { "id": "default" }`.
-
-```json
-"text": [
-  { "properties": { "show": { "expr": { "Literal": { "Value": "true" } } } } },
-  {
-    "properties": {
-      "text": { "expr": { "Literal": { "Value": "'Overview'" } } },
-      "fontColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#ffffff'" } } } } },
-      "fontSize": { "expr": { "Literal": { "Value": "10D" } } }
-    },
-    "selector": { "id": "default" }
-  }
-]
-```
-
-Valid state IDs: `default`, `hover`, `selected`, `disabled`, `pressed`. **Both directions fail silently**: styling without the selector is ignored, and putting `show` *inside* the selector entry disables the whole formatting bag — the button renders as an empty placeholder outline with no fill and no text. ajv, fab-inspector, and the MS conformance CLI all pass either way; only a screenshot catches it. Reference: `pbir-format` skill's `examples/visuals/formatted/actionButton.json` (Desktop-emitted).
+Reserve `shape` for lines/dividers (where only the outline matters) and thin background bars.
 
 ## 15. `pageNavigator` shows every page unless hidden
 
@@ -227,50 +150,10 @@ The built-in `pageNavigator` enumerates all pages in `pages.json` order, includi
 
 `<page-name>` matches the page folder name. One selector entry per hidden page.
 
-## 16. `textbox` has no `visualLink`
+## 19. `labelPrecision` loses to the measure formatString
 
-Only `actionButton` and `pageNavigator` carry `visualContainerObjects.visualLink`. Using `textbox` as a nav button = clickable area exists in JSON but Desktop renders it as static text.
-
-Nav primitives -> `actionButton` (single target) or `pageNavigator` (multi-page strip). Decoration -> `shape` (lines/dividers) or `textbox` (static labels).
-
-## 17. Thin bars (hairlines, underlines): `actionButton` fill doesn't render below ~4px height
-
-The gotcha-13 actionButton-fill pattern silently renders nothing at 1-3px heights (nav underlines, divider rules). For thin solid bars use `shape` with **`visualContainerObjects.background`** — the container background renders even though `objects.fill` doesn't (gotcha 13):
-
-```json
-{
-  "visualType": "shape",
-  "objects": {
-    "shape": [{ "properties": { "tileShape": { "expr": { "Literal": { "Value": "'rectangle'" } } } } }],
-    "fill": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }],
-    "outline": [{ "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }]
-  },
-  "visualContainerObjects": {
-    "background": [{ "properties": {
-      "show": { "expr": { "Literal": { "Value": "true" } } },
-      "color": { "solid": { "color": { "expr": { "Literal": { "Value": "'#0E2841'" } } } } },
-      "transparency": { "expr": { "Literal": { "Value": "0D" } } }
-    } }]
-  }
-}
-```
-
-Keep actionButton fill for panels >=~10px tall (gotcha 13's nav backdrop case).
-
-## 18. Theme `visualStyles` property shapes differ from textClasses and PBIR literals
-
-Two traps writing `visualStyles` into a theme JSON (both named precisely by the repo validator):
-
-- Colors are **objects**, not hex strings: `"fontColor": {"solid": {"color": "#FFFFFF"}}` — a bare `"#FFFFFF"` fails `must be object`.
-- The font property is **`fontFamily`** inside `visualStyles` cards (title, subTitle, …); `fontFace` is only valid inside `textClasses` — the conformance CLI flags it `PBIR_THEME_VISUAL_PROP_UNKNOWN`.
-
-`subTitle` is a valid theme/visual card (gray line under a title band) even though Desktop's base themes never emit it.
-
-## 19. Card `wordWrap` is its own formatting object; `labelPrecision` loses to the measure formatString
-
-- `wordWrap` on a `card` is a separate object — `"wordWrap": [{"properties": {"show": ...}}]` — not a `labels` property (`PBIR_FORMATTING_PROP_UNKNOWN` otherwise).
-- `labels.labelPrecision` (an `L`-typed literal, e.g. `"0L"`) is **ignored when the measure's model formatString pins decimals** — a `0.0%` formatString renders `75.0%` no matter what the visual says. Fix the decimals in TMDL (`formatString: 0%`), which is a model change: `reload` won't apply it, reopen the pbip.
+`labels.labelPrecision` (an `L`-typed literal, e.g. `"0L"`) is **ignored when the measure's model formatString pins decimals** — a `0.0%` formatString renders `75.0%` no matter what the visual says. Fix the decimals in TMDL (`formatString: 0%`), which is a model change: `reload` won't apply it, reopen the pbip. (The `wordWrap`-placement half of this gotcha is linted.)
 
 ## Validation flow
 
-Run `pwsh .github/powerbi/validate.ps1` before commit — it mirrors the `ci-powerbi` gate locally (ajv schema, fab-inspector rules, Tabular Editor 2 BPA). Setup, the tooling roster, and the exit-code contract: `docs/agents/powerbi-tooling.md`.
+Run `pwsh .github/powerbi/validate.ps1` before commit — it mirrors the `ci-powerbi` gate locally (ajv schema, pbir-gotchas lint, fab-inspector rules, Tabular Editor 2 BPA, MS conformance CLI). Setup, the tooling roster, and the exit-code contract: `docs/agents/powerbi-tooling.md`.

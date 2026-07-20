@@ -55,7 +55,7 @@ Rejected below). Do not use them; author with pbi-cli instead.
 pwsh .github/powerbi/validate.ps1
 ```
 
-Runs the same three checks as the `ci-powerbi` gate on the same pinned versions
+Runs the same checks as the `ci-powerbi` gate on the same pinned versions
 (ajv 8.17.1, fab-inspector v3.4.0, Tabular Editor 2 2.28.0) and the same rule
 files in `.github/powerbi/`. It runs the **Windows** fab-inspector binary where
 CI runs the linux one, and runs everything on one machine where CI splits
@@ -63,7 +63,9 @@ ajv+fab-inspector onto ubuntu and TE2 onto windows — same versions, same rules
 (gitignored) and reused; the ajv leg installs into a gitignored `node_modules/`
 in the repo root (`--no-package-lock`, so the tree stays clean). A fourth leg
 runs the Microsoft conformance CLI — **blocking** since #112 promoted it (it
-catches role/theme defects that render silently wrong past the other three).
+catches role/theme defects that render silently wrong past the other three). A
+fifth leg (#135) runs `gotchas-lint.mjs` — the statically checkable
+`pbir-gotchas` skill traps as lint rules (pure node, no deps).
 
 **Exit-code contract** (the single source of truth for it):
 

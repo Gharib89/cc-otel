@@ -66,19 +66,41 @@ installed version doesn't have, and acting on it would be a regression.
 ## Model tiers — match the model to the work
 
 Use the cheapest model that fits; reserve the strong model for judgment. Tag every
-subagent and the poll loop with a model explicitly — never default-inherit.
+subagent with a model explicitly — never default-inherit.
 
 | Work | Model |
 |------|-------|
-| Investigation / mapping, poll loops (review + CI) | haiku |
-| Mechanical edits & fixes, docs-sync helper, running the gates/tests, `code-review` skill's **Spec** axis | sonnet |
-| Triage judgment (phases 4 & 7), `code-review` skill's **Standards / code** axis | opus |
+| Investigation / mapping | haiku |
+| Mechanical edits & fixes, docs-sync helper, `code-review` skill's **Spec** axis | sonnet |
+| Implementation subagent (phase 2) — small lane, or full lane on a tight brief | sonnet |
+| Triage judgment (phases 4 & 7), `code-review` skill's **Standards / code** axis, writing the implementation brief | opus |
 
-Triage and code review are judgment — running them on the cheap tier under-reads
-diffs. Poll loops, file-mapping, and running the gates are mechanical — running them
-on the strong tier burns budget for nothing. When you invoke the `code-review`
+Gate runs, CI polling, and merge mechanics are **scripts** (*Scripted mechanics*
+below) — no subagent, no model, no tokens. Triage and code review are judgment —
+running them on the cheap tier under-reads diffs. When you invoke the `code-review`
 skill, tier its two axes yourself (Standards = opus, Spec = sonnet — rows above).
 Fall back to the nearest available tier rather than running everything on one model.
+
+## Scripted mechanics — run the script, don't hand-roll
+
+The deterministic phase mechanics live in `scripts/ship/` (bash). Contract: one
+JSON verdict on **stdout**, a failing step's log tail on **stderr** — never a
+full log — exit 0 ok / 1 real failure / 2 tooling. Act on the JSON; don't
+re-derive what a script already checked, and never spawn a subagent to do a
+script's job.
+
+| Phase | Script |
+|---|---|
+| 0 pre-flight | `scripts/ship/preflight.sh <issue>` |
+| 0 isolate | `scripts/ship/isolate.sh <issue> <type> <slug>` |
+| 1 claim / blocked hand-back | `scripts/ship/claim.sh <issue> [--release]` |
+| 5 local gate | `scripts/ship/local-gate.sh [--all] [--no-docker] [--small <node>]` |
+| 6 PR-reflect | `scripts/ship/reflect.sh <issue> <pr-url>` |
+| 8 CI wait + conflict check | `scripts/ship/ci-wait.sh <pr>` |
+| 9 merge mechanics (post-approval only) | `scripts/ship/merge.sh <pr> <issue> [--worktree <path>]` |
+
+A repo without these scripts: fall back to the prose mechanics in each phase and
+its reference file.
 
 ## The lanes
 
@@ -114,14 +136,14 @@ when their phase begins — never hand-roll their logic. Set the `code-review` s
 (opus code / sonnet spec, table above); run finding-**triage** at the judgment tier,
 mechanical helpers at the cheap tier (table above).
 
-**0 · Isolate.** **Pre-flight:** confirm the issue is actionable and not already in
-flight — if it's closed, already has an open or merged PR, or a branch already
-exists for it, **stop and report** instead of opening a duplicate. (A picker-based
-runner like the cloud routine relies on the phase-1 `agent-working` claim to block
-concurrent re-picks; this guard catches a *manual* re-run or an already-shipped
-issue, where there is no picker.) Then create an isolated workspace on a fresh
-branch off the default branch — `EnterWorktree`, or `git worktree add`. Name the
-branch `<type>/<slug>-<issue>` where `<type>` matches the issue (feat/fix/…). All
+**0 · Isolate.** **Pre-flight:** run `scripts/ship/preflight.sh <issue>` — on
+`"actionable": false` (closed, a PR or branch already exists) **stop and report**
+instead of opening a duplicate. (A picker-based runner like the cloud routine
+relies on the phase-1 claim to block concurrent re-picks; this guard catches a
+*manual* re-run or an already-shipped issue, where there is no picker.) Then
+`scripts/ship/isolate.sh <issue> <type> <slug>` creates the sibling worktree on a
+fresh `<type>/<slug>-<issue>` branch off the default branch — `<type>` matches
+the issue (feat/fix/…) — and copies the gitignored env files in. All
 work, commits, and the PR happen from this branch; clean it up after merge.
 **Commit as you go** — intermediate messages don't matter, but the PR needs real
 commits. (The branch
@@ -133,10 +155,10 @@ or `docs:`. The squash subject, not the branch, drives release tooling.)
 like. A later authoritative comment can supersede the issue body — **spec
 precedence**, detailed in [reference/implement.md](reference/implement.md). **If
 it's too vague to plan, stop and ask** (the ambiguity rail).
-**Claim it before implementing** — mark the issue in-progress per the project's
-claim convention so a concurrent run can't double-pick it (idempotent; skip if
-there's no issue or no documented convention). Don't claim if you stopped on the
-ambiguity rail; if you claim then stop blocked, hand the issue back.
+**Claim it before implementing** — `scripts/ship/claim.sh <issue>` (the assignee
+is the claim; idempotent; skip if there's no issue). Don't claim if you stopped on
+the ambiguity rail; if you claim then stop blocked, hand the issue back
+(`claim.sh <issue> --release`).
 
 **2 · Implement.** Classify the change as `docs` / `code` / `infra`, announce the
 class and the skip path it implies — **and whether it passes the three lane keys**
@@ -144,7 +166,15 @@ class and the skip path it implies — **and whether it passes the three lane ke
 [reference/small-lane.md](reference/small-lane.md)) — then implement
 test-first per class —
 **full detail (classes, TDD override, external-claim verification) in
-[reference/implement.md](reference/implement.md).** **Stay surgical** — implement
+[reference/implement.md](reference/implement.md).**
+**Where implementation runs:** a small-lane change — or a full-lane one once
+phase 1 produced a tight brief (success criteria, file list, test plan, known
+unknowns) — goes to a **sonnet implementation subagent** that composes the `tdd`
+skill and returns a diff summary plus its deviations log as structured output;
+the phase-4 opus review is the quality backstop. Keep implementation on the main
+thread when the issue is exploratory, the spec is still settling, or the change
+touches schema / architecture — a wrong cheap build costs more rework than the
+tier saves. **Stay surgical** — implement
 only what the issue asks; every changed line should trace to it. An adjacent bug or
 cleanup you spot is **out of scope**: file a `needs-triage` issue for it and move
 on, don't fix it inline. **Keep a deviations log** from the first edit: whenever
@@ -187,12 +217,13 @@ the valid ones; record a one-line disposition per finding for the merge summary.
 **5 · Local gate.** *Precondition:* phase 3 passed **or** the class is `docs` — if
 neither holds, you skipped a verification; stop and go back.
 
-Run the project's full verification green before opening the PR, **mirroring the
-checks CI actually runs** (per project instructions) — not a fixed triad: tests,
-lint, type-check, docs build (which now covers the phase-4 docs-sync edits), **and
-any secret/security scan the repo gates on** (cheap to pre-empt locally, expensive
-to discover after the PR is open). If you can't run a check locally, at least
-*anticipate* it. **Small lane:** reduced gate per
+Run `scripts/ship/local-gate.sh` green before opening the PR — it maps the diff
+to the same concern gates CI's path filters select and mirrors them locally,
+secrets grep included. Act on the JSON: `fail` → fix and re-run;
+`deferred-to-ci` (Docker-requiring gates under `--no-docker`) → PR CI proves
+those, don't re-derive them; `unavailable` → a required tool is missing —
+surface it, don't silently skip. **Small lane:**
+`local-gate.sh --small <test-node>` per
 [reference/small-lane.md](reference/small-lane.md).
 
 **6 · Open PR.** Open a **ready** (non-draft) PR — drafts may not trigger the
@@ -206,9 +237,8 @@ copy the phase-2 deviations log into the **Deviations from plan** section
 pass a raw `--body` that bypasses the template; let it populate, then edit. (No
 template → a plain body that closes the issue.) Review fires in
 phase 7 — nothing to wait for at PR-open.
-**Reflect the PR back on the issue** right after opening (typically a comment
-linking the PR) so a scheduled run won't re-pick it; skip if no documented
-convention.
+**Reflect the PR back on the issue** right after opening —
+`scripts/ship/reflect.sh <issue> <pr-url>` — so a scheduled run won't re-pick it.
 
 **7 · Review loop.** Invoke the `copilot-pr-review-loop` skill in **unattended
 mode** (read its `references/unattended.md`) — Copilot is this repo's only
@@ -220,20 +250,20 @@ quiet (zero new findings) or the cap reached with every finding dispositioned**;
 the disposition log lands in the merge summary.
 
 **8 · CI.** CI usually runs concurrently from PR-open, so phases 7 and 8 overlap.
-**First confirm the PR isn't conflicted with the base branch** — `gh pr view <n>
---json mergeable,mergeStateStatus` (`CONFLICTING` / `DIRTY` = conflict). A
-conflicted PR has no merge ref, so merge-commit checks never start and CI sits
-**pending forever** — don't wait on it. Resolve: fetch the latest default branch,
-rebase (or merge) it in, fix conflicts, **re-run the local gate (phase 5)**, and
-push — that recomputes the merge ref and lets CI run. Then land the checks green.
-If CI goes red **after** review converged, fix and push, then proceed on green —
-a lint/format/flake fix earns no extra review round; don't re-request Copilot
-for it.
+Run `scripts/ship/ci-wait.sh <pr>` — it checks for a base-branch conflict first
+(a conflicted PR has no merge ref, so its checks sit **pending forever**; the
+script won't wait on one), then blocks until every check completes. On
+`"conflict"`: fetch the latest default branch, rebase (or merge) it in, fix
+conflicts, **re-run the local gate (phase 5)**, push, and re-run the script. On
+`"checks-failed"`: fix the named checks and push, then proceed on green — a
+lint/format/flake fix earns no extra review round; don't re-request Copilot
+for it. `"no-checks"` on a docs-only diff is fine (path-filtered CI).
 
 **9 · Merge gate.** **Hard stop.** Post the summary and wait for the user's
-explicit "merge"; on approval, squash-merge, delete the branch, clean up the
-worktree. Summary format and merge mechanics:
-**[reference/merge-gate.md](reference/merge-gate.md).**
+explicit "merge"; on approval run
+`scripts/ship/merge.sh <pr> <issue> --worktree <path>` (squash-merge, verify
+merged + issue closed, delete branches, remove the worktree). Summary format and
+mechanics detail: **[reference/merge-gate.md](reference/merge-gate.md).**
 
 ## Reference files
 

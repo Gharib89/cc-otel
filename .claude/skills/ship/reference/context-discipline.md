@@ -6,7 +6,8 @@ decisions, not dumps.
 
 **The delegation rule — delegate noise, not size.** A subagent earns its cost only
 when the raw output you'd otherwise ingest is much larger than the conclusion you
-need: a multi-file map, a full suite run, CI logs, a poll loop. When you can
+need: a multi-file map, a large unfamiliar diff. (Suite runs, CI logs, and merge
+mechanics are scripts now — *Scripted mechanics* in SKILL.md.) When you can
 already point at the target — one or two known files, a single test node, one
 projected `gh` call — work inline; a subagent there costs more than it saves
 (spawn overhead, relay loss, re-reading). A small-lane run typically spawns none
@@ -32,12 +33,11 @@ In rough order of impact:
   to "confirm" the change is pure cost.
 - **Targeted test nodes during the loop; full suite only at the local gate.** Name
   the nodes you touched; re-running the whole suite every cycle is slow noise.
-- **Delegate the noisy verification *runs*, not just reads.** The full local gate
-  (phase 5), live integration tests (phase 3), and CI polling (phase 8) each dump
-  volumes of output. Run them in a cheap-tier subagent (model-tier table in
-  SKILL.md) that returns a pass/fail summary plus only the failing lines — never
-  let raw suite / build / CI logs land in the main thread. (A single targeted
-  test node's output is already small — run it inline.)
+- **The noisy verification *runs* are scripts, not subagents.** The local gate
+  (phase 5) and CI wait (phase 8) project their own output — JSON verdict on
+  stdout, failing lines only on stderr (*Scripted mechanics* in SKILL.md). Run
+  them inline; a subagent wrapped around a script is pure overhead. (A single
+  targeted test node's output is already small — run it inline too.)
 - **One scratch file for the design/plan** (it survives a mid-run context
   summary); don't restate the same summary across turns.
 

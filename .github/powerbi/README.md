@@ -10,6 +10,7 @@ by the exact `$schema` version each report file declares.
 | File | Job | Source |
 |---|---|---|
 | `validate-pbir.mjs` | `pbir-schema` | project-native — validates each PBIP/PBIR file against the Fabric JSON schema it declares in `$schema` (ajv `8.17.1`, fetches the schema + `$ref` closure over HTTP) |
+| `gotchas-lint.mjs` | `pbir-schema` | project-native — the statically checkable `pbir-gotchas` skill traps as lint rules (#135); pure node, no deps |
 | `fab-inspector-rules.json` | `fab-inspector` | vendored from `NatVanG/fab-inspector` `v3.4.0` `Rules/Base-rules.json` (report visual-quality rules) |
 | `BPARules.json` | `bpa` | vendored from `TabularEditor/BestPracticeRules` `BPARules-PowerBI.json` |
 

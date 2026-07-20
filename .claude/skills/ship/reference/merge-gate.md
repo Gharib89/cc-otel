@@ -46,18 +46,15 @@ CI is green, before a review lands.
 
 ## On approval
 
-1. Squash-merge the PR and delete the remote branch
-   (`gh pr merge <n> --squash --delete-branch`). The squash **subject** is what
-   release tooling reads — make sure it's the Conventional-Commit line from the
-   PR title (see project instructions).
-2. Re-verify the PR actually merged (`gh pr view <n> --json state,mergedAt`)
-   before reporting done — don't assume the command took.
-3. Confirm the linked issue closed. The `Closes #<issue>` in the squash body should
-   auto-close it on merge to the default branch; verify (`gh issue view <issue>
-   --json state`) and close it manually if it didn't.
-4. Clean up the local workspace: a squash-merged branch isn't an ancestor of the
-   default branch, so local branch deletion needs a force delete, and exiting the
-   worktree should discard its now-orphaned changes.
+Run `scripts/ship/merge.sh <pr> <issue> --worktree <path>` from the main
+checkout. It performs the whole land-and-clean ritual and reports each step in
+its JSON: squash-merge (the squash **subject** is the PR title — release tooling
+reads it, so the title must be the Conventional-Commit line), re-verify the PR
+actually reached `MERGED`, verify the `Closes #<issue>` auto-close fired (closes
+manually if not), copy gitignored env files out of the worktree, delete the
+remote branch explicitly, remove the worktree, force-delete the local branch (a
+squash-merged branch isn't an ancestor of the default branch), and ff-only pull.
+Any `false` in the JSON → finish that step by hand before reporting done.
 
 ## If the user says no / wants changes
 

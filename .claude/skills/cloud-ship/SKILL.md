@@ -78,13 +78,14 @@ Then **invoke the `ship` skill on issue $NUM**. While it runs:
 - **This branch in the sandbox clone IS `ship`'s phase-0 isolation** — don't
   create a worktree inside it; treat phase 0 as satisfied (its pre-flight
   already-in-flight check still applies).
-- **Integration gate by `DOCKER`:** `present` → full pytest (testcontainers)
-  runs locally per `ship`. `absent` → run the unit suite (`sink/tests`), ruff,
-  and sqlfluff locally; **PR CI is the integration gate** — merge-ready requires
-  the CI integration job green, and a **schema-touching issue is blocked**
-  (`ship` reference/cc-otel.md: no live Postgres → `schema.sql` can't
-  regenerate). No CI configured on the repo yet → **blocked** for any `code`
-  change (nothing can prove integration).
+- **Integration gate by `DOCKER`:** `ship`'s phase-5 gate is
+  `scripts/ship/local-gate.sh` — plain when `DOCKER=present`; `--no-docker` when
+  `absent`, which marks the Docker-requiring gates (integration pytest,
+  schema-drift, docker builds) `deferred-to-ci`: **PR CI is the integration
+  gate** — merge-ready requires the CI integration job green, and a
+  **schema-touching issue is blocked** (`ship` reference/cc-otel.md: no live
+  Postgres → `schema.sql` can't regenerate). No CI configured on the repo yet →
+  **blocked** for any `code` change (nothing can prove integration).
 - The shared dev DB is out of reach by design — the fire has no `DATABASE_URL`
   and must never construct one.
 - Put **`Closes #$NUM`** in the PR body so the squash-merge auto-closes the
@@ -127,8 +128,10 @@ fires skip it until the merge closes it.
   gate**.
 - **Subagent tools are absent too.** `ship`'s delegation rule and model-tier
   table are inert in a fire — run everything inline in the main thread (the
-  `code-review` skill's two axes included), and compensate by projecting every
-  GitHub / CLI call harder, since nothing can be offloaded.
+  `code-review` skill's two axes and the implementation subagent included), and
+  compensate by projecting every GitHub / CLI call harder, since nothing can be
+  offloaded. `ship`'s **scripts still run** — `local-gate.sh` is local-only and
+  works in a fire; the `gh`-wrapping ones do not (next section).
 
 ## GitHub access in a fire
 
@@ -139,8 +142,10 @@ gates `gh`'s repo/PR/issue REST endpoints (`api.github.com`) — they return
 `403 "GitHub access is not enabled for this session"` regardless of `GH_TOKEN` —
 so every `gh` command in `ship`, its references, the `copilot-pr-review-loop`
 skill, and the repo docs they follow (`docs/agents/issue-tracker.md`) fails
-here. **This section outranks every literal `gh` command in those files for the
-duration of a fire.** (One deliberate exception: the step-3 dependencies probe
+here — **including the `scripts/ship/*.sh` helpers that wrap `gh`** (preflight,
+claim, reflect, ci-wait, merge; only `local-gate.sh` works in a fire). **This
+section outranks every literal `gh` command and `gh`-wrapping script in those
+files for the duration of a fire.** (One deliberate exception: the step-3 dependencies probe
 *tries* `gh api` as a fallback rung — expect it to 403 and move on.) The merge /
 post-merge commands in `reference/merge-gate.md` are out of a fire's path —
 step 6 ends the fire before merging — so they need no mapping.

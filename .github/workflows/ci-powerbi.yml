@@ -39,6 +39,11 @@ jobs:
       - name: Validate PBIR schemas
         run: node .github/powerbi/validate-pbir.mjs powerbi
 
+      # Statically checkable pbir-gotchas traps (#135) — the skill keeps only the
+      # judgment/runtime-only ones. Pure node, no deps.
+      - name: pbir-gotchas lint
+        run: node .github/powerbi/gotchas-lint.mjs powerbi/cc-otel-report.Report
+
       # First-party PBIR conformance check, promoted to blocking by issue #112:
       # it catches role/theme defects that render silently wrong past ajv (whose
       # schemas model queryState as an open map). Pinned; preview tool.

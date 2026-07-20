@@ -1,9 +1,10 @@
-# Local dev mirror of the ci-powerbi gate: runs the same three validators against
+# Local dev mirror of the ci-powerbi gate: runs the same validators against
 # the on-disk PBIP/PBIR report and TMDL model so an edit-then-validate loop closes
 # on the dev machine before a push. Pinned to the exact tool versions CI pins
 # (ajv 8.17.1, fab-inspector v3.4.0, Tabular Editor 2 2.28.0). A fourth leg runs
 # Microsoft's conformance CLI, BLOCKING since issue #112 promoted it (it catches
-# renders-but-wrong role/theme defects none of the other three can see).
+# renders-but-wrong role/theme defects none of the other three can see). A fifth
+# leg (#135) lints the statically checkable pbir-gotchas traps (gotchas-lint.mjs).
 #
 # Usage:  pwsh .github/powerbi/validate.ps1
 #
@@ -25,6 +26,7 @@ $Model     = Join-Path $RepoRoot 'powerbi/cc-otel-report.SemanticModel/definitio
 $Rules     = Join-Path $RepoRoot '.github/powerbi/fab-inspector-rules.json'
 $BpaRules  = Join-Path $RepoRoot '.github/powerbi/BPARules.json'
 $ValidMjs  = Join-Path $RepoRoot '.github/powerbi/validate-pbir.mjs'
+$GotchaMjs = Join-Path $RepoRoot '.github/powerbi/gotchas-lint.mjs'
 $Cache     = Join-Path $RepoRoot '.pbi-tools'
 
 $FabVersion = 'v3.4.0'
@@ -64,6 +66,27 @@ if ((Have 'node') -and (Have 'npm')) {
   } finally { Pop-Location }
 } else {
   Write-Host '[TOOL] node + npm required for the ajv leg; see docs/agents/powerbi-tooling.md' -ForegroundColor Red
+  $tooling = $true
+}
+
+# --- 1b. pbir-gotchas lint (no deps, plain node) ------------------------------
+Section 'pbir-gotchas lint'
+if (-not (Test-Path $GotchaMjs)) {
+  # Guard before running: node exits 1 for "cannot find module" too, which would
+  # misread a missing/renamed script as report violations. A missing script is
+  # a tooling failure (exit 2), not a report bug.
+  Write-Host "[TOOL] gotchas-lint script not found at ${GotchaMjs}" -ForegroundColor Red
+  $tooling = $true
+} elseif (Have 'node') {
+  try {
+    & node $GotchaMjs (Join-Path $RepoRoot 'powerbi/cc-otel-report.Report') 2>&1 | Out-Host
+    if ($LASTEXITCODE -eq 1) { $failed = $true }
+    elseif ($LASTEXITCODE -ne 0) { $tooling = $true }
+  } catch {
+    Write-Host "[TOOL] gotchas-lint leg failed to run: $_" -ForegroundColor Red; $tooling = $true
+  }
+} else {
+  Write-Host '[TOOL] node required for the gotchas-lint leg' -ForegroundColor Red
   $tooling = $true
 }
 
