@@ -4,10 +4,10 @@
     "pg_exec",
     "pg_adopt",
     "pg_impact",
+    "pg_capacity",
     "pg_overview",
     "pg_users",
     "pg_session",
-    "pg_usage",
     "pg_tool",
     "pg_eco",
     "pg_ingest"
