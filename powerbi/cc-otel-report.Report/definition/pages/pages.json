@@ -2,6 +2,7 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/pagesMetadata/1.1.0/schema.json",
   "pageOrder": [
     "pg_exec",
+    "pg_adopt",
     "pg_overview",
     "pg_users",
     "pg_session",
