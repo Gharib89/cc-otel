@@ -154,6 +154,12 @@ The built-in `pageNavigator` enumerates all pages in `pages.json` order, includi
 
 `labels.labelPrecision` (an `L`-typed literal, e.g. `"0L"`) is **ignored when the measure's model formatString pins decimals** — a `0.0%` formatString renders `75.0%` no matter what the visual says. Fix the decimals in TMDL (`formatString: 0%`), which is a model change: `reload` won't apply it, reopen the pbip. (The `wordWrap`-placement half of this gotcha is linted.)
 
+## 20. Visual Top-N (`VisualTopN`) authored on disk is not applied
+
+A visual-level Top-N filter hand-written into `filterConfig` is **schema-valid but silently ignored** on load — the visual renders every category, scrolling, as if no filter existed. Verified against `ci-powerbi`: ajv (semanticQuery `1.4.0`) requires `Condition.VisualTopN` to be exactly `{ "ItemCount": <n> }` (no `Expression`/`OrderBy`/`Count`/`IsAscending` — that richer shape is legacy report.json, and ajv rejects it), with the ordering measure in the sibling `Where[].Target`. Both the `ItemCount` form and the legacy form failed to limit rows even after a full pbip reopen (not just bridge `reload`), matching the documented caveat that PBIR visual filters activate only after the filter pane is expanded in Desktop.
+
+Consequence: you cannot cap a high-cardinality bar to "top N" purely on disk. Options: leave the visual sorted-descending and scrollable (top-first, standard interactive UX); author the Top-N in Desktop's Filters pane (Desktop-persisted filters do render) and commit the emitted JSON; or filter on an explicit `RANKX` measure via a `Comparison` condition (column categorical + comparison filters *are* honored on disk — see the cohort filters — though measure-comparison reliability is unproven here).
+
 ## Validation flow
 
 Run `pwsh .github/powerbi/validate.ps1` before commit — it mirrors the `ci-powerbi` gate locally (ajv schema, pbir-gotchas lint, fab-inspector rules, Tabular Editor 2 BPA, MS conformance CLI). Setup, the tooling roster, and the exit-code contract: `docs/agents/powerbi-tooling.md`.

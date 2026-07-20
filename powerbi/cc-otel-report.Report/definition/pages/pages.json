@@ -5,11 +5,11 @@
     "pg_adopt",
     "pg_impact",
     "pg_capacity",
+    "pg_eco",
     "pg_overview",
     "pg_users",
     "pg_session",
     "pg_tool",
-    "pg_eco",
     "pg_ingest"
   ],
   "activePageName": "pg_exec"
