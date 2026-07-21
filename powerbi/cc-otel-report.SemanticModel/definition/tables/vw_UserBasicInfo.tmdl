@@ -109,7 +109,26 @@ table vw_UserBasicInfo
 		source =
 				let
 				  Source = Sql.Database("itxdatainteg-prod.database.windows.net", "EmployeeSchema"),
-				  #"Navigation 1" = Source{[Schema = "dbo", Item = "vw_UserBasicInfo"]}[Data]
+				  #"Navigation 1" = Source{[Schema = "dbo", Item = "vw_UserBasicInfo"]}[Data],
+				  // STOPGAP: dbo.vw_UserBasicInfo returns duplicate Email rows, which breaks the
+				  // one-side uniqueness of the dim_user_to_vw_UserBasicInfo relationship at refresh.
+				  // Durable fix is upstream in the HR view; this mirrors the ManagerEmailClean stopgap
+				  // in the same table. Sort by all columns (Email first) so the surviving row per Email
+				  // is deterministic across refreshes, buffer to lock that order, then keep one row per Email.
+				  #"Sorted Rows" = Table.Sort(#"Navigation 1", {
+					{"Email", Order.Ascending},
+					{"DisplayName", Order.Ascending},
+					{"Organization", Order.Ascending},
+					{"Department", Order.Ascending},
+					{"Division", Order.Ascending},
+					{"BusinessUnit", Order.Ascending},
+					{"Account", Order.Ascending},
+					{"ManagerEmail", Order.Ascending},
+					{"ManagerFirstName", Order.Ascending},
+					{"ManagerLastName", Order.Ascending}
+				  }),
+				  #"Buffered Rows" = Table.Buffer(#"Sorted Rows"),
+				  #"Deduped Email" = Table.Distinct(#"Buffered Rows", {"Email"})
 				in
-				  #"Navigation 1"
+				  #"Deduped Email"
 
