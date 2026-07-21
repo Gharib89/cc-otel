@@ -42,11 +42,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Total Input Tokens"
+                  "Property": "Input Tokens (Weekly)"
                 }
               },
-              "queryRef": "_Measures.Total Input Tokens",
-              "nativeQueryRef": "Total Input Tokens"
+              "queryRef": "_Measures.Input Tokens (Weekly)",
+              "nativeQueryRef": "Input Tokens (Weekly)"
             },
             {
               "field": {
@@ -56,11 +56,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Total Output Tokens"
+                  "Property": "Output Tokens (Weekly)"
                 }
               },
-              "queryRef": "_Measures.Total Output Tokens",
-              "nativeQueryRef": "Total Output Tokens"
+              "queryRef": "_Measures.Output Tokens (Weekly)",
+              "nativeQueryRef": "Output Tokens (Weekly)"
             }
           ]
         }

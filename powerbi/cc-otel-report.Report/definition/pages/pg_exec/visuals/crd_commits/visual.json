@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Commits 28d"
+                  "Property": "Total Commits"
                 }
               },
-              "queryRef": "_Measures.Commits 28d",
-              "nativeQueryRef": "Commits 28d"
+              "queryRef": "_Measures.Total Commits",
+              "nativeQueryRef": "Total Commits"
             }
           ]
         }

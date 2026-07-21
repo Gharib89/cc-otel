@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Tool Acceptance Rate 28d"
+                  "Property": "Tool Acceptance Rate"
                 }
               },
-              "queryRef": "_Measures.Tool Acceptance Rate 28d",
-              "nativeQueryRef": "Tool Acceptance Rate 28d"
+              "queryRef": "_Measures.Tool Acceptance Rate",
+              "nativeQueryRef": "Tool Acceptance Rate"
             }
           ]
         }
