@@ -53,7 +53,9 @@ REST endpoints are gated in the cloud sandbox — see *GitHub access in a fire*)
   (`mcp__github__list_issues` labels=["ready-for-agent"] state=OPEN
   orderBy=CREATED_AT direction=ASC).
 - Walk candidates ascending, skipping any with an assignee (assigned = claimed —
-  in flight or awaiting merge).
+  in flight or awaiting merge) **and any carrying the `desktop-bound` label** —
+  those need Windows + Power BI Desktop and ship locally via the
+  `powerbi-ship` skill; a cloud fire cannot verify them.
 - **Blocker check** on the first unassigned candidate: it is pickable only if it
   has no *open* blocker. Read its dependencies — try `mcp__github__issue_read`
   `method=get` (look for blocked-by data in the payload), then
