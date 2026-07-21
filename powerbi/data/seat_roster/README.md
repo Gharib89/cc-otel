@@ -1,7 +1,9 @@
 # Seat roster drops
 
-IS-provided Claude seat roster consumed by the `seat_roster` semantic-model table
-(#116 delivery, #117 modeling decision).
+Claude seat roster consumed by the `seat_roster` semantic-model table
+(#117 modeling decision). Derived from telemetry — the roster is regenerated
+from post-cleanup `marts.dim_user` (itworx emails), superseding the IS-file
+plan (#116, via the #153 shine map / #154).
 
 - **File convention:** `seat_roster_YYYY-MM-DD.csv` — one file per drop, dated
   as-of. The model's M query always loads the **latest** drop by filename sort;
@@ -18,6 +20,7 @@ IS-provided Claude seat roster consumed by the `seat_roster` semantic-model tabl
   source values (the Postgres hostname). Authoring/refresh happens on the one
   Desktop authoring machine by convention; adjust the partition source if that
   ever moves.
-- Until #116 delivers the real file, the drop in place is a **stub** (real
-  telemetry emails + clearly-marked `stub.idle-seat-*` rows) so measures return
-  non-blank values; swap in the real file when it lands.
+- **Generating a drop:** query interim `marts.dim_user` for itworx emails and
+  emit one row per user — `ahmed.gharib@itworx.com` and `hadeel.sharaf@itworx.com`
+  are `Premium`, every other user `Standard`. No stub rows (the #163 regeneration
+  dropped the earlier `stub.idle-seat-*` placeholders).
