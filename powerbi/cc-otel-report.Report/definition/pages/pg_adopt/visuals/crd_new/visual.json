@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "New Users 28d"
+                  "Property": "New Users"
                 }
               },
-              "queryRef": "_Measures.New Users 28d",
-              "nativeQueryRef": "New Users 28d"
+              "queryRef": "_Measures.New Users",
+              "nativeQueryRef": "New Users"
             }
           ]
         }

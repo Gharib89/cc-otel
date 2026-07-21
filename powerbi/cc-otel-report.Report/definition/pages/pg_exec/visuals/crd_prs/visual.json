@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "PRs 28d"
+                  "Property": "Total PRs"
                 }
               },
-              "queryRef": "_Measures.PRs 28d",
-              "nativeQueryRef": "PRs 28d"
+              "queryRef": "_Measures.Total PRs",
+              "nativeQueryRef": "Total PRs"
             }
           ]
         }

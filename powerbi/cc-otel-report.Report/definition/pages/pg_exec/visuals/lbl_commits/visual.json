@@ -19,7 +19,7 @@
               {
                 "textRuns": [
                   {
-                    "value": "COMMITS (28D)",
+                    "value": "COMMITS",
                     "textStyle": {
                       "fontWeight": "bold",
                       "fontSize": "8pt",

@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Reactivated Users 28d"
+                  "Property": "Reactivated Users"
                 }
               },
-              "queryRef": "_Measures.Reactivated Users 28d",
-              "nativeQueryRef": "Reactivated Users 28d"
+              "queryRef": "_Measures.Reactivated Users",
+              "nativeQueryRef": "Reactivated Users"
             }
           ]
         }

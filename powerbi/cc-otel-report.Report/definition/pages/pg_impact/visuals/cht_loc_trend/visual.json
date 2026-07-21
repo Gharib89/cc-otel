@@ -42,11 +42,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Total Lines of Code"
+                  "Property": "Lines of Code (Weekly)"
                 }
               },
-              "queryRef": "_Measures.Total Lines of Code",
-              "nativeQueryRef": "Total Lines of Code"
+              "queryRef": "_Measures.Lines of Code (Weekly)",
+              "nativeQueryRef": "Lines of Code (Weekly)"
             }
           ]
         }

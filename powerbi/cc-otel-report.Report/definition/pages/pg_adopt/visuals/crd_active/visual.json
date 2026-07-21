@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Active Users 28d"
+                  "Property": "Active Roster Users"
                 }
               },
-              "queryRef": "_Measures.Active Users 28d",
-              "nativeQueryRef": "Active Users 28d"
+              "queryRef": "_Measures.Active Roster Users",
+              "nativeQueryRef": "Active Roster Users"
             }
           ]
         }

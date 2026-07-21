@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Off-Roster Active Users 28d"
+                  "Property": "Off-Roster Active Users"
                 }
               },
-              "queryRef": "_Measures.Off-Roster Active Users 28d",
-              "nativeQueryRef": "Off-Roster Active Users 28d"
+              "queryRef": "_Measures.Off-Roster Active Users",
+              "nativeQueryRef": "Off-Roster Active Users"
             }
           ]
         }

@@ -19,7 +19,7 @@
               {
                 "textRuns": [
                   {
-                    "value": "ACTIVE USERS (28D)",
+                    "value": "ACTIVE USERS",
                     "textStyle": {
                       "fontWeight": "bold",
                       "fontSize": "8pt",

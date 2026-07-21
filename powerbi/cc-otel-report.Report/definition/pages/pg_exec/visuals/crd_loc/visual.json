@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Lines of Code 28d"
+                  "Property": "Total Lines of Code"
                 }
               },
-              "queryRef": "_Measures.Lines of Code 28d",
-              "nativeQueryRef": "Lines of Code 28d"
+              "queryRef": "_Measures.Total Lines of Code",
+              "nativeQueryRef": "Total Lines of Code"
             }
           ]
         }

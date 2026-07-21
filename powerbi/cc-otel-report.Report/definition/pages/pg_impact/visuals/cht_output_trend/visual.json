@@ -42,11 +42,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Total Commits"
+                  "Property": "Commits (Weekly)"
                 }
               },
-              "queryRef": "_Measures.Total Commits",
-              "nativeQueryRef": "Total Commits"
+              "queryRef": "_Measures.Commits (Weekly)",
+              "nativeQueryRef": "Commits (Weekly)"
             },
             {
               "field": {
@@ -56,11 +56,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Total PRs"
+                  "Property": "PRs (Weekly)"
                 }
               },
-              "queryRef": "_Measures.Total PRs",
-              "nativeQueryRef": "Total PRs"
+              "queryRef": "_Measures.PRs (Weekly)",
+              "nativeQueryRef": "PRs (Weekly)"
             }
           ]
         }
