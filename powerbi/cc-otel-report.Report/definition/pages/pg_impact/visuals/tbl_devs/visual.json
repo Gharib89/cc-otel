@@ -229,7 +229,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'DEVELOPER OUTPUT LEADERBOARD'"
+                  "Value": "'DEVELOPER LEADERBOARD'"
                 }
               }
             },

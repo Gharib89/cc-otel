@@ -40,7 +40,7 @@ table mart_refresh_log
 		dataType: int64
 		formatString: 0
 		lineageTag: 4516ea5e-e6d4-4758-99d3-f8b880839e5d
-		summarizeBy: sum
+		summarizeBy: none
 		sourceColumn: row_count
 
 		annotation SummarizationSetBy = Automatic
