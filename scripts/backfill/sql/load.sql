@@ -36,6 +36,7 @@ BEGIN
     SELECT s.*
     FROM backfill_stg.metrics s
     WHERE s.scope_name IS DISTINCT FROM 'github.copilot'
+      AND (s.user_email IS NULL OR lower(trim(s.user_email)) LIKE '%@itworx.com')
       AND (
           s.session_id IS NULL
           OR s.session_id NOT IN (SELECT session_id FROM _existing_sessions)
@@ -46,6 +47,7 @@ BEGIN
     SELECT s.*
     FROM backfill_stg.events s
     WHERE s.scope_name IS DISTINCT FROM 'com.anthropic.claude_code.tracing'
+      AND (s.user_email IS NULL OR lower(trim(s.user_email)) LIKE '%@itworx.com')
       AND (
           s.session_id IS NULL
           OR s.session_id NOT IN (SELECT session_id FROM _existing_sessions)

@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 import pytest
-from _helpers import _insert, ins_event
+from _helpers import _insert, ins_event, ins_metric
 
 BACKFILL_SQL = Path(__file__).resolve().parents[2] / "scripts" / "backfill" / "sql"
 
@@ -69,6 +69,10 @@ def ins_poc_event(conn, **cols) -> None:
 
 def one(conn, sql):
     return conn.execute(sql).fetchone()
+
+
+def count(conn, table: str, where: str) -> int:
+    return one(conn, f"SELECT count(*) FROM {table} WHERE {where}")[0]
 
 
 @pytest.fixture
@@ -226,6 +230,78 @@ def test_sum_cumulative_rows_retained(bf):
 # Note: idempotency (the meta.processed_batches sentinel) is intentionally NOT
 # automated here — issue #131's Testing Decisions assign it to the manual
 # verification gate. load.sql claims `poc-backfill:interim:v1` and no-ops on re-run.
+
+
+def test_non_itworx_emails_excluded_nulls_kept(bf):
+    # Non-itworx domain must be dropped; itworx and NULL emails must land
+    # (NULLs are covered by the unknown_email dq finding, #162). The itworx match is
+    # case-/whitespace-insensitive, so a mixed-case ITWORX address must also land.
+    for email in ("dev@gmail.com", "someone@itworx.com", " Mixed@ITWORX.COM ", None):
+        ins_poc_metric(
+            bf,
+            ts=IN_WINDOW,
+            metric_name="m",
+            metric_type="sum",
+            value=1,
+            session_id=S_HIST,
+            user_email=email,
+            scope_name="com.anthropic.claude_code",
+        )
+        ins_poc_event(
+            bf,
+            event_time=IN_WINDOW,
+            event_name="api_request",
+            session_id=S_HIST,
+            user_email=email,
+            scope_name="com.anthropic.claude_code.events",
+        )
+    run_backfill(bf)
+    # Only the gmail row is dropped; both itworx rows (lowercase + mixed-case) and NULL land.
+    assert count(bf, "raw.metrics", "lower(trim(user_email)) NOT LIKE '%@itworx.com'") == 0
+    assert count(bf, "raw.metrics", "user_email IS NULL") == 1
+    assert count(bf, "raw.metrics", "lower(trim(user_email)) LIKE '%@itworx.com'") == 2
+    assert count(bf, "raw.events", "lower(trim(user_email)) NOT LIKE '%@itworx.com'") == 0
+    assert count(bf, "raw.events", "user_email IS NULL") == 1
+    assert count(bf, "raw.events", "lower(trim(user_email)) LIKE '%@itworx.com'") == 2
+
+
+def test_purge_non_itworx_removes_only_backfilled_non_itworx_and_logs_finding(conn):
+    # Seed raw directly (the one-shot purge operates on raw, not the backfill staging).
+    # Backfilled rows (ts < 2026-07-14). The mixed-case ITWORX address must survive (the
+    # domain is matched case-/whitespace-insensitively so corp rows are never wrongly purged).
+    seeded = ("dev@gmail.com", "x@outlook.com", "someone@itworx.com", " Mixed@ITWORX.COM ", None)
+    for email in seeded:
+        ins_metric(conn, ts=IN_WINDOW, metric_name="m", metric_type="sum", user_email=email)
+        ins_event(conn, event_time=IN_WINDOW, event_name="api_request", user_email=email)
+    # A LIVE non-itworx row (>= 2026-07-14) that the window-scoped purge must NOT touch.
+    LIVE = "2026-07-15T10:00:00Z"
+    ins_metric(conn, ts=LIVE, metric_name="m", metric_type="sum", user_email="live@gmail.com")
+    ins_event(conn, event_time=LIVE, event_name="api_request", user_email="live@gmail.com")
+    conn.execute(_read("purge_non_itworx.sql"))
+
+    # Backfilled non-itworx gone; the live non-itworx row survives.
+    bw_m = "lower(trim(user_email)) NOT LIKE '%@itworx.com' AND ts < DATE '2026-07-14'"
+    bw_e = "lower(trim(user_email)) NOT LIKE '%@itworx.com' AND event_time < DATE '2026-07-14'"
+    assert count(conn, "raw.metrics", bw_m) == 0
+    assert count(conn, "raw.events", bw_e) == 0
+    assert count(conn, "raw.metrics", "user_email='live@gmail.com'") == 1
+    assert count(conn, "raw.events", "user_email='live@gmail.com'") == 1
+    # Both itworx rows (lowercase + mixed-case) and NULL emails kept.
+    assert count(conn, "raw.metrics", "lower(trim(user_email)) LIKE '%@itworx.com'") == 2
+    assert count(conn, "raw.metrics", "user_email IS NULL") == 1
+    assert count(conn, "raw.events", "lower(trim(user_email)) LIKE '%@itworx.com'") == 2
+    assert count(conn, "raw.events", "user_email IS NULL") == 1
+
+    # DQ finding records the purge with the total row count and the distinct domains (not emails).
+    # Only the backfilled non-itworx rows count; the live gmail.com row is out of window.
+    row = one(
+        conn,
+        "SELECT finding_type, row_count, details->'domains' FROM marts.dq_finding "
+        "WHERE finding_type='non_itworx_email_purge'",
+    )
+    assert row[0] == "non_itworx_email_purge"
+    assert row[1] == 4  # 2 backfilled non-itworx metrics + 2 events
+    assert row[2] == ["gmail.com", "outlook.com"]
 
 
 def test_window_excludes_out_of_range_rows(bf):
