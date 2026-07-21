@@ -6,7 +6,7 @@
 //   default reportDir: powerbi/cc-otel-report.Report
 // Exit: 0 clean · 1 violations found · 2 walk/parse infrastructure failure
 import { readFile, readdir } from 'node:fs/promises';
-import { join, basename, sep } from 'node:path';
+import { join, basename, dirname, sep } from 'node:path';
 
 const ROOT = process.argv[2] ?? 'powerbi/cc-otel-report.Report';
 const NAME_RE = /^[a-zA-Z0-9_-]+$/;
@@ -36,6 +36,70 @@ async function walk(dir, out = []) {
 
 const literalOf = (prop) => prop?.expr?.Literal?.Value;
 
+// G22 model awareness: parse the sibling SemanticModel's TMDL into a per-table
+// {columns, measures} catalog so we can tell a real measure from a column that
+// was wrongly wrapped as one. Returns null when no model is found beside ROOT
+// (the rule then no-ops — it can't run without the model).
+const tmdlName = (raw) => raw.replace(/^'(.*)'$/, '$1');
+async function loadModelCatalog(root) {
+  let siblings;
+  try {
+    siblings = await readdir(dirname(root), { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  const model = siblings.find((e) => e.isDirectory() && e.name.endsWith('.SemanticModel'));
+  if (!model) return null;
+  const tablesDir = join(dirname(root), model.name, 'definition', 'tables');
+  let tmdlFiles;
+  try {
+    tmdlFiles = (await readdir(tablesDir)).filter((n) => n.endsWith('.tmdl'));
+  } catch {
+    return null;
+  }
+  const catalog = new Map(); // entity -> { columns: Set, measures: Set }
+  for (const name of tmdlFiles) {
+    const text = await readFile(join(tablesDir, name), 'utf8');
+    let entry = null;
+    for (const line of text.split('\n')) {
+      const table = line.match(/^table\s+(?:'([^']+)'|(\S+))/);
+      if (table) {
+        entry = { columns: new Set(), measures: new Set() };
+        catalog.set(tmdlName(table[1] ?? table[2]), entry);
+        continue;
+      }
+      if (!entry) continue;
+      const col = line.match(/^\s+column\s+(?:'([^']+)'|([^\s=]+))/);
+      if (col) { entry.columns.add(tmdlName(col[1] ?? col[2])); continue; }
+      const meas = line.match(/^\s+measure\s+(?:'([^']+)'|([^\s=]+))/);
+      if (meas) entry.measures.add(tmdlName(meas[1] ?? meas[2]));
+    }
+  }
+  return catalog;
+}
+
+// G22: a numeric column wrapped as { "Measure": {...} } (implicit-aggregation
+// form) is a hard field error on live data in tableEx — invisible to the static
+// legs and to Desktop until it hits real rows. Any Measure field whose Property
+// is a known column (and not a measure) of its entity is the trap.
+function checkImplicitMeasure(file, node, catalog) {
+  if (Array.isArray(node)) {
+    for (const item of node) checkImplicitMeasure(file, item, catalog);
+    return;
+  }
+  if (!node || typeof node !== 'object') return;
+  const m = node.Measure;
+  const entity = m?.Expression?.SourceRef?.Entity;
+  const prop = m?.Property;
+  if (entity && prop) {
+    const t = catalog.get(entity);
+    if (t && t.columns.has(prop) && !t.measures.has(prop)) {
+      flag(file, 'G22', `${entity}.${prop} is a column projected as a Measure — a runtime field error; use { "Column": {...} } (or an Aggregation wrapper for implicit agg)`);
+    }
+  }
+  for (const value of Object.values(node)) checkImplicitMeasure(file, value, catalog);
+}
+
 // G1: "Drillthrough" is a pageBinding type, never a filter type.
 function checkFilters(file, data) {
   for (const f of data?.filterConfig?.filters ?? []) {
@@ -45,7 +109,7 @@ function checkFilters(file, data) {
   }
 }
 
-function checkVisual(file, data) {
+function checkVisual(file, data, catalog) {
   const v = data?.visual;
   if (!v) return;
   const type = v.visualType;
@@ -53,6 +117,7 @@ function checkVisual(file, data) {
   const vco = v.visualContainerObjects ?? {};
 
   checkFilters(file, data);
+  if (catalog) checkImplicitMeasure(file, v.query, catalog);
 
   // G4/G16: visualLink placement — only actionButton/pageNavigator carry it,
   // and only under visualContainerObjects.
@@ -173,9 +238,17 @@ const usedTypes = new Set(
   parsed.map(([, d]) => d?.visual?.visualType).filter(Boolean),
 );
 
+let catalog;
+try {
+  catalog = await loadModelCatalog(ROOT);
+} catch (err) {
+  console.error(`cannot read semantic model: ${err.message}`);
+  process.exit(2);
+}
+
 for (const [file, data] of parsed) {
   const name = basename(file);
-  if (name === 'visual.json') checkVisual(file, data);
+  if (name === 'visual.json') checkVisual(file, data, catalog);
   else if (name === 'page.json') checkFilters(file, data);
   else if (data?.visualStyles || data?.textClasses) checkTheme(file, data, usedTypes);
 }

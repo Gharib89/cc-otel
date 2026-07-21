@@ -11,7 +11,7 @@ For general PBIR format reference, defer to the `pbir-format` skill (data-goblin
 
 ## Statically checkable traps are enforced, not documented
 
-`.github/powerbi/gotchas-lint.mjs` (a `validate.ps1` / `ci-powerbi` leg, #135) fails the gate on the machine-checkable traps: Drillthrough-as-filter-type (1), `visualLink` under `objects` (4), folder naming (7), multi-projection cards (10), theme subtype cascade (11), `shape` fill (13), the actionButton show/selector contract + state ids (14), `textbox` visualLink (16), thin actionButton fill (17), theme `visualStyles` property shapes (18), `wordWrap` inside `labels` (19). Fix what a lint message names — the rule text travels with it. Below are only the traps a linter can't catch, keeping their original numbers.
+`.github/powerbi/gotchas-lint.mjs` (a `validate.ps1` / `ci-powerbi` leg, #135) fails the gate on the machine-checkable traps: Drillthrough-as-filter-type (1), `visualLink` under `objects` (4), folder naming (7), multi-projection cards (10), theme subtype cascade (11), `shape` fill (13), the actionButton show/selector contract + state ids (14), `textbox` visualLink (16), thin actionButton fill (17), theme `visualStyles` property shapes (18), `wordWrap` inside `labels` (19), and a column projected as a `Measure` (22, the only model-aware rule — it parses the sibling `.SemanticModel` TMDL to tell a real measure from a wrongly-wrapped column; renders as a hard field error on live data that every other leg passes silently). Fix what a lint message names — the rule text travels with it. Below are only the traps a linter can't catch, keeping their original numbers.
 
 ## 1. Drillthrough — the runtime half
 
