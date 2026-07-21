@@ -483,7 +483,10 @@ function Invoke-StepPgCronVerify {
 function Invoke-StepRollImage {
     [OutputType([int])]
     param([Parameter(Mandatory)]$Config)
-    gh workflow run deploy.yml -f environment=$($Config.Environment)
+    # Out-Host keeps gh's stdout off the pipeline; left on it, it pollutes the
+    # return value into @(<gh output>, 0) and the dispatcher false-halts a
+    # successful dispatch (same class as the dbmate/psql leaks above).
+    gh workflow run deploy.yml -f environment=$($Config.Environment) 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { Write-BootstrapLog 'deploy.yml dispatch failed.' 'FAIL'; return 1 }
     Write-BootstrapLog 'Dispatched deploy.yml; watch it with `gh run watch`.'
     return 0
