@@ -238,7 +238,13 @@ const usedTypes = new Set(
   parsed.map(([, d]) => d?.visual?.visualType).filter(Boolean),
 );
 
-const catalog = await loadModelCatalog(ROOT);
+let catalog;
+try {
+  catalog = await loadModelCatalog(ROOT);
+} catch (err) {
+  console.error(`cannot read semantic model: ${err.message}`);
+  process.exit(2);
+}
 
 for (const [file, data] of parsed) {
   const name = basename(file);
