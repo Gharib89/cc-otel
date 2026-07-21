@@ -121,13 +121,17 @@ Single-context layout — `CONTEXT.md` + `docs/adr/` at the repo root. See `docs
 
 ### Shipping
 
-`ship` (issue → merge-ready PR, human merge gate), `cloud-ship` (unattended
-routine fire), and `pbir-gotchas` (Power BI format traps) are **project-native**
-skills in `.claude/skills/` — their source of truth is this repo. Every other
-skill under `.claude/skills/` is **vendored** from the operator's personal skills
-by `uv run python scripts/sync-skills.py` (run locally, commit the result; never
-edit vendored copies by hand). The scheduled routine that drives `cloud-ship`
-over the `ready-for-agent` frontier: `docs/agents/cloud-ship-routine.md`.
+`ship` (issue → merge-ready PR, human merge gate), `powerbi-ship`
+(`desktop-bound` Power BI issues — Desktop-verified visuals, no Copilot review,
+merge gate opens the report in Desktop), `cloud-ship` (unattended routine
+fire), and `pbir-gotchas` (Power BI format traps) are **project-native** skills
+in `.claude/skills/` — their source of truth is this repo. Issues labeled
+`desktop-bound` route through `powerbi-ship`, never `ship` or a cloud fire.
+Every other skill under `.claude/skills/` is **vendored** from the operator's
+personal skills by `uv run python scripts/sync-skills.py` (run locally, commit
+the result; never edit vendored copies by hand). The scheduled routine that
+drives `cloud-ship` over the `ready-for-agent` frontier:
+`docs/agents/cloud-ship-routine.md`.
 
 ### Power BI authoring
 

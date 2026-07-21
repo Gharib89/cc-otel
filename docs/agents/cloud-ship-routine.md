@@ -1,8 +1,9 @@
 # Cloud ship routine
 
 A claude.ai **routine** (research preview) that ships the frontier issue —
-oldest open `ready-for-agent`, unassigned, no open blockers — to a merge-ready
-PR via the **`cloud-ship` skill** (which composes the **`ship`** skill), then
+oldest open `ready-for-agent`, unassigned, no open blockers, not
+`desktop-bound` (those need Windows + Power BI Desktop and ship locally via
+the `powerbi-ship` skill) — to a merge-ready PR via the **`cloud-ship` skill** (which composes the **`ship`** skill), then
 stops at the merge gate without merging. One issue per fire, at most 3 open PRs
 at a time. Manage at https://claude.ai/code/routines or via `/schedule` in the CLI.
 
