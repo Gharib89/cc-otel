@@ -14,6 +14,9 @@ staging lifecycle, and `refresh_all()` are covered by the gate below.
 - **Window:** `2026-05-24` (first clean all-`sum_delta` day) .. `2026-07-16` (POC last day), inclusive.
 - **Scope filter:** drops `github.copilot` metrics and `com.anthropic.claude_code.tracing`
   events (ADR-0001); keeps `com.anthropic.claude_code*`, `cc-otel.statusline`, and null-scope rows.
+- **Domain filter (#162):** drops rows whose `user_email` has a non-itworx domain; keeps
+  itworx and null-`user_email` rows. So a rerun cannot reintroduce the non-itworx rows the
+  one-shot purge below removed.
 - **Mapping:** POC schema-v1 -> schema-v2 — same-named columns 1:1, `token_type`->`type_label`,
   `usage_window`/`source` and the event agent/plugin/marketplace/mcp/decision columns lifted
   out of `attrs`; `attrs`/`resource` JSONB dropped. See `sql/map_metrics.sql`, `sql/map_events.sql`.
@@ -34,6 +37,23 @@ psql "$INTERIM_DATABASE_URL" -c 'SELECT marts.refresh_all()'
 
 The load prints the inserted row counts and the overlap-complement session list
 (`>= 2026-07-14`) — **record that list**; it is part of the rollback predicate below.
+
+## One-shot purge of non-itworx emails (#162)
+
+The initial backfill (before the domain filter above) carried non-itworx-domain emails into
+interim. `sql/purge_non_itworx.sql` deletes those rows from `raw.metrics` / `raw.events` in one
+transaction (NULL emails kept -- covered by the `unknown_email` DQ finding) and logs a
+`non_itworx_email_purge` `marts.dq_finding` row with the total row count and the distinct domains
+purged (domains, not full emails). Run once against interim, locally, then refresh so the staging
+views + marts matviews (all rebuilt from raw) drop the derived rows too:
+
+```sh
+psql "$INTERIM_DATABASE_URL" -f scripts/backfill/sql/purge_non_itworx.sql   # prints deleted counts
+psql "$INTERIM_DATABASE_URL" -c 'SELECT marts.refresh_all()'
+```
+
+Verify: `SELECT count(*) FROM raw.metrics WHERE user_email NOT LIKE '%@itworx.com'` (and
+`raw.events`) return 0, and the `non_itworx_email_purge` DQ finding row is present.
 
 ## Verification gate (run after load + refresh_all)
 
