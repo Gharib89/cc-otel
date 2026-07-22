@@ -114,7 +114,7 @@ to see what is actually present in the blob reservoir.
 | `output_tokens` | bigint | 20.7% | 26.0% | 2,250 | Completion tokens. | fact_api_usage |
 | `cache_creation_tokens` | bigint | 20.7% | 46.0% | 3,984 | Cache-write tokens. | fact_api_usage |
 | `cache_read_tokens` | bigint | 20.7% | 89.4% | 7,743 | Cache-read tokens. | fact_api_usage |
-| `cost_usd` | double precision | 20.7% | 99.4% | 8,610 | Estimated cost. |  |
+| `cost_usd` | double precision | 20.7% | 99.4% | 8,610 | API-equivalent value consumed (flat per-seat, not spend). | fact_api_usage |
 | `cc_version` | text | 100.0% | 0.0% | 10 | Claude Code version. | install health |
 | `event_sequence` | bigint | 100.0% | 7.4% | 3,091 | Per-session event ordinal. |  |
 | `request_id` | text | 33.7% | 61.4% | 8,675 | Anthropic API request id. |  |

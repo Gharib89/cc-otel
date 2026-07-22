@@ -34,7 +34,7 @@ The OpenTelemetry Collector container — the only authenticated ingest boundary
 Our FastAPI service that parses OTLP/JSON and writes rows to Postgres. Trusts the collector; never exposed externally.
 
 **Adoption report**:
-The slim daily-refresh Power BI report (successor to the POC report). Focus: productivity + adoption (tokens out, LOC, commits, PRs, active time, sessions, limits, model/effort mix, top skills/MCPs/subagents). Explicitly excludes cost — subscription seats make `cost_usd` misleading.
+The slim daily-refresh Power BI report (successor to the POC report). Focus: productivity + adoption (tokens out, LOC, commits, PRs, active time, sessions, limits, model/effort mix, top skills/MCPs/subagents). Includes `cost_usd` as **API-equivalent value consumed** — not marginal spend, since subscription seats are flat per-seat (ADR-0007, decision #158).
 _Avoid_: dashboard v2, current report
 
 **Non-empty session**:

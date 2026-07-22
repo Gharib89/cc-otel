@@ -49,7 +49,7 @@ CREATE SCHEMA staging;
 
 CREATE FUNCTION marts.refresh_all() RETURNS void
     LANGUAGE plpgsql
-    AS $$
+    AS $_$
 DECLARE
     mv TEXT;
     log_id BIGINT;
@@ -138,8 +138,35 @@ BEGIN
         GROUP BY session_id, activity_date
         HAVING COUNT(DISTINCT user_email) > 1
     ) x;
+
+    -- DQ: promoted cost_usd vs the claude_code.cost.usage counter. Both measure the
+    -- same API-equivalent value; a gap past tolerance means the api_request cost
+    -- promotion diverged from the counter. Fire only when BOTH >1% relative AND >$0.01
+    -- absolute.
+    INSERT INTO marts.dq_finding (finding_type, row_count, details)
+    SELECT 'cost_promotion_divergence',
+           NULL,
+           jsonb_build_object(
+               'promoted_usd', round(promoted::numeric, 6),
+               'counter_usd', round(counter::numeric, 6),
+               'abs_diff_usd', round(abs(promoted - counter)::numeric, 6),
+               'rel_diff', round((abs(promoted - counter) / GREATEST(counter, 0.01))::numeric, 6),
+               'tolerance', '>1% relative and >$0.01 absolute'
+           )
+    FROM (
+        SELECT
+            (SELECT COALESCE(SUM(cost_usd), 0) FROM marts.fact_api_usage) AS promoted,
+            -- Match fact_api_usage's session_id IS NOT NULL grain filter, so the two
+            -- sides reconcile on the same population (a session-less counter row would
+            -- otherwise register as spurious divergence).
+            (SELECT COALESCE(SUM(value), 0) FROM staging.stg_counter_delta
+                 WHERE metric_name = 'claude_code.cost.usage'
+                   AND session_id IS NOT NULL) AS counter
+    ) c
+    WHERE abs(promoted - counter) > 0.01
+      AND abs(promoted - counter) / GREATEST(counter, 0.01) > 0.01;
 END
-$$;
+$_$;
 
 
 SET default_tablespace = '';
@@ -461,7 +488,8 @@ CREATE VIEW staging.stg_api_request AS
     skill_name,
     mcp_server_name,
     mcp_tool_name,
-    cc_version
+    cc_version,
+    cost_usd
    FROM raw.events
   WHERE (event_name = 'api_request'::text);
 
@@ -481,6 +509,7 @@ CREATE MATERIALIZED VIEW marts.fact_api_usage AS
     sum(output_tokens) AS output_tokens,
     sum(cache_creation_tokens) AS cache_creation_tokens,
     sum(cache_read_tokens) AS cache_read_tokens,
+    sum(cost_usd) AS cost_usd,
     count(*) AS request_count,
     max(event_time) AS last_event_ts
    FROM staging.stg_api_request
@@ -1034,4 +1063,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260713170013'),
     ('20260716153503'),
     ('20260720120000'),
-    ('20260722031957');
+    ('20260722031957'),
+    ('20260722120000');
