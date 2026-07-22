@@ -553,7 +553,7 @@ table _Measures
 		lineageTag: 62b922f3-1e40-4a6a-8f0e-cabed5dbf026
 
 	/// Report-display helper: Executive Overview hero card sub-line.
-	measure 'Seat Utilization Detail' = [Active Roster Users] & " of " & [Paid Seats] & " paid seats active · " & [Idle Seats] & " idle"
+	measure 'Seat Utilization Detail' = [Active Roster Users] & " of " & [Paid Seats] & " paid seats · " & [Idle Seats] & " idle"
 		displayFolder: Seat ROI
 		lineageTag: 437fa2bc-e7ee-4ba3-ab8b-4499e3ed9cfc
 
