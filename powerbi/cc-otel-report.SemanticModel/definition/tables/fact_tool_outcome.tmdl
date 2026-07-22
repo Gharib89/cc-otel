@@ -1,0 +1,77 @@
+table fact_tool_outcome
+	lineageTag: 6db2c860-7abb-46f3-a8cc-9fe75b82719c
+
+	column session_id
+		dataType: string
+		lineageTag: 6bdb56a4-e936-4302-82ea-93df702f17dc
+		summarizeBy: none
+		sourceColumn: session_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column activity_date
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 7f363f92-cdba-455d-81ae-6ca91d0f1ba7
+		summarizeBy: none
+		sourceColumn: activity_date
+
+		annotation SummarizationSetBy = Automatic
+
+	column tool_name
+		dataType: string
+		lineageTag: 86e21d09-d152-4dd7-abec-65033611525d
+		summarizeBy: none
+		sourceColumn: tool_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column tool_call_count
+		dataType: int64
+		formatString: 0
+		lineageTag: b0120435-1b8b-466d-b8e4-5941d3d27310
+		summarizeBy: none
+		isHidden
+		sourceColumn: tool_call_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column success_count
+		dataType: int64
+		formatString: 0
+		lineageTag: 4bd94384-76f8-4da5-bf53-8d44617efb55
+		summarizeBy: none
+		isHidden
+		sourceColumn: success_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column duration_p50_ms
+		dataType: int64
+		formatString: 0
+		lineageTag: cc16e3f4-a5b2-46a5-ba74-0c4cf54c73a9
+		summarizeBy: none
+		isHidden
+		sourceColumn: duration_p50_ms
+
+		annotation SummarizationSetBy = Automatic
+
+	column duration_p95_ms
+		dataType: int64
+		formatString: 0
+		lineageTag: a5a9e6c0-23cf-4c38-9aa9-ec1992d693ba
+		summarizeBy: none
+		isHidden
+		sourceColumn: duration_p95_ms
+
+		annotation SummarizationSetBy = Automatic
+
+	partition fact_tool_outcome = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT * FROM marts.fact_tool_outcome")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table

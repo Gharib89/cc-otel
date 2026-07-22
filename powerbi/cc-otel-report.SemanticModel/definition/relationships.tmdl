@@ -93,3 +93,11 @@ relationship dim_user_to_seat_roster
 	fromColumn: dim_user.user_email
 	toColumn: seat_roster.user_email
 
+relationship fact_tool_outcome_to_dim_date
+	fromColumn: fact_tool_outcome.activity_date
+	toColumn: dim_date.date_day
+
+relationship fact_api_error_rate_to_dim_date
+	fromColumn: fact_api_error_rate.activity_date
+	toColumn: dim_date.date_day
+
