@@ -681,7 +681,7 @@ CREATE VIEW staging.stg_utilization_segments AS
             date_bin('00:05:00'::interval, (u.ts + make_interval(secs => r.value)), '2000-01-01 00:00:00+00'::timestamp with time zone) AS window_end
            FROM (raw.metrics u
              JOIN raw.metrics r ON (((r.metric_name = 'claude_code.usage.reset_in_seconds'::text) AND (NOT (r.user_email IS DISTINCT FROM u.user_email)) AND (NOT (r.usage_window IS DISTINCT FROM u.usage_window)) AND (u.ts = r.ts))))
-          WHERE ((u.metric_name = 'claude_code.usage.utilization'::text) AND (u.value_kind = 'gauge_last'::text))
+          WHERE ((u.metric_name = 'claude_code.usage.utilization'::text) AND (u.value_kind = 'gauge_last'::text) AND ((r.value >= (0)::double precision) AND (r.value <= (604800)::double precision)))
         ), flagged AS (
          SELECT samples.user_email,
             samples.window_type,
@@ -1064,4 +1064,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260716153503'),
     ('20260720120000'),
     ('20260722031957'),
-    ('20260722120000');
+    ('20260722120000'),
+    ('20260722140000');
