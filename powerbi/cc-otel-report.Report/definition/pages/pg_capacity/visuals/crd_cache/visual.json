@@ -73,6 +73,24 @@
       ]
     },
     "visualContainerObjects": {
+      "general": [
+        {
+          "properties": {
+            "altText": {
+              "expr": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Cache Hit Ratio Δ Label"
+                }
+              }
+            }
+          }
+        }
+      ],
       "title": [
         {
           "properties": {

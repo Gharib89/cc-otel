@@ -35,6 +35,19 @@
       ]
     },
     "visualContainerObjects": {
+      "general": [
+        {
+          "properties": {
+            "altText": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Development output and tool-acceptance quality across the selected window (cards). Per-active-user throughput trend (charts).'"
+                }
+              }
+            }
+          }
+        }
+      ],
       "title": [
         { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }
       ],

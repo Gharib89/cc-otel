@@ -1,7 +1,7 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "lbl_commits",
-  "position": { "x": 28, "y": 148, "z": 300, "height": 34, "width": 232, "tabOrder": 300 },
+  "position": { "x": 28, "y": 148, "z": 300, "height": 34, "width": 232, "tabOrder": -1 },
   "visual": {
     "visualType": "textbox",
     "objects": {

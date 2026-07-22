@@ -73,6 +73,19 @@
       ]
     },
     "visualContainerObjects": {
+      "general": [
+        {
+          "properties": {
+            "altText": {
+              "expr": {
+                "Literal": {
+                  "Value": "'How the session was started (startup, resume, clear, or compact).'"
+                }
+              }
+            }
+          }
+        }
+      ],
       "title": [
         {
           "properties": {
