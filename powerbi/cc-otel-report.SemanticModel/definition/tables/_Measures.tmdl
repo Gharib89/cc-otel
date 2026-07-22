@@ -187,6 +187,28 @@ table _Measures
 		displayFolder: Productivity
 		lineageTag: a1c00003-0000-4000-8000-000000000028
 
+	/// Per-active-user output ratio (#176): normalizes throughput by the active population so the trend reflects intensity, not headcount.
+	measure 'Commits per Active User' = DIVIDE ( [Total Commits], [Active Users] )
+		formatString: #,##0.0
+		displayFolder: Productivity
+		lineageTag: a1c00005-0000-4000-8000-000000000176
+
+	measure 'PRs per Active User' = DIVIDE ( [Total PRs], [Active Users] )
+		formatString: #,##0.0
+		displayFolder: Productivity
+		lineageTag: a1c00006-0000-4000-8000-000000000176
+
+	/// Weekly-gated ratio for the trend: divides the partial-week-suppressed numerator so the line matches the Commits/PRs and LoC trends (no spurious final partial week).
+	measure 'Commits per Active User (Weekly)' = DIVIDE ( [Commits (Weekly)], [Active Users] )
+		formatString: #,##0.0
+		displayFolder: Trends
+		lineageTag: a1c00007-0000-4000-8000-000000000176
+
+	measure 'PRs per Active User (Weekly)' = DIVIDE ( [PRs (Weekly)], [Active Users] )
+		formatString: #,##0.0
+		displayFolder: Trends
+		lineageTag: a1c00008-0000-4000-8000-000000000176
+
 	/// Mean active duration per active day (contract "Avg active time per day"), in minutes.
 	measure 'Avg Active Time per Day' = DIVIDE(SUM(fact_session_daily[active_time_total_s]), [Active Days]) / 60
 		formatString: #,##0.0 "min"

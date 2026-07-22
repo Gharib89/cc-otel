@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "crd_rejected",
   "position": {
-    "x": 560,
-    "y": 96,
-    "z": 450,
-    "height": 40,
-    "width": 160,
-    "tabOrder": 450
+    "x": 1004,
+    "y": 182,
+    "z": 314,
+    "height": 48,
+    "width": 232,
+    "tabOrder": 314
   },
   "visual": {
     "visualType": "card",

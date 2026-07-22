@@ -3,10 +3,10 @@
   "name": "cht_output_trend",
   "position": {
     "x": 28,
-    "y": 148,
+    "y": 238,
     "z": 400,
-    "height": 300,
-    "width": 800,
+    "height": 232,
+    "width": 397,
     "tabOrder": 400
   },
   "visual": {
