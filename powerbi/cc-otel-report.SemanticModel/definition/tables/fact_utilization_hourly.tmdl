@@ -51,6 +51,14 @@ table fact_utilization_hourly
 
 		annotation SummarizationSetBy = Automatic
 
+	column hour_of_day = HOUR(fact_utilization_hourly[hour])
+		dataType: int64
+		formatString: 0
+		lineageTag: a1b2c3d4-0175-4e5f-8a9b-0c1d2e3f4a5b
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
 	partition fact_utilization_hourly = m
 		mode: import
 		source =
