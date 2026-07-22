@@ -1,0 +1,129 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
+  "name": "cht_ratio_trend",
+  "position": {
+    "x": 441,
+    "y": 238,
+    "z": 405,
+    "height": 232,
+    "width": 397,
+    "tabOrder": 405
+  },
+  "visual": {
+    "visualType": "lineChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": { "SourceRef": { "Entity": "dim_date" } },
+                  "Property": "week_label"
+                }
+              },
+              "queryRef": "dim_date.week_label",
+              "nativeQueryRef": "week_label",
+              "active": true
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": { "SourceRef": { "Entity": "_Measures" } },
+                  "Property": "Commits per Active User (Weekly)"
+                }
+              },
+              "queryRef": "_Measures.Commits per Active User (Weekly)",
+              "nativeQueryRef": "Commits per Active User (Weekly)"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": { "SourceRef": { "Entity": "_Measures" } },
+                  "Property": "PRs per Active User (Weekly)"
+                }
+              },
+              "queryRef": "_Measures.PRs per Active User (Weekly)",
+              "nativeQueryRef": "PRs per Active User (Weekly)"
+            }
+          ]
+        }
+      }
+    },
+    "objects": {
+      "categoryAxis": [
+        {
+          "properties": {
+            "showAxisTitle": { "expr": { "Literal": { "Value": "false" } } },
+            "labelColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#7E8CA0'" } } } } }
+          }
+        }
+      ],
+      "valueAxis": [
+        {
+          "properties": {
+            "showAxisTitle": { "expr": { "Literal": { "Value": "false" } } },
+            "labelColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#7E8CA0'" } } } } }
+          }
+        }
+      ],
+      "legend": [
+        {
+          "properties": {
+            "show": { "expr": { "Literal": { "Value": "true" } } },
+            "position": { "expr": { "Literal": { "Value": "'Bottom'" } } }
+          }
+        }
+      ],
+      "lineStyles": [
+        {
+          "properties": {
+            "showMarker": { "expr": { "Literal": { "Value": "true" } } }
+          }
+        }
+      ],
+      "labels": [
+        {
+          "properties": {
+            "show": { "expr": { "Literal": { "Value": "false" } } }
+          }
+        }
+      ]
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": { "expr": { "Literal": { "Value": "true" } } },
+            "text": { "expr": { "Literal": { "Value": "'OUTPUT PER ACTIVE USER BY WEEK'" } } },
+            "alignment": { "expr": { "Literal": { "Value": "'center'" } } },
+            "background": { "solid": { "color": { "expr": { "Literal": { "Value": "'#00197F'" } } } } },
+            "fontColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#FFFFFF'" } } } } },
+            "fontSize": { "expr": { "Literal": { "Value": "10D" } } },
+            "fontFamily": { "expr": { "Literal": { "Value": "'Segoe UI Semibold'" } } }
+          }
+        }
+      ],
+      "background": [
+        { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }
+      ],
+      "border": [
+        { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }
+      ],
+      "visualHeader": [
+        { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }
+      ],
+      "dropShadow": [
+        { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }
+      ],
+      "subTitle": [
+        { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

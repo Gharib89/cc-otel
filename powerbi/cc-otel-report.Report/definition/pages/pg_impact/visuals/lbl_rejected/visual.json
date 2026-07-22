@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "lbl_rejected",
   "position": {
-    "x": 560,
-    "y": 70,
-    "z": 440,
-    "height": 30,
-    "width": 160,
-    "tabOrder": 440
+    "x": 1004,
+    "y": 148,
+    "z": 304,
+    "height": 34,
+    "width": 232,
+    "tabOrder": 304
   },
   "visual": {
     "visualType": "textbox",

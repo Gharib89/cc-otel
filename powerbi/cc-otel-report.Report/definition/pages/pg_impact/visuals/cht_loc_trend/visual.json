@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "cht_loc_trend",
   "position": {
-    "x": 842,
-    "y": 148,
+    "x": 854,
+    "y": 238,
     "z": 410,
-    "height": 300,
-    "width": 410,
+    "height": 232,
+    "width": 398,
     "tabOrder": 410
   },
   "visual": {
