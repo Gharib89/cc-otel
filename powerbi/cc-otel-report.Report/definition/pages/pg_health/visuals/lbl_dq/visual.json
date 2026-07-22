@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "lbl_dq",
   "position": {
-    "x": 272,
+    "x": 235,
     "y": 148,
     "z": 302,
     "height": 34,
-    "width": 232,
+    "width": 190,
     "tabOrder": 302
   },
   "visual": {

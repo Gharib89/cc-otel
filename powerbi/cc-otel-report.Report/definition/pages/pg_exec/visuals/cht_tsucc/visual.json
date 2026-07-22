@@ -1,13 +1,13 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "cht_tier",
+  "name": "cht_tsucc",
   "position": {
-    "x": 28,
-    "y": 420,
-    "z": 27000,
-    "height": 160,
-    "width": 480,
-    "tabOrder": 27000
+    "x": 196,
+    "y": 592,
+    "z": 30200,
+    "height": 120,
+    "width": 1056,
+    "tabOrder": 30200
   },
   "visual": {
     "visualType": "clusteredBarChart",
@@ -20,14 +20,14 @@
                 "Column": {
                   "Expression": {
                     "SourceRef": {
-                      "Entity": "seat_roster"
+                      "Entity": "fact_tool_outcome"
                     }
                   },
-                  "Property": "seat_tier"
+                  "Property": "tool_name"
                 }
               },
-              "queryRef": "seat_roster.seat_tier",
-              "nativeQueryRef": "seat_tier",
+              "queryRef": "fact_tool_outcome.tool_name",
+              "nativeQueryRef": "tool_name",
               "active": true
             }
           ]
@@ -42,28 +42,31 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Active Roster Users"
+                  "Property": "Tool Success Rate"
                 }
               },
-              "queryRef": "_Measures.Active Roster Users",
-              "nativeQueryRef": "Active Roster Users"
-            },
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "_Measures"
-                    }
-                  },
-                  "Property": "Paid Seats"
-                }
-              },
-              "queryRef": "_Measures.Paid Seats",
-              "nativeQueryRef": "Paid Seats"
+              "queryRef": "_Measures.Tool Success Rate",
+              "nativeQueryRef": "Tool Success Rate"
             }
           ]
         }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Measure": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "_Measures"
+                  }
+                },
+                "Property": "Tool Success Rate"
+              }
+            },
+            "direction": "Ascending"
+          }
+        ]
       }
     },
     "objects": {
@@ -87,6 +90,13 @@
                   }
                 }
               }
+            },
+            "maxMarginFactor": {
+              "expr": {
+                "Literal": {
+                  "Value": "40D"
+                }
+              }
             }
           }
         }
@@ -94,14 +104,47 @@
       "valueAxis": [
         {
           "properties": {
-            "showAxisTitle": {
+            "show": {
               "expr": {
                 "Literal": {
                   "Value": "false"
                 }
               }
             },
-            "labelColor": {
+            "showAxisTitle": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "legend": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "labels": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "color": {
               "solid": {
                 "color": {
                   "expr": {
@@ -109,6 +152,13 @@
                       "Value": "'#7E8CA0'"
                     }
                   }
+                }
+              }
+            },
+            "fontSize": {
+              "expr": {
+                "Literal": {
+                  "Value": "9D"
                 }
               }
             }
@@ -130,7 +180,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'ACTIVE USERS & PAID SEATS BY TIER'"
+                  "Value": "'SUCCESS % BY TOOL'"
                 }
               }
             },
@@ -247,61 +297,5 @@
       ]
     },
     "drillFilterOtherVisuals": true
-  },
-  "filterConfig": {
-    "filters": [
-      {
-        "name": "flt_tier_notblank",
-        "field": {
-          "Column": {
-            "Expression": {
-              "SourceRef": {
-                "Entity": "seat_roster"
-              }
-            },
-            "Property": "seat_tier"
-          }
-        },
-        "type": "Categorical",
-        "filter": {
-          "Version": 2,
-          "From": [
-            {
-              "Name": "s",
-              "Entity": "seat_roster",
-              "Type": 0
-            }
-          ],
-          "Where": [
-            {
-              "Condition": {
-                "Not": {
-                  "Expression": {
-                    "Comparison": {
-                      "ComparisonKind": 0,
-                      "Left": {
-                        "Column": {
-                          "Expression": {
-                            "SourceRef": {
-                              "Source": "s"
-                            }
-                          },
-                          "Property": "seat_tier"
-                        }
-                      },
-                      "Right": {
-                        "Literal": {
-                          "Value": "null"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          ]
-        }
-      }
-    ]
   }
 }

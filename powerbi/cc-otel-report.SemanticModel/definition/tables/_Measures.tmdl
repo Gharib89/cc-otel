@@ -128,7 +128,7 @@ table _Measures
 	measure 'API Error Rate' =
 			DIVIDE (
 			    SUM ( fact_api_error_rate[api_error_count] ),
-			    SUM ( fact_api_error_rate[api_request_count] )
+			    SUM ( fact_api_error_rate[api_request_count] ) + SUM ( fact_api_error_rate[api_error_count] )
 			)
 		formatString: 0.00%;-0.00%;0.00%
 		displayFolder: Ingest Health

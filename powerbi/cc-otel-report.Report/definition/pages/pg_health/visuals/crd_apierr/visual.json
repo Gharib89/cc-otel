@@ -1,13 +1,13 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "crd_offroster",
+  "name": "crd_apierr",
   "position": {
-    "x": 648,
+    "x": 1062,
     "y": 182,
-    "z": 307,
+    "z": 311,
     "height": 48,
     "width": 190,
-    "tabOrder": 307
+    "tabOrder": 311
   },
   "visual": {
     "visualType": "card",
@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Off-Roster Active Users"
+                  "Property": "API Error Rate"
                 }
               },
-              "queryRef": "_Measures.Off-Roster Active Users",
-              "nativeQueryRef": "Off-Roster Active Users"
+              "queryRef": "_Measures.API Error Rate",
+              "nativeQueryRef": "API Error Rate"
             }
           ]
         }
