@@ -251,14 +251,13 @@ table _Measures
 		lineageTag: 2f215bf4-5930-4fc4-8ba5-8602e4c8a432
 
 	/// #173 (map #153, adopt-findings #158 Q1/Q2/Q15; ADR-0007). Flat per-seat plan list price,
-	/// USD/seat/month. PLACEHOLDER — confirm actual Team Standard / Premium prices with Ahmed in
-	/// PR review (issue #173).
-	measure 'Standard Seat Price' = 30
+	/// USD/seat/month, confirmed by Ahmed at PR #201 review (issue #173).
+	measure 'Standard Seat Price' = 25
 		formatString: \$#,##0
 		displayFolder: Seat ROI\Cost
 		lineageTag: a1730001-0000-4000-8000-000000000173
 
-	measure 'Premium Seat Price' = 150
+	measure 'Premium Seat Price' = 125
 		formatString: \$#,##0
 		displayFolder: Seat ROI\Cost
 		lineageTag: a1730002-0000-4000-8000-000000000173
