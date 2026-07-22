@@ -266,6 +266,7 @@ def test_fact_api_usage_grain_and_last_event_ts(conn):
         model="claude-opus-4-8",
         input_tokens=100,
         output_tokens=50,
+        cost_usd=0.10,
         query_source="main",
         effort="high",
     )
@@ -278,15 +279,86 @@ def test_fact_api_usage_grain_and_last_event_ts(conn):
         model="claude-opus-4-8",
         input_tokens=20,
         output_tokens=5,
+        cost_usd=0.02,
         query_source="main",
         effort="high",
     )
     refresh(conn)
     assert one(
         conn,
-        "SELECT input_tokens, output_tokens, request_count, last_event_ts::text "
+        "SELECT input_tokens, output_tokens, request_count, "
+        "round(cost_usd::numeric, 2)::float8, last_event_ts::text "
         "FROM marts.fact_api_usage",
-    ) == (120, 55, 2, "2026-07-01 10:30:00+00")
+    ) == (120, 55, 2, 0.12, "2026-07-01 10:30:00+00")
+
+
+def _cost_findings(conn):
+    return one(
+        conn,
+        "SELECT count(*) FROM marts.dq_finding "
+        "WHERE finding_type = 'cost_promotion_divergence'",
+    )[0]
+
+
+def test_cost_promotion_divergence_flagged(conn):
+    # Promoted api_request cost ($1.00) vs the claude_code.cost.usage counter ($2.00):
+    # a 100% gap, far past the 1%/$0.01 tolerance -> one DQ finding.
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:00:00Z",
+        event_name="api_request",
+        session_id=S1,
+        user_email="a@x.com",
+        model="claude-opus-4-8",
+        cost_usd=1.00,
+        query_source="main",
+        effort="high",
+    )
+    ins_metric(
+        conn,
+        ts="2026-07-01T10:00:00Z",
+        metric_name="claude_code.cost.usage",
+        metric_type="sum",
+        value=2.00,
+        value_kind="sum_delta",
+        session_id=S1,
+        user_email="a@x.com",
+    )
+    refresh(conn)
+    assert _cost_findings(conn) == 1
+    assert one(
+        conn,
+        "SELECT (details->>'promoted_usd')::float8, (details->>'counter_usd')::float8 "
+        "FROM marts.dq_finding WHERE finding_type = 'cost_promotion_divergence'",
+    ) == (1.0, 2.0)
+
+
+def test_cost_promotion_within_tolerance_no_finding(conn):
+    # $1.00 promoted vs $1.005 counter: 0.5% relative and $0.005 absolute, inside
+    # both tolerance bounds -> no finding.
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:00:00Z",
+        event_name="api_request",
+        session_id=S1,
+        user_email="a@x.com",
+        model="claude-opus-4-8",
+        cost_usd=1.00,
+        query_source="main",
+        effort="high",
+    )
+    ins_metric(
+        conn,
+        ts="2026-07-01T10:00:00Z",
+        metric_name="claude_code.cost.usage",
+        metric_type="sum",
+        value=1.005,
+        value_kind="sum_delta",
+        session_id=S1,
+        user_email="a@x.com",
+    )
+    refresh(conn)
+    assert _cost_findings(conn) == 0
 
 
 def test_fact_tool_outcome_counts_and_percentiles(conn):
