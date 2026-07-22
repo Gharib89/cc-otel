@@ -1,13 +1,13 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "crd_first",
+  "name": "crd_hooks_u",
   "position": {
-    "x": 276,
-    "y": 182,
-    "z": 303,
-    "height": 48,
-    "width": 114,
-    "tabOrder": 303
+    "x": 760,
+    "y": 220,
+    "z": 5307,
+    "height": 20,
+    "width": 232,
+    "tabOrder": 308
   },
   "visual": {
     "visualType": "card",
@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "User First Seen"
+                  "Property": "Users Using Hooks"
                 }
               },
-              "queryRef": "_Measures.User First Seen",
-              "nativeQueryRef": "User First Seen"
+              "queryRef": "_Measures.Users Using Hooks",
+              "nativeQueryRef": "Users Using Hooks"
             }
           ]
         }
@@ -40,7 +40,7 @@
             "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "13D"
+                  "Value": "9D"
                 }
               }
             },
@@ -49,7 +49,7 @@
                 "color": {
                   "expr": {
                     "Literal": {
-                      "Value": "'#0198CB'"
+                      "Value": "'#5a6473'"
                     }
                   }
                 }
@@ -79,7 +79,7 @@
             "altText": {
               "expr": {
                 "Literal": {
-                  "Value": "'Date the developer was first seen.'"
+                  "Value": "'Distinct users whose sessions used this capability in the selected window.'"
                 }
               }
             }

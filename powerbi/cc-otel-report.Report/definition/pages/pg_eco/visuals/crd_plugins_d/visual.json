@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "crd_plugins_d",
   "position": {
-    "x": 516,
-    "y": 232,
+    "x": 1004,
+    "y": 240,
     "z": 20012,
     "height": 20,
     "width": 232,
-    "tabOrder": 20012
+    "tabOrder": 20013
   },
   "visual": {
     "visualType": "card",

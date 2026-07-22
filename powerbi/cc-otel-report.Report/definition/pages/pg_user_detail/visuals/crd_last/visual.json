@@ -1,13 +1,13 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "crd_first",
+  "name": "crd_last",
   "position": {
-    "x": 276,
+    "x": 394,
     "y": 182,
     "z": 303,
     "height": 48,
     "width": 114,
-    "tabOrder": 303
+    "tabOrder": 304
   },
   "visual": {
     "visualType": "card",
@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "User First Seen"
+                  "Property": "User Last Seen"
                 }
               },
-              "queryRef": "_Measures.User First Seen",
-              "nativeQueryRef": "User First Seen"
+              "queryRef": "_Measures.User Last Seen",
+              "nativeQueryRef": "User Last Seen"
             }
           ]
         }
@@ -79,7 +79,7 @@
             "altText": {
               "expr": {
                 "Literal": {
-                  "Value": "'Date the developer was first seen.'"
+                  "Value": "'Date this user was last seen active.'"
                 }
               }
             }
