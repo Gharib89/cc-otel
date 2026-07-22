@@ -177,6 +177,12 @@ A visual-level Top-N filter hand-written into `filterConfig` is **schema-valid b
 
 Consequence: you cannot cap a high-cardinality bar to "top N" purely on disk. Options: leave the visual sorted-descending and scrollable (top-first, standard interactive UX); author the Top-N in Desktop's Filters pane (Desktop-persisted filters do render) and commit the emitted JSON; or filter on an explicit `RANKX` measure via a `Comparison` condition (column categorical + comparison filters *are* honored on disk — see the cohort filters — though measure-comparison reliability is unproven here).
 
+## 23. Adding `altText` blindly duplicates a pre-existing `general` and crashes fab-inspector
+
+`altText` lives at `visualContainerObjects.general[].properties.altText`. A scripted pass that *prepends* a fresh `"general": [...]` block to every data visual's `visualContainerObjects` breaks on any visual that **already has** a `general` object there: the file ends up with two `"general"` keys in the same object. Python `json.loads` silently keeps the last (so a JSON round-trip "passes"), but fab-inspector's strict .NET parser throws and the whole rule aborts: `::error:: Rule "Reduce the number of objects within visuals" - Part "page.json" execution failed. Inner exception: An item with the same key has already been added. Key: general`. With `-formats GitHub` that `::error` is a non-zero exit — a **blocking** `ci-powerbi` red, not a warning. The crash names the key, never the offending file, so it reads like a tool bug; it isn't.
+
+Before inserting, check each visual for an existing `visualContainerObjects.general` and **merge into it** (or skip — it already carries alt) rather than adding a second key. In this report only `pg_capacity/cht_util_heatmap` (pivotTable) shipped with hand-authored alt, so it was the lone landmine across a 110-visual pass. Note the two `general` bags are independent: a `textbox` carrying paragraphs in `objects.general` takes a new `visualContainerObjects.general` alt cleanly — fab-inspector does **not** merge `objects` and `visualContainerObjects`, so only a duplicate **within** `visualContainerObjects` collides.
+
 ## Validation flow
 
 Run `pwsh .github/powerbi/validate.ps1` before commit — it mirrors the `ci-powerbi` gate locally (ajv schema, pbir-gotchas lint, fab-inspector rules, Tabular Editor 2 BPA, MS conformance CLI). Setup, the tooling roster, and the exit-code contract: `docs/agents/powerbi-tooling.md`.

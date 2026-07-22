@@ -73,6 +73,24 @@
       ]
     },
     "visualContainerObjects": {
+      "general": [
+        {
+          "properties": {
+            "altText": {
+              "expr": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Seat Utilization Δ Label"
+                }
+              }
+            }
+          }
+        }
+      ],
       "title": [
         {
           "properties": {

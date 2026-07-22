@@ -73,6 +73,24 @@
       ]
     },
     "visualContainerObjects": {
+      "general": [
+        {
+          "properties": {
+            "altText": {
+              "expr": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Sessions Using Agents % Δ Label"
+                }
+              }
+            }
+          }
+        }
+      ],
       "title": [
         {
           "properties": {

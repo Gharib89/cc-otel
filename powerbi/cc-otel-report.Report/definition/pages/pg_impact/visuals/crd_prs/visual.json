@@ -36,6 +36,19 @@
       ]
     },
     "visualContainerObjects": {
+      "general": [
+        {
+          "properties": {
+            "altText": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Total pull requests created over the selected window.'"
+                }
+              }
+            }
+          }
+        }
+      ],
       "title": [ { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } } ],
       "background": [ { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } } ],
       "border": [ { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } } ],

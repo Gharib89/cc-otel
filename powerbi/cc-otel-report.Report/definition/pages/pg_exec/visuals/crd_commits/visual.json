@@ -73,6 +73,24 @@
       ]
     },
     "visualContainerObjects": {
+      "general": [
+        {
+          "properties": {
+            "altText": {
+              "expr": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Commits Δ Label"
+                }
+              }
+            }
+          }
+        }
+      ],
       "title": [
         {
           "properties": {
