@@ -1,0 +1,8 @@
+# Power BI PBIP on-disk source (PBIR/TMDL). Power BI Desktop writes CRLF on
+# Windows every save; pin LF so re-saves don't surface ~230 tracked files as
+# EOL-only churn (core.autocrlf=input alone doesn't hold this).
+powerbi/**/*.json     text eol=lf
+powerbi/**/*.tmdl     text eol=lf
+powerbi/**/*.pbir     text eol=lf
+powerbi/**/*.pbism    text eol=lf
+powerbi/**/*.platform text eol=lf
