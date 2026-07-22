@@ -139,8 +139,9 @@ BEGIN
     ) x;
 
     -- DQ: promoted cost_usd vs the claude_code.cost.usage counter. Both measure the
-    -- same spend; a gap past tolerance means the api_request cost promotion diverged
-    -- from the counter. Fire only when BOTH >1% relative AND >$0.01 absolute.
+    -- same API-equivalent value; a gap past tolerance means the api_request cost
+    -- promotion diverged from the counter. Fire only when BOTH >1% relative AND >$0.01
+    -- absolute.
     INSERT INTO marts.dq_finding (finding_type, row_count, details)
     SELECT 'cost_promotion_divergence',
            NULL,

@@ -1,7 +1,7 @@
 -- migrate:up
 
--- Promote cost into the marts (adopt-findings #158, decision Q1; map #170; ADR-0007
--- supersedes ADR-0002's "no cost columns in marts"). ITWorx pays flat per-seat, so
+-- Promote cost into the marts (adopt-findings #158, decision Q1; map #153, issue #170;
+-- ADR-0007 supersedes ADR-0002's "no cost columns in marts"). ITWorx pays flat per-seat, so
 -- cost_usd is API-EQUIVALENT VALUE CONSUMED — what the same usage would cost on metered
 -- API pricing — not marginal spend. Sourced from the cost_usd already promoted onto
 -- api_request events in raw.events, surfaced through staging first, then summed per
@@ -60,11 +60,12 @@ CREATE UNIQUE INDEX fact_api_usage_pk ON marts.fact_api_usage
 GRANT SELECT ON marts.fact_api_usage TO cc_otel_read;
 
 -- Cross-check the promoted cost against the claude_code.cost.usage counter: two
--- independent measures of the same spend that should agree closely. A systematic gap
--- means the api_request cost_usd promotion drifted from the counter — surface it as a
--- DQ finding rather than silently trusting the promoted sum. Tolerance: fire only when
--- BOTH >1% relative AND >$0.01 absolute, so floating-point noise and empty windows
--- don't. Emitted per refresh cycle (point-in-time), matching the other refresh_all
+-- independent measures of the same API-equivalent value that should agree closely. A
+-- systematic gap means the api_request cost_usd promotion drifted from the counter —
+-- surface it as a DQ finding rather than silently trusting the promoted sum. Tolerance:
+-- fire only when BOTH >1% relative AND >$0.01 absolute, so floating-point noise and
+-- empty windows don't trip it. Emitted per refresh cycle (point-in-time), matching the
+-- other refresh_all
 -- DQ inserts. Only the DQ insert is new; the refresh loop is verbatim from the
 -- multi-email-grain migration.
 CREATE OR REPLACE FUNCTION marts.refresh_all() RETURNS void LANGUAGE plpgsql AS $fn$
@@ -157,8 +158,9 @@ BEGIN
     ) x;
 
     -- DQ: promoted cost_usd vs the claude_code.cost.usage counter. Both measure the
-    -- same spend; a gap past tolerance means the api_request cost promotion diverged
-    -- from the counter. Fire only when BOTH >1% relative AND >$0.01 absolute.
+    -- same API-equivalent value; a gap past tolerance means the api_request cost
+    -- promotion diverged from the counter. Fire only when BOTH >1% relative AND >$0.01
+    -- absolute.
     INSERT INTO marts.dq_finding (finding_type, row_count, details)
     SELECT 'cost_promotion_divergence',
            NULL,
