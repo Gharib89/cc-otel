@@ -250,6 +250,73 @@ table _Measures
 		displayFolder: Seat ROI
 		lineageTag: 2f215bf4-5930-4fc4-8ba5-8602e4c8a432
 
+	/// #173 (map #153, adopt-findings #158 Q1/Q2/Q15; ADR-0007). Flat per-seat plan list price,
+	/// USD/seat/month, confirmed by Ahmed at PR #201 review (issue #173).
+	measure 'Standard Seat Price' = 25
+		formatString: \$#,##0
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730001-0000-4000-8000-000000000173
+
+	measure 'Premium Seat Price' = 125
+		formatString: \$#,##0
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730002-0000-4000-8000-000000000173
+
+	/// API-equivalent value consumed = SUM of the promoted fact_api_usage[cost_usd] (#170, ADR-0007).
+	/// Filter-context aware (selected relative-date window + slicers). ITWorx pays a flat per-seat plan,
+	/// so this is value consumed at metered-API rates, never marginal spend.
+	measure 'Value Consumed' = SUM ( fact_api_usage[cost_usd] )
+		formatString: \$#,##0.00
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730003-0000-4000-8000-000000000173
+
+	/// Monthly seat cost of the paid roster: Premium seats × Premium price + the rest at Standard price.
+	/// Period-independent (a monthly figure); the ratio prorates it to the selected window.
+	measure 'Monthly Seat Cost' =
+			VAR Premium = CALCULATE ( [Paid Seats], seat_roster[seat_tier] = "Premium" )
+			VAR Standard = [Paid Seats] - Premium
+			RETURN Premium * [Premium Seat Price] + Standard * [Standard Seat Price]
+		formatString: \$#,##0
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730004-0000-4000-8000-000000000173
+
+	/// Value-vs-seat ROI (#173, research item 7): value consumed in the window over the seat cost for the
+	/// SAME window. Monthly seat cost is prorated by Days/30 (nominal month) so the multiple stays
+	/// period-consistent when the relative-date window changes (#165).
+	measure 'Value vs Seat Ratio' =
+			VAR Days = COUNTROWS ( dim_date )
+			VAR WindowSeatCost = [Monthly Seat Cost] * DIVIDE ( Days, 30 )
+			RETURN DIVIDE ( [Value Consumed], WindowSeatCost )
+		formatString: 0.0"×"
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730005-0000-4000-8000-000000000173
+
+	/// ROI-tile delta triplet (mirrors the Overview KPI pattern): hidden prior-window ratio / Δ (% change) /
+	/// label. Seat cost is date-independent and the prior window is equal-length, so the ratio delta reduces
+	/// to the value-consumed change — meaningful and window-consistent.
+	measure 'Value vs Seat Ratio PP' =
+			VAR Days = COUNTROWS ( dim_date )
+			VAR FirstDay = MIN ( dim_date[date_day] )
+			RETURN
+			    CALCULATE ( [Value vs Seat Ratio], DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 ) )
+		formatString: 0.0"×"
+		isHidden
+		displayFolder: Seat ROI\Cost\Support
+		lineageTag: a1730007-0000-4000-8000-000000000173
+
+	measure 'Value vs Seat Ratio Δ' = DIVIDE ( [Value vs Seat Ratio] - [Value vs Seat Ratio PP], [Value vs Seat Ratio PP] )
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730008-0000-4000-8000-000000000173
+
+	measure 'Value vs Seat Ratio Δ Label' =
+			VAR D = [Value vs Seat Ratio Δ]
+			VAR N = COUNTROWS ( dim_date )
+			RETURN
+			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730009-0000-4000-8000-000000000173
+
 	/// Distinct actives per calendar ISO week (all telemetry, #117 decision 5); the incomplete
 	/// current week returns BLANK so the trend never ends in a fake dip.
 	measure 'Weekly Active Users' =
@@ -511,7 +578,7 @@ table _Measures
 		lineageTag: 62b922f3-1e40-4a6a-8f0e-cabed5dbf026
 
 	/// Report-display helper: Executive Overview hero card sub-line.
-	measure 'Seat Utilization Detail' = [Active Roster Users] & " of " & [Paid Seats] & " paid seats active"
+	measure 'Seat Utilization Detail' = [Active Roster Users] & " of " & [Paid Seats] & " paid seats · " & [Idle Seats] & " idle"
 		displayFolder: Seat ROI
 		lineageTag: 437fa2bc-e7ee-4ba3-ab8b-4499e3ed9cfc
 
@@ -701,6 +768,14 @@ table _Measures
 		formatString: #,##0
 		displayFolder: Session Detail
 		lineageTag: d125000f-0000-4000-8000-000000000125
+
+	/// Per-session API-equivalent value consumed for the user-detail sessions table (#173). fact_api_usage
+	/// relates to fact_session via an INACTIVE relationship; USERELATIONSHIP routes the drillthrough filter
+	/// into the fact (mirrors [Session Tokens]).
+	measure 'Session Value' = CALCULATE ( [Value Consumed], USERELATIONSHIP ( fact_api_usage[session_id], fact_session[session_id] ) )
+		formatString: \$#,##0.00
+		displayFolder: Session Detail
+		lineageTag: a1730006-0000-4000-8000-000000000173
 
 	/// Axis measure for the 'Ecosystem Bridge' disconnected table (#125): one bar per bridge.
 	measure 'Ecosystem Intensity' =

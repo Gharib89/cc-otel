@@ -1,6 +1,6 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "crd_idle",
+  "name": "crd_roi",
   "position": {
     "x": 540,
     "y": 107,
@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Idle Seats"
+                  "Property": "Value vs Seat Ratio"
                 }
               },
-              "queryRef": "_Measures.Idle Seats",
-              "nativeQueryRef": "Idle Seats"
+              "queryRef": "_Measures.Value vs Seat Ratio",
+              "nativeQueryRef": "Value vs Seat Ratio"
             }
           ]
         }
