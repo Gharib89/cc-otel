@@ -384,6 +384,35 @@ table _Measures
 		displayFolder: Seat ROI
 		lineageTag: a233816c-5328-45ad-8f54-a9d9399761fe
 
+	/// Distinct actives per calendar month (all telemetry, mirrors [Weekly Active Users], #177); the
+	/// incomplete current month returns BLANK — guarded by month-end vs the latest data date, no fake dip.
+	measure 'Monthly Active Users' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			VAR MonthEnd = EOMONTH ( MAX ( dim_date[month_start] ), 0 )
+			RETURN
+			    IF ( MonthEnd <= Anchor, DISTINCTCOUNT ( fact_session_daily[user_email] ) )
+		formatString: #,##0
+		displayFolder: Seat ROI
+		lineageTag: b7c4f1a8-2e93-45d6-8a01-6f3d9c2e7b15
+
+	/// Month-over-month change in [Monthly Active Users] for the per-column trend label (#177). Prior month
+	/// via REMOVEFILTERS + month_start (clears the month_label axis filter — a bare month_start filter would
+	/// intersect empty against it); BLANK when either month is guarded so the first column carries no fake Δ.
+	measure 'MAU MoM Δ' =
+			VAR PriorMonth = EDATE ( MAX ( dim_date[month_start] ), -1 )
+			VAR Cur = [Monthly Active Users]
+			VAR Prior =
+			    CALCULATE (
+			        [Monthly Active Users],
+			        REMOVEFILTERS ( dim_date ),
+			        dim_date[month_start] = PriorMonth
+			    )
+			RETURN
+			    IF ( NOT ISBLANK ( Cur ) && NOT ISBLANK ( Prior ) && Prior <> 0, DIVIDE ( Cur - Prior, Prior ) )
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: Seat ROI
+		lineageTag: c9e2a7d4-5b81-42f0-9c36-8a1e4f7b2d63
+
 	/// Cohorts (#117): growth-accounting semantics, leadership labels, roster-scoped, exhaustive
 	/// with [Idle Seats]: New + Retained + Reactivated + Idle = Paid Seats. Window = selection (#165).
 	measure 'New Users' =

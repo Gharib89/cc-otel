@@ -108,6 +108,24 @@ table dim_date
 
 		annotation SummarizationSetBy = Automatic
 
+	/// Month bucket for the MAU trend — model-side calc column mirroring week_start (#177), no migration.
+	column month_start = DATE ( YEAR ( dim_date[date_day] ), MONTH ( dim_date[date_day] ), 1 )
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 3f1c8a02-6d4e-4b7a-9c15-0a2e7b6d1f44
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	/// Month axis label; carries the month-start date so the label sorts chronologically across years (#177).
+	column month_label = FORMAT ( dim_date[month_start], "mmm yy" )
+		dataType: string
+		lineageTag: 9b7e2d51-4a8c-46f3-bd90-1c6f8a3e5d72
+		summarizeBy: none
+		sortByColumn: month_start
+
+		annotation SummarizationSetBy = Automatic
+
 	partition dim_date = m
 		mode: import
 		source =
