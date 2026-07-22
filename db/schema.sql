@@ -58,6 +58,7 @@ DECLARE
         'dim_user', 'dim_date', 'dim_model',
         'fact_session', 'fact_session_daily', 'fact_api_usage', 'fact_edit_decision',
         'fact_usage_window', 'fact_utilization_hourly',
+        'fact_tool_outcome', 'fact_api_error_rate',
         'bridge_session_skill', 'bridge_session_mcp', 'bridge_session_plugin',
         'bridge_session_agent', 'bridge_session_hook'
     ];

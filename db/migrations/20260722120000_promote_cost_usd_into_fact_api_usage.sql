@@ -66,8 +66,8 @@ GRANT SELECT ON marts.fact_api_usage TO cc_otel_read;
 -- fire only when BOTH >1% relative AND >$0.01 absolute, so floating-point noise and
 -- empty windows don't trip it. Emitted per refresh cycle (point-in-time), matching the
 -- other refresh_all
--- DQ inserts. Only the DQ insert is new; the refresh loop is verbatim from the
--- multi-email-grain migration.
+-- DQ inserts. Only the cost DQ insert is new; the refresh loop + matview list are
+-- carried forward from the reliability-marts migration (#196).
 CREATE OR REPLACE FUNCTION marts.refresh_all() RETURNS void LANGUAGE plpgsql AS $fn$
 DECLARE
     mv TEXT;
@@ -77,6 +77,7 @@ DECLARE
         'dim_user', 'dim_date', 'dim_model',
         'fact_session', 'fact_session_daily', 'fact_api_usage', 'fact_edit_decision',
         'fact_usage_window', 'fact_utilization_hourly',
+        'fact_tool_outcome', 'fact_api_error_rate',
         'bridge_session_skill', 'bridge_session_mcp', 'bridge_session_plugin',
         'bridge_session_agent', 'bridge_session_hook'
     ];
@@ -198,6 +199,7 @@ DECLARE
         'dim_user', 'dim_date', 'dim_model',
         'fact_session', 'fact_session_daily', 'fact_api_usage', 'fact_edit_decision',
         'fact_usage_window', 'fact_utilization_hourly',
+        'fact_tool_outcome', 'fact_api_error_rate',
         'bridge_session_skill', 'bridge_session_mcp', 'bridge_session_plugin',
         'bridge_session_agent', 'bridge_session_hook'
     ];
