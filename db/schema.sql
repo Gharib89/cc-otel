@@ -155,8 +155,12 @@ BEGIN
     FROM (
         SELECT
             (SELECT COALESCE(SUM(cost_usd), 0) FROM marts.fact_api_usage) AS promoted,
+            -- Match fact_api_usage's session_id IS NOT NULL grain filter, so the two
+            -- sides reconcile on the same population (a session-less counter row would
+            -- otherwise register as spurious divergence).
             (SELECT COALESCE(SUM(value), 0) FROM staging.stg_counter_delta
-                 WHERE metric_name = 'claude_code.cost.usage') AS counter
+                 WHERE metric_name = 'claude_code.cost.usage'
+                   AND session_id IS NOT NULL) AS counter
     ) c
     WHERE abs(promoted - counter) > 0.01
       AND abs(promoted - counter) / GREATEST(counter, 0.01) > 0.01;

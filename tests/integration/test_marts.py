@@ -397,6 +397,44 @@ def test_fact_api_error_rate_per_day(conn):
     ) == (3, 1, "25.00")
 
 
+def test_cost_promotion_ignores_session_less_counter(conn):
+    # The counter sum matches fact_api_usage's session_id IS NOT NULL grain, so a
+    # session-less cost.usage row is excluded from reconciliation -> no false divergence.
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:00:00Z",
+        event_name="api_request",
+        session_id=S1,
+        user_email="a@x.com",
+        model="claude-opus-4-8",
+        cost_usd=1.00,
+        query_source="main",
+        effort="high",
+    )
+    ins_metric(
+        conn,
+        ts="2026-07-01T10:00:00Z",
+        metric_name="claude_code.cost.usage",
+        metric_type="sum",
+        value=1.00,
+        value_kind="sum_delta",
+        session_id=S1,
+        user_email="a@x.com",
+    )
+    ins_metric(
+        conn,
+        ts="2026-07-01T10:00:00Z",
+        metric_name="claude_code.cost.usage",
+        metric_type="sum",
+        value=5.00,
+        value_kind="sum_delta",
+        session_id=None,
+        user_email="a@x.com",
+    )
+    refresh(conn)
+    assert _cost_findings(conn) == 0
+
+
 def test_fact_edit_decision_language_mix(conn):
     cases = (("Python", "accept", 3), ("Python", "reject", 1), ("TypeScript", "accept", 2))
     for lang, dec, n in cases:
