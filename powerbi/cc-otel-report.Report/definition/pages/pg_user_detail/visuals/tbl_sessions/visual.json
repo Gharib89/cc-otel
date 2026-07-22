@@ -101,6 +101,20 @@
               },
               "queryRef": "_Measures.Session Tokens",
               "nativeQueryRef": "Session Tokens"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Session Value"
+                }
+              },
+              "queryRef": "_Measures.Session Value",
+              "nativeQueryRef": "Session Value"
             }
           ]
         }
@@ -207,6 +221,20 @@
           },
           "selector": {
             "metadata": "_Measures.Session Tokens"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "150D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "_Measures.Session Value"
           }
         }
       ],

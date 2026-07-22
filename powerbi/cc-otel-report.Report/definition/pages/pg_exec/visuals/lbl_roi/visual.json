@@ -1,6 +1,6 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "lbl_idle",
+  "name": "lbl_roi",
   "position": {
     "x": 540,
     "y": 76,
@@ -19,7 +19,7 @@
               {
                 "textRuns": [
                   {
-                    "value": "IDLE SEATS",
+                    "value": "VALUE VS SEAT",
                     "textStyle": {
                       "fontWeight": "bold",
                       "fontSize": "8pt",

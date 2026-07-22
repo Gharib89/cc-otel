@@ -1,16 +1,16 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "cht_tokens_effort",
+  "name": "cht_value_dau",
   "position": {
-    "x": 842,
+    "x": 28,
     "y": 480,
-    "z": 430,
+    "z": 410,
     "height": 224,
-    "width": 410,
-    "tabOrder": 430
+    "width": 800,
+    "tabOrder": 410
   },
   "visual": {
-    "visualType": "clusteredColumnChart",
+    "visualType": "lineClusteredColumnComboChart",
     "query": {
       "queryState": {
         "Category": {
@@ -20,14 +20,14 @@
                 "Column": {
                   "Expression": {
                     "SourceRef": {
-                      "Entity": "fact_api_usage"
+                      "Entity": "dim_date"
                     }
                   },
-                  "Property": "effort"
+                  "Property": "date_day"
                 }
               },
-              "queryRef": "fact_api_usage.effort",
-              "nativeQueryRef": "effort",
+              "queryRef": "dim_date.date_day",
+              "nativeQueryRef": "date_day",
               "active": true
             }
           ]
@@ -42,31 +42,32 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Total Tokens"
+                  "Property": "Value Consumed"
                 }
               },
-              "queryRef": "_Measures.Total Tokens",
-              "nativeQueryRef": "Total Tokens"
+              "queryRef": "_Measures.Value Consumed",
+              "nativeQueryRef": "Value Consumed"
+            }
+          ]
+        },
+        "Y2": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Active Users"
+                }
+              },
+              "queryRef": "_Measures.Active Users",
+              "nativeQueryRef": "Active Users"
             }
           ]
         }
-      },
-      "sortDefinition": {
-        "sort": [
-          {
-            "field": {
-              "Measure": {
-                "Expression": {
-                  "SourceRef": {
-                    "Entity": "_Measures"
-                  }
-                },
-                "Property": "Total Tokens"
-              }
-            },
-            "direction": "Descending"
-          }
-        ]
       }
     },
     "objects": {
@@ -85,7 +86,7 @@
                 "color": {
                   "expr": {
                     "Literal": {
-                      "Value": "'#44566B'"
+                      "Value": "'#7E8CA0'"
                     }
                   }
                 }
@@ -124,7 +125,14 @@
             "show": {
               "expr": {
                 "Literal": {
-                  "Value": "false"
+                  "Value": "true"
+                }
+              }
+            },
+            "position": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Bottom'"
                 }
               }
             }
@@ -137,25 +145,7 @@
             "show": {
               "expr": {
                 "Literal": {
-                  "Value": "true"
-                }
-              }
-            },
-            "color": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#7E8CA0'"
-                    }
-                  }
-                }
-              }
-            },
-            "fontSize": {
-              "expr": {
-                "Literal": {
-                  "Value": "9D"
+                  "Value": "false"
                 }
               }
             }
@@ -177,7 +167,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'TOKENS BY EFFORT'"
+                  "Value": "'DAILY VALUE & ACTIVE USERS'"
                 }
               }
             },
@@ -278,77 +268,8 @@
             }
           }
         }
-      ],
-      "subTitle": [
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "false"
-                }
-              }
-            }
-          }
-        }
       ]
     },
     "drillFilterOtherVisuals": true
-  },
-  "filterConfig": {
-    "filters": [
-      {
-        "name": "flt_effort_notblank",
-        "field": {
-          "Column": {
-            "Expression": {
-              "SourceRef": {
-                "Entity": "fact_api_usage"
-              }
-            },
-            "Property": "effort"
-          }
-        },
-        "type": "Categorical",
-        "filter": {
-          "Version": 2,
-          "From": [
-            {
-              "Name": "f",
-              "Entity": "fact_api_usage",
-              "Type": 0
-            }
-          ],
-          "Where": [
-            {
-              "Condition": {
-                "Not": {
-                  "Expression": {
-                    "Comparison": {
-                      "ComparisonKind": 0,
-                      "Left": {
-                        "Column": {
-                          "Expression": {
-                            "SourceRef": {
-                              "Source": "f"
-                            }
-                          },
-                          "Property": "effort"
-                        }
-                      },
-                      "Right": {
-                        "Literal": {
-                          "Value": "null"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          ]
-        }
-      }
-    ]
   }
 }
