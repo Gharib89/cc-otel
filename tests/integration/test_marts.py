@@ -289,6 +289,42 @@ def test_fact_api_usage_grain_and_last_event_ts(conn):
     ) == (120, 55, 2, "2026-07-01 10:30:00+00")
 
 
+def test_fact_tool_outcome_counts_and_percentiles(conn):
+    # 3 Bash tool_result events: 2 succeed, 1 fails; durations 100/200/300ms.
+    for dur, ok in ((100, True), (200, True), (300, False)):
+        ins_event(
+            conn,
+            event_time="2026-07-01T10:00:00Z",
+            event_name="tool_result",
+            session_id=S1,
+            tool_name="Bash",
+            duration_ms=dur,
+            success_bool=ok,
+        )
+    refresh(conn)
+    # p50 of [100,200,300] = 200; p95 (PERCENTILE_CONT) interpolates to 290.
+    assert one(
+        conn,
+        "SELECT tool_call_count, success_count, duration_p50_ms, duration_p95_ms "
+        "FROM marts.fact_tool_outcome WHERE tool_name = 'Bash'",
+    ) == (3, 2, 200, 290)
+
+
+def test_fact_api_error_rate_per_day(conn):
+    for _ in range(3):
+        ins_event(
+            conn, event_time="2026-07-01T10:00:00Z", event_name="api_request", session_id=S1
+        )
+    ins_event(conn, event_time="2026-07-01T11:00:00Z", event_name="api_error", session_id=S1)
+    refresh(conn)
+    # 1 error out of 4 total attempts = 25.00% (0-100 scale).
+    assert one(
+        conn,
+        "SELECT api_request_count, api_error_count, error_rate_pct::text "
+        "FROM marts.fact_api_error_rate WHERE activity_date = '2026-07-01'",
+    ) == (3, 1, "25.00")
+
+
 def test_fact_edit_decision_language_mix(conn):
     cases = (("Python", "accept", 3), ("Python", "reject", 1), ("TypeScript", "accept", 2))
     for lang, dec, n in cases:
@@ -450,7 +486,7 @@ def test_refresh_writes_a_log_row_per_matview(conn):
         "(WHERE finished IS NOT NULL AND row_count IS NOT NULL) "
         "FROM marts.mart_refresh_log",
     )
-    assert marts == 14 and complete == 14
+    assert marts == 16 and complete == 16
 
 
 def test_cumulative_rows_recorded_as_dq_finding(conn):

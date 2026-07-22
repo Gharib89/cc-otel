@@ -58,6 +58,7 @@ DECLARE
         'dim_user', 'dim_date', 'dim_model',
         'fact_session', 'fact_session_daily', 'fact_api_usage', 'fact_edit_decision',
         'fact_usage_window', 'fact_utilization_hourly',
+        'fact_tool_outcome', 'fact_api_error_rate',
         'bridge_session_skill', 'bridge_session_mcp', 'bridge_session_plugin',
         'bridge_session_agent', 'bridge_session_hook'
     ];
@@ -426,6 +427,21 @@ ALTER TABLE marts.dq_finding ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
 
 
 --
+-- Name: fact_api_error_rate; Type: MATERIALIZED VIEW; Schema: marts; Owner: -
+--
+
+CREATE MATERIALIZED VIEW marts.fact_api_error_rate AS
+ SELECT (event_time)::date AS activity_date,
+    count(*) FILTER (WHERE (event_name = 'api_request'::text)) AS api_request_count,
+    count(*) FILTER (WHERE (event_name = 'api_error'::text)) AS api_error_count,
+    round(((100.0 * (count(*) FILTER (WHERE (event_name = 'api_error'::text)))::numeric) / (NULLIF(count(*), 0))::numeric), 2) AS error_rate_pct
+   FROM raw.events
+  WHERE (event_name = ANY (ARRAY['api_request'::text, 'api_error'::text]))
+  GROUP BY ((event_time)::date)
+  WITH NO DATA;
+
+
+--
 -- Name: stg_api_request; Type: VIEW; Schema: staging; Owner: -
 --
 
@@ -602,6 +618,24 @@ CREATE MATERIALIZED VIEW marts.fact_session_daily AS
     (COALESCE(m.active_time_user_s, (0)::double precision) + COALESCE(m.active_time_cli_s, (0)::double precision)) AS active_time_total_s
    FROM (m
      FULL JOIN p ON (((m.session_id = p.session_id) AND (m.activity_date = p.activity_date))))
+  WITH NO DATA;
+
+
+--
+-- Name: fact_tool_outcome; Type: MATERIALIZED VIEW; Schema: marts; Owner: -
+--
+
+CREATE MATERIALIZED VIEW marts.fact_tool_outcome AS
+ SELECT session_id,
+    (event_time)::date AS activity_date,
+    tool_name,
+    count(*) AS tool_call_count,
+    count(*) FILTER (WHERE success_bool) AS success_count,
+    (percentile_cont((0.5)::double precision) WITHIN GROUP (ORDER BY ((duration_ms)::double precision)))::bigint AS duration_p50_ms,
+    (percentile_cont((0.95)::double precision) WITHIN GROUP (ORDER BY ((duration_ms)::double precision)))::bigint AS duration_p95_ms
+   FROM raw.events
+  WHERE ((event_name = 'tool_result'::text) AND (session_id IS NOT NULL))
+  GROUP BY session_id, ((event_time)::date), tool_name
   WITH NO DATA;
 
 
@@ -869,6 +903,13 @@ CREATE INDEX dq_finding_detected_idx ON marts.dq_finding USING btree (detected_a
 
 
 --
+-- Name: fact_api_error_rate_pk; Type: INDEX; Schema: marts; Owner: -
+--
+
+CREATE UNIQUE INDEX fact_api_error_rate_pk ON marts.fact_api_error_rate USING btree (activity_date);
+
+
+--
 -- Name: fact_api_usage_pk; Type: INDEX; Schema: marts; Owner: -
 --
 
@@ -894,6 +935,13 @@ CREATE UNIQUE INDEX fact_session_daily_pk ON marts.fact_session_daily USING btre
 --
 
 CREATE UNIQUE INDEX fact_session_pk ON marts.fact_session USING btree (session_id);
+
+
+--
+-- Name: fact_tool_outcome_pk; Type: INDEX; Schema: marts; Owner: -
+--
+
+CREATE UNIQUE INDEX fact_tool_outcome_pk ON marts.fact_tool_outcome USING btree (session_id, activity_date, tool_name);
 
 
 --
@@ -985,4 +1033,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260713170012'),
     ('20260713170013'),
     ('20260716153503'),
-    ('20260720120000');
+    ('20260720120000'),
+    ('20260722031957');
