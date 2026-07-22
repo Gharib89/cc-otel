@@ -1,16 +1,16 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "cht_wau",
+  "name": "cht_mau",
   "position": {
-    "x": 28,
+    "x": 648,
     "y": 193,
-    "z": 26000,
+    "z": 26100,
     "height": 215,
     "width": 604,
-    "tabOrder": 26000
+    "tabOrder": 26100
   },
   "visual": {
-    "visualType": "lineChart",
+    "visualType": "lineClusteredColumnComboChart",
     "query": {
       "queryState": {
         "Category": {
@@ -23,11 +23,11 @@
                       "Entity": "dim_date"
                     }
                   },
-                  "Property": "week_label"
+                  "Property": "month_label"
                 }
               },
-              "queryRef": "dim_date.week_label",
-              "nativeQueryRef": "week_label",
+              "queryRef": "dim_date.month_label",
+              "nativeQueryRef": "month_label",
               "active": true
             }
           ]
@@ -42,11 +42,29 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Weekly Active Users"
+                  "Property": "Monthly Active Users"
                 }
               },
-              "queryRef": "_Measures.Weekly Active Users",
-              "nativeQueryRef": "Weekly Active Users"
+              "queryRef": "_Measures.Monthly Active Users",
+              "nativeQueryRef": "Monthly Active Users"
+            }
+          ]
+        },
+        "Y2": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "MAU MoM Δ"
+                }
+              },
+              "queryRef": "_Measures.MAU MoM Δ",
+              "nativeQueryRef": "MAU MoM Δ"
             }
           ]
         }
@@ -97,6 +115,13 @@
                   }
                 }
               }
+            },
+            "secShow": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
             }
           }
         }
@@ -128,6 +153,9 @@
                 }
               }
             }
+          },
+          "selector": {
+            "metadata": "_Measures.Monthly Active Users"
           }
         }
       ],
@@ -137,7 +165,14 @@
             "showMarker": {
               "expr": {
                 "Literal": {
-                  "Value": "true"
+                  "Value": "false"
+                }
+              }
+            },
+            "strokeWidth": {
+              "expr": {
+                "Literal": {
+                  "Value": "0D"
                 }
               }
             }
@@ -190,7 +225,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'WEEKLY ACTIVE USERS'"
+                  "Value": "'MONTHLY ACTIVE USERS'"
                 }
               }
             },
@@ -280,19 +315,6 @@
         }
       ],
       "dropShadow": [
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "false"
-                }
-              }
-            }
-          }
-        }
-      ],
-      "subTitle": [
         {
           "properties": {
             "show": {

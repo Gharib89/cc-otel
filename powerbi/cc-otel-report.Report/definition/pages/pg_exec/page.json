@@ -5,6 +5,13 @@
   "displayOption": "FitToPage",
   "height": 720,
   "width": 1280,
+  "visualInteractions": [
+    {
+      "source": "sl_date",
+      "target": "cht_mau",
+      "type": "NoFilter"
+    }
+  ],
   "objects": {
     "background": [
       {
