@@ -99,6 +99,14 @@ table _Measures
 		displayFolder: Utilization
 		lineageTag: 81068fa0-8934-4b90-aa99-797baea5d229
 
+	/// Mean hourly utilization for the hour-of-day heatmap. fact_utilization_hourly[avg_pct] is the
+	/// per user x window_type x hour mean closing utilization, stored 0-100 (percent points); average it
+	/// across the hour-of-day bucket in context and divide by 100 for the 0.0% format. Split by window_type.
+	measure 'Hourly Utilization Intensity' = DIVIDE ( AVERAGE ( fact_utilization_hourly[avg_pct] ), 100 )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Utilization
+		lineageTag: b2c3d4e5-0175-4f6a-9b0c-1d2e3f4a5b6c
+
 	measure 'Tool Acceptance Rate' =
 			DIVIDE (
 			    CALCULATE ( SUM ( fact_edit_decision[decision_count] ), fact_edit_decision[decision] = "accept" ),
