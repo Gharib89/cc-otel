@@ -499,6 +499,33 @@ def test_fact_usage_window_reset_split_can_exceed_100pct(conn):
     ) == (True,)
 
 
+def test_fact_usage_window_rejects_impossible_reset(conn):
+    """A wrapper glitch can emit a reset_in_seconds far beyond the 7d window max
+    (604800s); window_end = ts + reset would then land centuries out and pollute
+    the fact. Such samples are dropped, leaving only plausible windows."""
+    samples = [
+        ("10:00:00", 40, 18000),          # legit 5h window: kept
+        ("10:05:00", 42, 8_219_674_457),  # impossible reset (> 7d): rejected
+    ]
+    for hhmmss, util, reset in samples:
+        for name, val in (("utilization", util), ("reset_in_seconds", reset)):
+            ins_metric(
+                conn,
+                ts=f"2026-07-01T{hhmmss}Z",
+                metric_name=f"claude_code.usage.{name}",
+                metric_type="gauge",
+                value=val,
+                value_kind="gauge_last",
+                user_email="u@x.com",
+                usage_window="5h",
+            )
+    refresh(conn)
+    assert one(
+        conn, "SELECT COUNT(*) FROM marts.fact_usage_window WHERE window_end > '2100-01-01'"
+    ) == (0,)
+    assert all_(conn, "SELECT segment_no, end_pct FROM marts.fact_usage_window") == [(1, 40.0)]
+
+
 def test_fact_utilization_hourly_avg_max(conn):
     for hhmmss, util in (("10:00:00", 20), ("10:30:00", 80)):
         ins_metric(
