@@ -1,13 +1,13 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "crd_offroster",
+  "name": "crd_tsucc",
   "position": {
-    "x": 648,
-    "y": 182,
-    "z": 307,
-    "height": 48,
-    "width": 190,
-    "tabOrder": 307
+    "x": 28,
+    "y": 628,
+    "z": 30100,
+    "height": 80,
+    "width": 150,
+    "tabOrder": 30100
   },
   "visual": {
     "visualType": "card",
@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Off-Roster Active Users"
+                  "Property": "Tool Success Rate"
                 }
               },
-              "queryRef": "_Measures.Off-Roster Active Users",
-              "nativeQueryRef": "Off-Roster Active Users"
+              "queryRef": "_Measures.Tool Success Rate",
+              "nativeQueryRef": "Tool Success Rate"
             }
           ]
         }
@@ -40,7 +40,7 @@
             "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "28D"
+                  "Value": "32D"
                 }
               }
             },

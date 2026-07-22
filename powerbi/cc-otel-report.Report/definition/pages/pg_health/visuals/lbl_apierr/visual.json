@@ -1,73 +1,35 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "crd_offroster",
+  "name": "lbl_apierr",
   "position": {
-    "x": 648,
-    "y": 182,
-    "z": 307,
-    "height": 48,
+    "x": 1062,
+    "y": 148,
+    "z": 310,
+    "height": 34,
     "width": 190,
-    "tabOrder": 307
+    "tabOrder": 310
   },
   "visual": {
-    "visualType": "card",
-    "query": {
-      "queryState": {
-        "Values": {
-          "projections": [
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "_Measures"
-                    }
-                  },
-                  "Property": "Off-Roster Active Users"
-                }
-              },
-              "queryRef": "_Measures.Off-Roster Active Users",
-              "nativeQueryRef": "Off-Roster Active Users"
-            }
-          ]
-        }
-      }
-    },
+    "visualType": "textbox",
     "objects": {
-      "labels": [
+      "general": [
         {
           "properties": {
-            "fontSize": {
-              "expr": {
-                "Literal": {
-                  "Value": "28D"
-                }
-              }
-            },
-            "color": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#0198CB'"
+            "paragraphs": [
+              {
+                "textRuns": [
+                  {
+                    "value": "API ERROR RATE",
+                    "textStyle": {
+                      "fontWeight": "bold",
+                      "fontSize": "8pt",
+                      "color": "#5a6473"
                     }
                   }
-                }
+                ],
+                "horizontalTextAlignment": "center"
               }
-            }
-          }
-        }
-      ],
-      "categoryLabels": [
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "false"
-                }
-              }
-            }
+            ]
           }
         }
       ]
@@ -138,7 +100,6 @@
           }
         }
       ]
-    },
-    "drillFilterOtherVisuals": true
+    }
   }
 }

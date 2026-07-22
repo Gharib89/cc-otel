@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "lbl_mismatch",
   "position": {
-    "x": 516,
+    "x": 442,
     "y": 148,
     "z": 304,
     "height": 34,
-    "width": 232,
+    "width": 190,
     "tabOrder": 304
   },
   "visual": {

@@ -108,6 +108,32 @@ table _Measures
 		displayFolder: Tool Quality
 		lineageTag: d2bb363b-cd63-4aa4-84eb-169753d92097
 
+	/// Share of tool_result events that succeeded (#174, fact_tool_outcome P2). Pair with p95 latency — reliability failures kill adoption.
+	measure 'Tool Success Rate' =
+			DIVIDE (
+			    SUM ( fact_tool_outcome[success_count] ),
+			    SUM ( fact_tool_outcome[tool_call_count] )
+			)
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Tool Quality
+		lineageTag: d60a6272-71f2-4cbf-a7e7-ef12be7cbed1
+
+	/// Mean of the per-session/day p95 tool latency (ms). True cross-session p95 is unrecoverable from the pre-aggregated mart, so this averages the per-grain p95 — read as a tail-latency trend, not an exact percentile (#174).
+	measure 'Tool p95 Latency (ms)' = AVERAGE ( fact_tool_outcome[duration_p95_ms] )
+		formatString: #,##0
+		displayFolder: Tool Quality
+		lineageTag: 76fdd088-f0fd-4122-8082-1a74ea07084f
+
+	/// api_error events over api_request events (#174, fact_api_error_rate P3). Ops signal on Data Health, not exec. Recomputed from counts, not an average of daily rates.
+	measure 'API Error Rate' =
+			DIVIDE (
+			    SUM ( fact_api_error_rate[api_error_count] ),
+			    SUM ( fact_api_error_rate[api_request_count] ) + SUM ( fact_api_error_rate[api_error_count] )
+			)
+		formatString: 0.00%;-0.00%;0.00%
+		displayFolder: Ingest Health
+		lineageTag: d69888b0-c91f-48a5-a793-bf620d5fe29b
+
 	/// Import-mode caveat: staleness includes the daily report-refresh lag, not just pipeline silence.
 	measure 'Hours Since Last Signal' =
 			VAR LastSignal = MAX ( fact_api_usage[last_event_ts] )
