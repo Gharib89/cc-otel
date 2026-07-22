@@ -19,7 +19,7 @@
               {
                 "textRuns": [
                   {
-                    "value": "AGENTS",
+                    "value": "SUBAGENTS",
                     "textStyle": {
                       "fontWeight": "bold",
                       "fontSize": "8pt",

@@ -19,7 +19,7 @@
               {
                 "textRuns": [
                   {
-                    "value": "TOTAL TOKENS",
+                    "value": "TOKENS (IN+OUT)",
                     "textStyle": {
                       "fontWeight": "bold",
                       "fontSize": "8pt",

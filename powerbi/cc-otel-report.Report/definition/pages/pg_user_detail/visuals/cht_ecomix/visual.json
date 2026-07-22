@@ -146,7 +146,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'ECOSYSTEM MIX'"
+                  "Value": "'ECOSYSTEM ACTIVITY'"
                 }
               }
             },

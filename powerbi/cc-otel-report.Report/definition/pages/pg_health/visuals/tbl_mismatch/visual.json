@@ -245,13 +245,6 @@
                           "Value": "'Off-roster'"
                         }
                       }
-                    ],
-                    [
-                      {
-                        "Literal": {
-                          "Value": "'Unknown id'"
-                        }
-                      }
                     ]
                   ]
                 }
