@@ -292,6 +292,32 @@ table _Measures
 		displayFolder: Seat ROI\Cost
 		lineageTag: a1730005-0000-4000-8000-000000000173
 
+	/// ROI-tile delta triplet (mirrors the Overview KPI pattern): hidden prior-window ratio / Δ (% change) /
+	/// label. Seat cost is date-independent and the prior window is equal-length, so the ratio delta reduces
+	/// to the value-consumed change — meaningful and window-consistent.
+	measure 'Value vs Seat Ratio PP' =
+			VAR Days = COUNTROWS ( dim_date )
+			VAR FirstDay = MIN ( dim_date[date_day] )
+			RETURN
+			    CALCULATE ( [Value vs Seat Ratio], DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 ) )
+		formatString: 0.0"×"
+		isHidden
+		displayFolder: Seat ROI\Cost\Support
+		lineageTag: a1730007-0000-4000-8000-000000000173
+
+	measure 'Value vs Seat Ratio Δ' = DIVIDE ( [Value vs Seat Ratio] - [Value vs Seat Ratio PP], [Value vs Seat Ratio PP] )
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730008-0000-4000-8000-000000000173
+
+	measure 'Value vs Seat Ratio Δ Label' =
+			VAR D = [Value vs Seat Ratio Δ]
+			VAR N = COUNTROWS ( dim_date )
+			RETURN
+			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730009-0000-4000-8000-000000000173
+
 	/// Distinct actives per calendar ISO week (all telemetry, #117 decision 5); the incomplete
 	/// current week returns BLANK so the trend never ends in a fake dip.
 	measure 'Weekly Active Users' =
