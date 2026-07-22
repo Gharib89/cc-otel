@@ -128,6 +128,8 @@ BEGIN
                 '{}'::text[]
             ) AS personal_emails
         FROM (
+            -- UNION ALL, not UNION: the outer COUNT(DISTINCT)/ARRAY_AGG(DISTINCT)
+            -- already de-dupe, so a set UNION here is a wasted sort each refresh.
             SELECT session_id, ts::date AS activity_date, user_email
             FROM staging.stg_counter_delta
             WHERE session_id IS NOT NULL AND user_email IS NOT NULL
@@ -213,6 +215,8 @@ BEGIN
                 '{}'::text[]
             ) AS personal_emails
         FROM (
+            -- UNION ALL, not UNION: the outer COUNT(DISTINCT)/ARRAY_AGG(DISTINCT)
+            -- already de-dupe, so a set UNION here is a wasted sort each refresh.
             SELECT session_id, ts::date AS activity_date, user_email
             FROM staging.stg_counter_delta
             WHERE session_id IS NOT NULL AND user_email IS NOT NULL
