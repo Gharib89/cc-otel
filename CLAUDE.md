@@ -107,7 +107,7 @@ Every behavior/command/convention change ships its docs in the **same** PR. Coup
 - **`docs/adr/`** — a decision conflicting with a settled ADR is surfaced, never silently overridden; a new settled decision gets a new ADR.
 - **Map issue #1** — the locked design/decision log; a scope or design shift updates the relevant bullet.
 - **`db/schema.sql`** — never hand-edited; regenerated only via `scripts/dev-migrate.sh` (everything is a migration).
-- **CI path filters** — a new top-level concern needs its own workflow filter; validate `.github/workflows/**` edits with **actionlint**, not just a YAML parse (`matrix` context is invalid in a step's `shell:` key and fails at startup with no PR check). `scripts/ship/local-gate.sh` mirrors these filters in its path→gate map — a filter change updates the script in the same PR.
+- **CI path filters** — a new top-level concern needs its own workflow filter; validate `.github/workflows/**` edits with **actionlint**, not just a YAML parse (`matrix` context is invalid in a step's `shell:` key and fails at startup with no PR check). `scripts/ship/local-gate.sh` derives its selection from the workflows' `paths:` filters (via `tools/gate_paths.py`) — a new workflow still needs a local gate group or an entry in the script's exclusion list.
 
 ## Agent skills
 
