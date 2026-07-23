@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pytest
 
-_LIB_SRC = (
-    Path(__file__).resolve().parents[2] / "scripts" / "ship" / "_lib.sh"
-).read_text(encoding="utf-8")
+_LIB_SRC = (Path(__file__).resolve().parents[2] / "scripts" / "ship" / "_lib.sh").read_text(
+    encoding="utf-8"
+)
 
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None, reason="bash not on PATH")
 
@@ -43,14 +43,18 @@ def test_ship_branch_constructs_type_slug_issue():
 def test_branch_suffix_re_matches_only_the_issue_suffix():
     # The constructed branch matches its own issue's suffix regex...
     assert (
-        _run('b=$(ship_branch refactor sig-table 230); [[ $b =~ $(ship_branch_suffix_re 230) ]] '
-             '&& echo match || echo no').strip()
+        _run(
+            "b=$(ship_branch refactor sig-table 230); [[ $b =~ $(ship_branch_suffix_re 230) ]] "
+            "&& echo match || echo no"
+        ).strip()
         == "match"
     )
     # ...but not a different issue's, and not a numeric prefix (anchored end).
     assert (
-        _run('b=$(ship_branch refactor sig-table 230); [[ $b =~ $(ship_branch_suffix_re 23) ]] '
-             '&& echo match || echo no').strip()
+        _run(
+            "b=$(ship_branch refactor sig-table 230); [[ $b =~ $(ship_branch_suffix_re 23) ]] "
+            "&& echo match || echo no"
+        ).strip()
         == "no"
     )
 
