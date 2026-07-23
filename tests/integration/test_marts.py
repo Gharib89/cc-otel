@@ -555,6 +555,87 @@ def test_fact_utilization_hourly_avg_max(conn):
     assert one(conn, "SELECT avg_pct, max_pct FROM marts.fact_utilization_hourly") == (50.0, 80.0)
 
 
+def test_null_user_email_buckets_into_unknown_across_facts(conn):
+    """#214: a genuinely absent user_email must resolve to dim_user's explicit
+    '(unknown)' member at every fact grain, not collapse into a BLANK that
+    DISTINCTCOUNT(user_email) counts as a distinct user (which inflated Active
+    Users by one and orphaned the rows' activity). Seed one email-less session
+    feeding all six user-grained facts, then assert no fact leaks a NULL and each
+    carries the explicit '(unknown)' member that joins dim_user."""
+    ins_metric(
+        conn,
+        ts="2026-07-01T10:00:00Z",
+        metric_name="claude_code.commit.count",
+        metric_type="sum",
+        value=1,
+        value_kind="sum_delta",
+        session_id=S1,
+        user_email=None,
+    )
+    ins_metric(
+        conn,
+        ts="2026-07-01T10:00:00Z",
+        metric_name="claude_code.code_edit_tool.decision",
+        metric_type="sum",
+        value=1,
+        value_kind="sum_delta",
+        session_id=S1,
+        user_email=None,
+        tool_name="Edit",
+        language="Python",
+        decision="accept",
+        source="user_temporary",
+    )
+    for name, val in (("utilization", 40), ("reset_in_seconds", 18000)):
+        ins_metric(
+            conn,
+            ts="2026-07-01T10:00:00Z",
+            metric_name=f"claude_code.usage.{name}",
+            metric_type="gauge",
+            value=val,
+            value_kind="gauge_last",
+            user_email=None,
+            usage_window="5h",
+        )
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:05:00Z",
+        event_name="api_request",
+        session_id=S1,
+        user_email=None,
+        prompt_id=P1,
+        model="claude-opus-4-8",
+        cost_usd=0.01,
+        query_source="main",
+        effort="high",
+    )
+    refresh(conn)
+    facts = (
+        "fact_session",
+        "fact_session_daily",
+        "fact_api_usage",
+        "fact_edit_decision",
+        "fact_usage_window",
+        "fact_utilization_hourly",
+    )
+    for fact in facts:
+        assert one(
+            conn, f"SELECT count(*) FROM marts.{fact} WHERE user_email IS NULL"
+        ) == (0,), fact
+        assert one(
+            conn, f"SELECT count(*) FROM marts.{fact} WHERE user_email = '(unknown)'"
+        ) != (0,), fact
+    # The '(unknown)' member exists in dim_user with is_unknown, so the facts' FK resolves.
+    assert one(conn, "SELECT is_unknown FROM marts.dim_user WHERE user_email = '(unknown)'") == (
+        True,
+    )
+    assert one(
+        conn,
+        "SELECT count(*) FROM marts.fact_session_daily f "
+        "LEFT JOIN marts.dim_user d USING (user_email) WHERE d.user_email IS NULL",
+    ) == (0,)
+
+
 # --- bridges ----------------------------------------------------------------
 
 
