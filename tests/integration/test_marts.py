@@ -295,8 +295,7 @@ def test_fact_api_usage_grain_and_last_event_ts(conn):
 def _cost_findings(conn):
     return one(
         conn,
-        "SELECT count(*) FROM marts.dq_finding "
-        "WHERE finding_type = 'cost_promotion_divergence'",
+        "SELECT count(*) FROM marts.dq_finding WHERE finding_type = 'cost_promotion_divergence'",
     )[0]
 
 
@@ -386,9 +385,7 @@ def test_fact_tool_outcome_counts_and_percentiles(conn):
 
 def test_fact_api_error_rate_per_day(conn):
     for _ in range(3):
-        ins_event(
-            conn, event_time="2026-07-01T10:00:00Z", event_name="api_request", session_id=S1
-        )
+        ins_event(conn, event_time="2026-07-01T10:00:00Z", event_name="api_request", session_id=S1)
     ins_event(conn, event_time="2026-07-01T11:00:00Z", event_name="api_error", session_id=S1)
     refresh(conn)
     # 1 error out of 4 total attempts = 25.00% (0-100 scale).
@@ -507,7 +504,7 @@ def test_fact_usage_window_rejects_impossible_reset(conn):
     (604800s); window_end = ts + reset would then land centuries out and pollute
     the fact. Such samples are dropped, leaving only plausible windows."""
     samples = [
-        ("10:00:00", 40, 18000),          # legit 5h window: kept
+        ("10:00:00", 40, 18000),  # legit 5h window: kept
         ("10:05:00", 42, 8_219_674_457),  # impossible reset (> 7d): rejected
     ]
     for hhmmss, util, reset in samples:
@@ -619,12 +616,12 @@ def test_null_user_email_buckets_into_unknown_across_facts(conn):
         "fact_utilization_hourly",
     )
     for fact in facts:
-        assert one(
-            conn, f"SELECT count(*) FROM marts.{fact} WHERE user_email IS NULL"
-        ) == (0,), fact
-        assert one(
-            conn, f"SELECT count(*) FROM marts.{fact} WHERE user_email = '(unknown)'"
-        ) != (0,), fact
+        assert one(conn, f"SELECT count(*) FROM marts.{fact} WHERE user_email IS NULL") == (0,), (
+            fact
+        )
+        assert one(conn, f"SELECT count(*) FROM marts.{fact} WHERE user_email = '(unknown)'") != (
+            0,
+        ), fact
     # The '(unknown)' member exists in dim_user with is_unknown, so the facts' FK resolves.
     assert one(conn, "SELECT is_unknown FROM marts.dim_user WHERE user_email = '(unknown)'") == (
         True,

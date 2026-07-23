@@ -19,8 +19,12 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
+      # powerbi/ line endings are owned by .gitattributes + Desktop (#234):
+      # keep these mutating fixers off that tree so `-a` never fights Desktop.
       - id: trailing-whitespace
+        exclude: ^powerbi/
       - id: end-of-file-fixer
+        exclude: ^powerbi/
       - id: check-yaml
       - id: check-added-large-files
       - id: check-merge-conflict

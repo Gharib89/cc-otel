@@ -104,9 +104,7 @@ def test_gzip_encoded_body_is_decompressed():
     store = FakeStore()
     body = gzip.compress(json.dumps(METRICS_BODY).encode())
     with _client(store) as client:
-        resp = client.post(
-            "/v1/metrics", content=body, headers={"Content-Encoding": "gzip"}
-        )
+        resp = client.post("/v1/metrics", content=body, headers={"Content-Encoding": "gzip"})
     assert resp.status_code == 200
     assert len(store.calls) == 1
 

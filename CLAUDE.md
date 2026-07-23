@@ -36,12 +36,12 @@ uv sync                      # install workspace deps
 uv run pytest                # unit (sink/tests) + integration (tests/integration)
 uv run pytest -m "not integration"  # unit only — the `python` CI job
 uv run pytest -m integration # integration only (needs Docker) — the `integration` CI job
-uv run ruff check .          # Python lint — the `python` CI job
+uv run ruff check .          # Python lint (CI runs it via pre-commit)
 uv run mypy                  # strict type-check, sink/src only — the `python` CI job
-uv run sqlfluff lint db/     # SQL lint — the `python` CI job
+uv run sqlfluff lint db/     # SQL lint (CI runs it via pre-commit)
 az bicep build --file iac/main.bicep --stdout >/dev/null  # Bicep lint (the `iac` CI job)
 Assert-PSRule -InputPath ./iac/ -Module PSRule.Rules.Azure  # Bicep static analysis (pwsh; see iac/README.md)
-uv run pre-commit run -a     # all hooks
+uv run pre-commit run -a     # all hooks — the `python` CI job's lint/format gate
 dbmate new <name>            # new migration in db/migrations/
 scripts/dev-migrate.sh       # apply migrations + regenerate schema.sql on throwaway Docker Postgres (the authoring loop)
 scripts/dev-migrate.sh --check  # schema-drift verdict: normalized diff vs HEAD, exit 1 on drift (CI + local gate run this)

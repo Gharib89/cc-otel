@@ -130,9 +130,8 @@ fi
 
 # --- python (python.yml) ------------------------------------------------------
 if wf python; then
-  run_gate python:ruff uv run ruff check .
+  run_gate python:pre-commit uv run pre-commit run --all-files --show-diff-on-failure
   run_gate python:mypy uv run mypy
-  run_gate python:sqlfluff uv run sqlfluff lint db/
   run_gate python:pytest-unit uv run pytest -m "not integration"
 fi
 
