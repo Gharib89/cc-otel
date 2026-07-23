@@ -43,7 +43,7 @@ jobs:
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-      - run: uv run pre-commit run --all-files
+      - run: uv run pre-commit run --all-files --show-diff-on-failure
       # Strict static typing, sink ingest path only (#113): a type error here is
       # silent and permanent — bad telemetry lands in `raw`. Scope is set in the
       # `[tool.mypy]` config (files = sink/src).
