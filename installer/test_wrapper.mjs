@@ -13,7 +13,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import http from "node:http";
 import { once } from "node:events";
 import path from "node:path";
@@ -452,6 +452,43 @@ test("readManagedSettingsEnv: drops non-string values so downstream trim/split n
   // The malformed values are gone, so resolution stays on the safe path.
   assert.equal(resolveEndpoint({}, managed), "http://localhost:4318/v1/metrics");
   assert.deepEqual(resolveHeaders({}, managed), {});
+});
+
+// ---------------------------------------------------------------------------
+// Cross-language round-trip: real PS writer -> real JS reader (#231)
+// ---------------------------------------------------------------------------
+// The per-side tests above pin each half against its own hand-written fixture.
+// This one closes the seam between them: it runs the real installer writer
+// (ConvertTo-ManagedSettingsJson over Get-DesiredTelemetryEnv) and feeds its
+// actual output to the real wrapper reader. If the installer ever renamed or
+// restructured the file, the tolerant reader would silently return {} and the
+// statusline would fall back to localhost:4318 — a break no single-side fixture
+// can catch. pwsh is the sibling runtime here; skip locally when it is absent,
+// but never in CI (the lint-wrapper job has pwsh preinstalled).
+
+const INSTALL_PS1 = path.join(__dirname, "install.ps1");
+
+test("round-trip: PS-written managed-settings.json resolves through the JS reader (#231)", (t) => {
+  const psCommand =
+    `. '${INSTALL_PS1.replace(/'/g, "''")}' -InstallRoot '/tmp/cc-otel-231';` +
+    ` ConvertTo-ManagedSettingsJson` +
+    ` -TelemetryEnv (Get-DesiredTelemetryEnv -Endpoint 'https://c.example.com' -Token 'tok')` +
+    ` -WrapperPath '/x/cc-otel-wrapper.mjs'`;
+  const res = spawnSync("pwsh", ["-NoProfile", "-Command", psCommand], { encoding: "utf8" });
+
+  if (res.error?.code === "ENOENT") {
+    if (process.env.CI) throw new Error("pwsh missing in CI — the round-trip seam is unverified");
+    t.skip("pwsh not installed locally");
+    return;
+  }
+  assert.equal(res.status, 0, `pwsh writer failed: ${res.stderr}`);
+
+  const dir = tmpDir("cc-otel-roundtrip-");
+  fs.writeFileSync(path.join(dir, "managed-settings.json"), res.stdout);
+
+  const managed = readManagedSettingsEnv(dir);
+  assert.equal(resolveEndpoint({}, managed), "https://c.example.com/v1/metrics");
+  assert.equal(resolveHeaders({}, managed).Authorization, "Bearer tok");
 });
 
 // ---------------------------------------------------------------------------
