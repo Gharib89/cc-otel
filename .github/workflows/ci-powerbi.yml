@@ -34,7 +34,7 @@ jobs:
           node-version: "20"
 
       - name: Install pinned ajv
-        run: npm install --no-save ajv@8.17.1
+        run: npm install --no-save "ajv@$(jq -r .ajv .github/powerbi/tool-versions.json)"
 
       - name: Validate PBIR schemas
         run: node .github/powerbi/validate-pbir.mjs powerbi
@@ -54,7 +54,7 @@ jobs:
       # it catches role/theme defects that render silently wrong past ajv (whose
       # schemas model queryState as an open map). Pinned; preview tool.
       - name: MS conformance CLI
-        run: npx -y @microsoft/powerbi-report-authoring-cli@0.1.4 validate powerbi/cc-otel-report.Report --format text
+        run: npx -y "@microsoft/powerbi-report-authoring-cli@$(jq -r .msCli .github/powerbi/tool-versions.json)" validate powerbi/cc-otel-report.Report --format text
 
   # fab-inspector runs declarative report-quality rules against the report item.
   # Self-contained linux binary -> ubuntu (1x metered minutes, #32).
@@ -63,10 +63,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download pinned fab-inspector (v3.4.0)
+      - name: Download pinned fab-inspector
         run: |
+          FAB=$(jq -r .fab .github/powerbi/tool-versions.json)
           curl -fsSL --retry 3 -o fab.zip \
-            https://github.com/NatVanG/fab-inspector/releases/download/v3.4.0/linux-x64-FabInspCLI.zip
+            "https://github.com/NatVanG/fab-inspector/releases/download/$FAB/linux-x64-FabInspCLI.zip"
           unzip -q fab.zip -d fab-inspector
           chmod +x fab-inspector/linux-x64/FabInspCLI/fab-inspector
 
@@ -90,10 +91,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download pinned Tabular Editor 2 (2.28.0)
+      - name: Download pinned Tabular Editor 2
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri https://github.com/TabularEditor/TabularEditor/releases/download/2.28.0/TabularEditor.Portable.zip -OutFile te2.zip
+          $te2 = (Get-Content .github/powerbi/tool-versions.json -Raw | ConvertFrom-Json).te2
+          Invoke-WebRequest -Uri "https://github.com/TabularEditor/TabularEditor/releases/download/$te2/TabularEditor.Portable.zip" -OutFile te2.zip
           Expand-Archive te2.zip -DestinationPath te2
 
       - name: Best Practice Analyzer

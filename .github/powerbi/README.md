@@ -1,8 +1,10 @@
 # Power BI CI gate assets
 
 Config + helper for `.github/workflows/ci-powerbi.yml`, which validates the
-`powerbi/` PBIP/PBIR report and TMDL semantic model. All tool versions are pinned
-in the workflow. The `fab-inspector` and BPA rulesets are vendored here (no runtime
+`powerbi/` PBIP/PBIR report and TMDL semantic model. The four tool versions
+(`fab`, `te2`, `ajv`, `msCli`) are pinned once in `tool-versions.json`, read by
+both `ci-powerbi.yml` and the local `validate.ps1` (#227). The `fab-inspector`
+and BPA rulesets are vendored here (no runtime
 dependency on upstream `master`). The `pbir-schema` job is the one exception: it
 fetches the Fabric JSON schemas from `developer.microsoft.com` at runtime, pinned
 by the exact `$schema` version each report file declares. An unreachable schema
@@ -12,7 +14,7 @@ reachable schema fails.
 
 | File | Job | Source |
 |---|---|---|
-| `validate-pbir.mjs` | `pbir-schema` | project-native — validates each PBIP/PBIR file against the Fabric JSON schema it declares in `$schema` (ajv `8.17.1`, fetches the schema + `$ref` closure over HTTP) |
+| `validate-pbir.mjs` | `pbir-schema` | project-native — validates each PBIP/PBIR file against the Fabric JSON schema it declares in `$schema` (ajv pinned in `tool-versions.json`, fetches the schema + `$ref` closure over HTTP) |
 | `gotchas-lint.mjs` | `pbir-schema` | project-native — the statically checkable `pbir-gotchas` skill traps as lint rules (#135); pure node, no deps |
 | `fab-inspector-rules.json` | `fab-inspector` | vendored from `NatVanG/fab-inspector` `v3.4.0` `Rules/Base-rules.json` (report visual-quality rules) |
 | `BPARules.json` | `bpa` | vendored from `TabularEditor/BestPracticeRules` `BPARules-PowerBI.json` |
