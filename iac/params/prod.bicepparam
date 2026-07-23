@@ -36,6 +36,13 @@ param postgresFirewallRules = [
   { name: 'ITWorxVpn8', startIpAddress: '82.129.222.35', endIpAddress: '82.129.222.36' }
 ]
 
+// Postgres Entra administrator (issue #93) — Ahmed's identity; per-person team
+// access is minted from this login (bootstrap/README.md "Team access"). Committed
+// as literals deliberately: directory pointers, not secrets, same person + tenant
+// on both targets.
+param postgresEntraAdminObjectId = '72599483-8910-479f-a2b3-47b22f225a44'
+param postgresEntraAdminLogin = 'Ahmed.Gharib@itworx.com'
+
 param collectorImage = 'ghcr.io/gharib89/cc-otel-collector:latest'
 param sinkImage = 'ghcr.io/gharib89/cc-otel-sink:latest'
 

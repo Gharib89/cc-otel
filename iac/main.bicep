@@ -41,6 +41,12 @@ param postgresDatabaseName string = 'cc_otel'
 @description('Public-endpoint firewall rules. Include the special 0.0.0.0-0.0.0.0 rule to let the Container App reach the server.')
 param postgresFirewallRules array
 
+@description('Object ID of the Microsoft Entra user set as the Postgres Entra administrator.')
+param postgresEntraAdminObjectId string
+
+@description('Sign-in name (UPN) of the Postgres Entra administrator.')
+param postgresEntraAdminLogin string
+
 // --- Container App images & secrets ---
 @description('Collector container image (GHCR).')
 param collectorImage string
@@ -114,6 +120,8 @@ module postgres 'modules/postgres.bicep' = {
     administratorLoginPassword: postgresAdminPassword
     databaseName: postgresDatabaseName
     firewallRules: postgresFirewallRules
+    entraAdminObjectId: postgresEntraAdminObjectId
+    entraAdminLogin: postgresEntraAdminLogin
     tags: tags
   }
 }

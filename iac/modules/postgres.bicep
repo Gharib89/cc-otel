@@ -38,6 +38,12 @@ param databaseName string
 @description('Firewall rules opening the public endpoint to specific ranges. The special rule 0.0.0.0-0.0.0.0 (name "AllowAllAzureServices") lets Azure-hosted services (the Container App) reach the server.')
 param firewallRules array
 
+@description('Object ID of the Microsoft Entra user set as the server\'s Entra administrator — the identity that mints per-person team principals (issue #93).')
+param entraAdminObjectId string
+
+@description('Sign-in name (UPN) of the Entra administrator.')
+param entraAdminLogin string
+
 @description('Resource tags.')
 param tags object = {}
 
@@ -56,6 +62,13 @@ resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
     availabilityZone: empty(availabilityZone) ? null : availabilityZone
     administratorLogin: administratorLogin
     administratorLoginPassword: administratorLoginPassword
+    authConfig: {
+      activeDirectoryAuth: 'Enabled'
+      // Password auth stays on: the app path (sink DATABASE_URL), CI migrations, and
+      // the Power BI read login all authenticate with passwords. Entra is for humans.
+      passwordAuth: 'Enabled'
+      tenantId: tenant().tenantId
+    }
     storage: {
       storageSizeGB: storageSizeGB
     }
@@ -122,6 +135,22 @@ resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-0
   dependsOn: [cronDatabase]
 }
 
+// The Entra administrator — required for any Entra principal to connect; per-person
+// team principals are minted from this login (bootstrap/README.md "Team access").
+// Serialized after the database resource: administrator writes are server-level
+// operations and Azure PG rejects concurrent operations (same reasoning as the
+// configuration chain above).
+resource entraAdmin 'Microsoft.DBforPostgreSQL/flexibleServers/administrators@2024-08-01' = {
+  parent: server
+  name: entraAdminObjectId
+  properties: {
+    principalType: 'User'
+    principalName: entraAdminLogin
+    tenantId: tenant().tenantId
+  }
+  dependsOn: [database]
+}
+
 resource firewall 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = [
   for rule in firewallRules: {
     parent: server
@@ -130,7 +159,9 @@ resource firewall 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-
       startIpAddress: rule.startIpAddress
       endIpAddress: rule.endIpAddress
     }
-    dependsOn: [cronDatabase]
+    // Gated behind entraAdmin (itself behind the configuration chain) so the rule
+    // writes never race the server-level administrators operation.
+    dependsOn: [entraAdmin]
   }
 ]
 
