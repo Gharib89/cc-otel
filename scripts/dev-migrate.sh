@@ -30,6 +30,7 @@ case "${1:-}" in
   "") ;;
   *) die "unknown argument: $1 (usage: scripts/dev-migrate.sh [--check])" ;;
 esac
+[ $# -le 1 ] || die "unexpected extra arguments: ${*:2} (usage: scripts/dev-migrate.sh [--check])"
 
 command -v dbmate >/dev/null 2>&1 \
   || die "dbmate not found on PATH — see https://github.com/amacneil/dbmate (pin v2.34.1 to match CI)"
