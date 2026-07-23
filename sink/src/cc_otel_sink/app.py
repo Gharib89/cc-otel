@@ -11,13 +11,14 @@ import gzip
 import hashlib
 import json
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from typing import Annotated, Any
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 
-from .blob import BlobReservoir
+from .blob import BlobReservoir, Reservoir
 from .canonical import canonical_bytes
 from .config import Settings, load_settings
 from .counters import gate_leak_count, record_gate_leaks
@@ -27,6 +28,49 @@ from .store import Store
 
 logger = logging.getLogger("cc_otel_sink")
 
+# signal → parser. Both endpoints run the identical pipeline; the signal only
+# selects the parser (and which raw list its rows fill), so the two byte-identical
+# POST endpoints register by looping this table rather than being spelled twice.
+_SIGNAL_PARSERS: dict[str, Callable[[dict[str, Any]], list[dict[str, Any]]]] = {
+    "metrics": parse_metrics,
+    "logs": parse_events,
+}
+
+
+@dataclass(frozen=True)
+class IngestBatch:
+    """The pure result of the ingest pipeline: everything the Postgres store and
+    the blob reservoir consume, derived once so the ordering invariant (redact
+    before hash; the *same* canonical bytes to the hash and the blob) is a value
+    dependency, not an inline comment (#7/#8, ADR-0005)."""
+
+    redacted_payload: dict[str, Any]
+    canonical_bytes: bytes
+    batch_hash: str
+    metrics: list[dict[str, Any]]
+    events: list[dict[str, Any]]
+    gate_leaks: int
+
+
+def prepare_batch(payload: dict[str, Any], signal: str) -> IngestBatch:
+    """Redact → canonicalize → hash → parse, in that order. Pure: no counters, no
+    I/O — the caller records gate leaks and performs the writes."""
+    result = redact(payload)
+    # Canonical serialization: the hash key AND the blob content. Redacted, so a
+    # replayed batch is byte-identical and hash-matches (#7/#8).
+    cbytes = canonical_bytes(result.payload)
+    batch_hash = hashlib.sha256(cbytes).hexdigest()
+    rows_by_signal: dict[str, list[dict[str, Any]]] = {"metrics": [], "logs": []}
+    rows_by_signal[signal] = _SIGNAL_PARSERS[signal](result.payload)
+    return IngestBatch(
+        redacted_payload=result.payload,
+        canonical_bytes=cbytes,
+        batch_hash=batch_hash,
+        metrics=rows_by_signal["metrics"],
+        events=rows_by_signal["logs"],
+        gate_leaks=result.gate_leaks,
+    )
+
 
 def get_store(request: Request) -> Store:
     store: Store | None = request.app.state.store
@@ -35,14 +79,14 @@ def get_store(request: Request) -> Store:
     return store
 
 
-def get_blob(request: Request) -> BlobReservoir | None:
-    blob: BlobReservoir | None = request.app.state.blob
+def get_blob(request: Request) -> Reservoir:
+    blob: Reservoir = request.app.state.blob
     return blob
 
 
 # Annotated deps keep the Depends() call out of the parameter default (ruff B008).
 StoreDep = Annotated[Store, Depends(get_store)]
-BlobDep = Annotated[BlobReservoir | None, Depends(get_blob)]
+BlobDep = Annotated[Reservoir, Depends(get_blob)]
 
 
 async def _ingest(
@@ -50,7 +94,7 @@ async def _ingest(
     background_tasks: BackgroundTasks,
     signal: str,
     store: Store,
-    blob: BlobReservoir | None,
+    blob: Reservoir,
 ) -> dict[str, Any]:
     raw = await request.body()
     if "gzip" in request.headers.get("content-encoding", "").lower():
@@ -60,32 +104,22 @@ async def _ingest(
     except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
         raise HTTPException(400, "invalid OTLP/JSON body") from exc
 
-    result = redact(payload)
-    if result.gate_leaks:
-        record_gate_leaks(result.gate_leaks)
+    batch = prepare_batch(payload, signal)
+    if batch.gate_leaks:
+        record_gate_leaks(batch.gate_leaks)
         logger.warning(
             "redaction stripped %d non-empty defense-in-depth field(s); a client "
             "content gate has leaked",
-            result.gate_leaks,
+            batch.gate_leaks,
         )
 
-    # Canonical serialization: the hash key AND the blob content. Redacted, so a
-    # replayed batch is byte-identical and hash-matches (#7/#8).
-    redacted_bytes = canonical_bytes(result.payload)
-    batch_hash = hashlib.sha256(redacted_bytes).hexdigest()
-
-    if signal == "metrics":
-        metrics, events = parse_metrics(result.payload), []
-    else:
-        metrics, events = [], parse_events(result.payload)
     try:
-        await store.write_batch(metrics, events, batch_hash)
+        await store.write_batch(batch.metrics, batch.events, batch.batch_hash)
     except Exception as exc:
         logger.exception("postgres write failed")
         raise HTTPException(503, "postgres write failed") from exc
 
-    if blob is not None:
-        background_tasks.add_task(blob.write, signal, redacted_bytes)
+    background_tasks.add_task(blob.write, signal, batch.canonical_bytes)
 
     # OTLP/HTTP success envelope.
     return {"partialSuccess": {}}
@@ -107,8 +141,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally:
             if store is not None:
                 await store.close()
-            if blob is not None:
-                blob.close()
+            blob.close()
 
     app = FastAPI(title="cc-otel sink", lifespan=lifespan)
 
@@ -116,23 +149,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def healthz() -> dict[str, Any]:
         return {"status": "ok", "gate_leaks": gate_leak_count()}
 
-    @app.post("/v1/metrics")
-    async def ingest_metrics(
-        request: Request,
-        background_tasks: BackgroundTasks,
-        store: StoreDep,
-        blob: BlobDep,
-    ) -> dict[str, Any]:
-        return await _ingest(request, background_tasks, "metrics", store, blob)
+    # The metrics and logs endpoints are byte-identical bar the signal; register
+    # both from the one routing table (#16) instead of spelling each out.
+    def _make_endpoint(signal: str) -> Callable[..., Any]:
+        async def ingest(
+            request: Request,
+            background_tasks: BackgroundTasks,
+            store: StoreDep,
+            blob: BlobDep,
+        ) -> dict[str, Any]:
+            return await _ingest(request, background_tasks, signal, store, blob)
 
-    @app.post("/v1/logs")
-    async def ingest_logs(
-        request: Request,
-        background_tasks: BackgroundTasks,
-        store: StoreDep,
-        blob: BlobDep,
-    ) -> dict[str, Any]:
-        return await _ingest(request, background_tasks, "logs", store, blob)
+        return ingest
+
+    for signal in _SIGNAL_PARSERS:
+        app.add_api_route(f"/v1/{signal}", _make_endpoint(signal), methods=["POST"])
 
     return app
 

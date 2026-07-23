@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 
 import pytest
 from cc_otel_sink import counters
-from cc_otel_sink.app import create_app, get_blob, get_store
+from cc_otel_sink.app import create_app, get_blob, get_store, prepare_batch
+from cc_otel_sink.blob import NullReservoir
 from cc_otel_sink.config import Settings
 from fastapi.testclient import TestClient
 
@@ -84,8 +86,31 @@ def _reset_counters():
 def _client(store: FakeStore, blob: FakeBlob | None = None) -> TestClient:
     app = create_app(SETTINGS)
     app.dependency_overrides[get_store] = lambda: store
-    app.dependency_overrides[get_blob] = lambda: blob
+    # Unconfigured ⇒ the null reservoir, matching production; blob.write is
+    # always called now (no None branch on the ingest path).
+    app.dependency_overrides[get_blob] = lambda: blob or NullReservoir()
     return TestClient(app)
+
+
+def test_prepare_batch_hashes_the_canonical_bytes_the_blob_receives():
+    # The blob consumes `canonical_bytes`; the idempotency hash must be sha256 of
+    # those same bytes — the ordering invariant made structural.
+    batch = prepare_batch(METRICS_BODY, "metrics")
+    assert batch.batch_hash == hashlib.sha256(batch.canonical_bytes).hexdigest()
+
+
+def test_prepare_batch_routes_signal_to_the_matching_list():
+    batch = prepare_batch(METRICS_BODY, "metrics")
+    assert len(batch.metrics) == 1
+    assert batch.events == []
+
+
+def test_prepare_batch_redacts_before_hashing():
+    # file_path is denylisted; it must be absent from the bytes fed to the hash
+    # and the blob, proving redaction runs before canonicalization.
+    batch = prepare_batch(METRICS_BODY, "metrics")
+    assert b"file_path" not in batch.canonical_bytes
+    assert b"/secret" not in batch.canonical_bytes
 
 
 def test_metrics_write_returns_200_and_passes_rows_to_store():

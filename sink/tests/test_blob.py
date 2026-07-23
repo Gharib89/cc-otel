@@ -4,7 +4,27 @@ from __future__ import annotations
 
 import gzip
 
-from cc_otel_sink.blob import BlobReservoir
+from cc_otel_sink.blob import (
+    BlobReservoir,
+    ConnectionStringBackend,
+    ManagedIdentityBackend,
+    NullReservoir,
+    select_backend,
+)
+from cc_otel_sink.config import Settings
+
+
+def _settings(**overrides) -> Settings:
+    base = dict(
+        database_url="",
+        blob_account_url=None,
+        blob_connection_string=None,
+        blob_container="raw",
+        host="127.0.0.1",
+        port=8080,
+    )
+    base.update(overrides)
+    return Settings(**base)
 
 
 class FakeContainer:
@@ -57,3 +77,26 @@ def test_close_releases_credential_when_present():
     BlobReservoir(container, credential).close()
     assert container.closed is True
     assert credential.closed is True
+
+
+def test_select_backend_connection_string_wins():
+    backend = select_backend(
+        _settings(blob_connection_string="cs", blob_account_url="https://acct")
+    )
+    assert backend == ConnectionStringBackend("cs", "raw")
+
+
+def test_select_backend_account_url_uses_managed_identity():
+    backend = select_backend(_settings(blob_account_url="https://acct"))
+    assert backend == ManagedIdentityBackend("https://acct", "raw")
+
+
+def test_select_backend_unconfigured_is_none():
+    assert select_backend(_settings()) is None
+
+
+def test_null_reservoir_write_and_close_are_noops():
+    # No backend, no client — must not raise.
+    reservoir = NullReservoir()
+    reservoir.write("metrics", b"{}")
+    reservoir.close()
