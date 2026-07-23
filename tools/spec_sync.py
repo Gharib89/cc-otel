@@ -36,7 +36,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import psycopg
-from cc_otel_sink.column_spec import COLUMN_SPEC, ColumnSpec, RegistryRow
+from cc_otel_sink.column_spec import COLUMN_SPEC, ColumnSpec, RegistryRow, registry_rows
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _MIGRATIONS_DIR = _REPO_ROOT / "db" / "migrations"
@@ -72,22 +72,12 @@ _REGISTRY_COLS = (
 
 
 def spec_registry_rows(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> set[RegistryRow]:
-    """The registry rows the spec expects, keyed for set comparison."""
-    return {
-        (
-            r.signal,
-            r.signal_name,
-            r.attr_path,
-            r.status,
-            r.column_name,
-            r.data_type,
-            r.description,
-            r.useful_for,
-            r.decided_at,
-            r.notes,
-        )
-        for r in spec
-    }
+    """The registry rows the spec expects, keyed for set comparison.
+
+    The projection lives once, in ``column_spec.registry_rows`` — this only lifts
+    it into a set for diffing.
+    """
+    return set(registry_rows(spec))
 
 
 def spec_raw_columns(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> dict[str, dict[str, str]]:

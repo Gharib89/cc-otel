@@ -374,11 +374,12 @@ RegistryRow = tuple[
 ]
 
 
-def registry_rows() -> tuple[RegistryRow, ...]:
-    """Project every spec row to the ``meta.column_registry`` column order.
+def registry_rows(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> tuple[RegistryRow, ...]:
+    """Project spec rows to the ``meta.column_registry`` column order.
 
     ``kind`` and ``deny_mode`` are sink-side and are not projected — the registry
-    is the deployed projection of the spec, not a full mirror.
+    is the deployed projection of the spec, not a full mirror. ``tools.spec_sync``
+    diffs this against the live registry.
     """
     return tuple(
         (
@@ -393,7 +394,7 @@ def registry_rows() -> tuple[RegistryRow, ...]:
             r.decided_at,
             r.notes,
         )
-        for r in COLUMN_SPEC
+        for r in spec
     )
 
 
