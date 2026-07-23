@@ -65,7 +65,6 @@ class ColumnSpec:
     notes: str | None = None
 
 
-# ruff: noqa: E501  (this is a data catalogue; rows read best as one line each)
 COLUMN_SPEC: tuple[ColumnSpec, ...] = (
     # ===== metrics: promoted =====
     ColumnSpec(
