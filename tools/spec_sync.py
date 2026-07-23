@@ -1,0 +1,348 @@
+"""Prove — and close — the delta between ``column_spec`` and the migrations (#167).
+
+``column_spec`` is the authoritative attr -> column -> status catalogue;
+``meta.column_registry`` + the ``raw.*`` DDL are its deployed projection. This
+tool is the convergence gate between the two.
+
+    uv run python -m tools.spec_sync --check [--database-url URL]
+        Gate: exit 1 on any spec <-> migrations delta. Connects to an
+        already-migrated DB (``--database-url`` / ``$DATABASE_URL``) or, with
+        neither, spins its own throwaway ``postgres:16`` and applies migrations.
+
+    uv run python -m tools.spec_sync --name <slug>
+        Author: diff the spec against a from-zero DB, write a migration closing
+        the delta (``ADD COLUMN`` / registry ``INSERT``/``UPDATE`` + a down
+        section), apply it, verify the delta is empty, regenerate schema.sql.
+
+    uv run python -m tools.spec_sync --allow-destructive --name <slug>
+        Opt in to ``DROP COLUMN`` deltas (a column dropped from the spec).
+
+Renames and type changes are refused — hand-author the migration + spec edit;
+the gate proves convergence. A DB *ahead* of the spec (orphan registry rows) is
+a spec-edit fix, never a generated ``DELETE``.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import subprocess
+import sys
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+
+import psycopg
+from cc_otel_sink.column_spec import COLUMN_SPEC, ColumnSpec, RegistryRow, registry_rows
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_MIGRATIONS_DIR = _REPO_ROOT / "db" / "migrations"
+
+# Spec DataType -> information_schema.columns.data_type (raw-table check only;
+# the registry stores the spec's own type string verbatim).
+_PG_TYPE = {
+    "TEXT": "text",
+    "UUID": "uuid",
+    "TIMESTAMPTZ": "timestamp with time zone",
+    "BIGINT": "bigint",
+    "INTEGER": "integer",
+    "SMALLINT": "smallint",
+    "DOUBLE PRECISION": "double precision",
+    "BOOLEAN": "boolean",
+}
+
+_REGISTRY_COLS = (
+    "signal",
+    "signal_name",
+    "attr_path",
+    "status",
+    "column_name",
+    "data_type",
+    "description",
+    "useful_for",
+    "decided_at",
+    "notes",
+)
+
+
+# --- spec-side projections ----------------------------------------------------
+
+
+def spec_registry_rows(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> set[RegistryRow]:
+    """The registry rows the spec expects, keyed for set comparison.
+
+    The projection lives once, in ``column_spec.registry_rows`` — this only lifts
+    it into a set for diffing.
+    """
+    return set(registry_rows(spec))
+
+
+def spec_raw_columns(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> dict[str, dict[str, str]]:
+    """``{table: {column: pg_type}}`` the spec expects in the ``raw.*`` DDL."""
+    out: dict[str, dict[str, str]] = {"metrics": {}, "events": {}}
+    for r in spec:
+        if r.status == "promoted" and r.signal in out and r.column_name and r.data_type:
+            out[r.signal][r.column_name] = _PG_TYPE[r.data_type]
+    return out
+
+
+# --- db-side readers ----------------------------------------------------------
+
+
+def db_registry_rows(conn: psycopg.Connection) -> set[RegistryRow]:
+    cols = ", ".join(_REGISTRY_COLS)
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT {cols} FROM meta.column_registry")
+        rows = cur.fetchall()
+    out: set[RegistryRow] = set()
+    for row in rows:
+        decided = row[8].isoformat() if row[8] is not None else ""
+        out.add((row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], decided, row[9]))
+    return out
+
+
+def db_raw_columns(conn: psycopg.Connection, table: str) -> dict[str, str]:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT column_name, data_type FROM information_schema.columns "
+            "WHERE table_schema = 'raw' AND table_name = %s",
+            (table,),
+        )
+        return {name: dtype for name, dtype in cur.fetchall()}
+
+
+# --- delta --------------------------------------------------------------------
+
+
+@dataclass
+class Delta:
+    missing_rows: list[RegistryRow] = field(default_factory=list)  # in spec, not DB
+    orphan_rows: list[RegistryRow] = field(default_factory=list)  # in DB, not spec
+    missing_columns: list[tuple[str, str, str]] = field(default_factory=list)  # (table, col, type)
+    orphan_columns: list[tuple[str, str]] = field(default_factory=list)  # table, col
+    mismatched_columns: list[tuple[str, str, str, str]] = field(default_factory=list)
+
+    def empty(self) -> bool:
+        return not (
+            self.missing_rows
+            or self.orphan_rows
+            or self.missing_columns
+            or self.orphan_columns
+            or self.mismatched_columns
+        )
+
+    def report(self) -> str:
+        lines: list[str] = []
+        for r in sorted(self.missing_rows):
+            lines.append(f"  registry row in spec, missing from DB: {r[:4]}")
+        for r in sorted(self.orphan_rows):
+            lines.append(f"  registry row in DB, absent from spec (fix = spec edit): {r[:4]}")
+        for table, col, dtype in sorted(self.missing_columns):
+            lines.append(f"  raw.{table} column in spec, missing from DB: {col} {dtype}")
+        for table, col in sorted(self.orphan_columns):
+            lines.append(f"  raw.{table} column in DB, absent from spec (destructive): {col}")
+        for table, col, db_t, spec_t in sorted(self.mismatched_columns):
+            lines.append(f"  raw.{table}.{col} type: DB={db_t!r} spec={spec_t!r}")
+        return "\n".join(lines)
+
+
+def compute_delta(
+    conn: psycopg.Connection,
+    spec: tuple[ColumnSpec, ...] = COLUMN_SPEC,
+) -> Delta:
+    spec_rows = spec_registry_rows(spec)
+    db_rows = db_registry_rows(conn)
+    delta = Delta(
+        missing_rows=sorted(spec_rows - db_rows),
+        orphan_rows=sorted(db_rows - spec_rows),
+    )
+    spec_cols = spec_raw_columns(spec)
+    for table, expected in spec_cols.items():
+        actual = db_raw_columns(conn, table)
+        for col, spec_type in expected.items():
+            if col not in actual:
+                delta.missing_columns.append((table, col, _spec_ddl_type(spec, table, col)))
+            elif actual[col] != spec_type:
+                delta.mismatched_columns.append((table, col, actual[col], spec_type))
+        for col in actual:
+            if col not in expected:
+                delta.orphan_columns.append((table, col))
+    return delta
+
+
+def _spec_ddl_type(spec: tuple[ColumnSpec, ...], signal: str, column: str) -> str:
+    for r in spec:
+        if r.signal == signal and r.column_name == column and r.data_type:
+            return r.data_type
+    raise ValueError(f"no spec data_type for raw.{signal}.{column}")
+
+
+# --- migration generation -----------------------------------------------------
+
+
+def _sql_lit(value: str | None) -> str:
+    if value is None:
+        return "NULL"
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _insert_row(r: RegistryRow) -> str:
+    cols = ", ".join(_REGISTRY_COLS)
+    vals = ", ".join(_sql_lit(v) for v in r)
+    return f"INSERT INTO meta.column_registry ({cols}) VALUES ({vals});"
+
+
+def generate_migration(name: str, delta: Delta, *, allow_destructive: bool = False) -> str:
+    """Render up/down SQL closing ``delta``. Refuses renames, type changes, and
+    (without ``allow_destructive``) column drops."""
+    if delta.mismatched_columns:
+        raise ValueError(
+            "type change refused — hand-author the migration + spec edit: "
+            f"{delta.mismatched_columns}"
+        )
+    if delta.orphan_rows:
+        raise ValueError(
+            "DB has registry rows absent from the spec; fix is a spec edit, not a "
+            f"generated DELETE: {[r[:4] for r in delta.orphan_rows]}"
+        )
+    if delta.orphan_columns and not allow_destructive:
+        raise ValueError(
+            f"column drop needs --allow-destructive: {delta.orphan_columns}"
+        )
+
+    up: list[str] = []
+    down: list[str] = []
+    for table, col, dtype in delta.missing_columns:
+        up.append(f"ALTER TABLE raw.{table} ADD COLUMN {col} {dtype};")
+        down.append(f"ALTER TABLE raw.{table} DROP COLUMN {col};")
+    for table, col in delta.orphan_columns:
+        up.append(f"ALTER TABLE raw.{table} DROP COLUMN {col};")
+        down.append(f"-- manual: re-add dropped raw.{table}.{col}")
+    for r in delta.missing_rows:
+        up.append(_insert_row(r))
+        down.append(
+            "DELETE FROM meta.column_registry WHERE "
+            f"signal = {_sql_lit(r[0])} AND signal_name = {_sql_lit(r[1])} "
+            f"AND attr_path = {_sql_lit(r[2])};"
+        )
+
+    body_up = "\n".join(up) if up else "-- no forward changes"
+    body_down = "\n".join(reversed(down)) if down else "-- no rollback changes"
+    return f"-- migrate:up\n-- spec_sync: {name}\n\n{body_up}\n\n-- migrate:down\n\n{body_down}\n"
+
+
+# --- ephemeral DB (self-provision when no URL is given) -----------------------
+
+
+def _up_section(sql: str) -> str:
+    return sql.split("-- migrate:up", 1)[1].split("-- migrate:down", 1)[0]
+
+
+def _apply_migrations(conn: psycopg.Connection) -> None:
+    conn.autocommit = True
+    for path in sorted(_MIGRATIONS_DIR.glob("*.sql")):
+        up = _up_section(path.read_text(encoding="utf-8")).strip()
+        if up:
+            conn.execute(up)  # type: ignore[arg-type]
+
+
+@contextmanager
+def _ephemeral_db() -> Iterator[psycopg.Connection]:
+    """Spin a throwaway ``postgres:16``, apply every migration, yield a connection."""
+    name = "cc-otel-spec-sync"
+    subprocess.run(["docker", "rm", "-f", name], capture_output=True, check=False)
+    subprocess.run(
+        [
+            "docker", "run", "-d", "--name", name,
+            "-e", "POSTGRES_USER=postgres",
+            "-e", "POSTGRES_PASSWORD=postgres",
+            "-e", "POSTGRES_DB=cc_otel",
+            "-p", "127.0.0.1::5432",
+            "postgres:16",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    try:
+        port = subprocess.run(
+            ["docker", "port", name, "5432"], check=True, capture_output=True, text=True
+        ).stdout.strip().rsplit(":", 1)[-1]
+        url = f"postgres://postgres:postgres@127.0.0.1:{port}/cc_otel?sslmode=disable"
+        conn = None
+        for _ in range(30):
+            try:
+                conn = psycopg.connect(url)
+                break
+            except psycopg.OperationalError:
+                time.sleep(1)
+        if conn is None:
+            raise RuntimeError("ephemeral Postgres did not become ready within 30s")
+        with conn:
+            _apply_migrations(conn)
+            yield conn
+    finally:
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True, check=False)
+
+
+@contextmanager
+def _connection(database_url: str | None) -> Iterator[psycopg.Connection]:
+    if database_url:
+        with psycopg.connect(database_url) as conn:
+            yield conn
+    else:
+        with _ephemeral_db() as conn:
+            yield conn
+
+
+# --- CLI ----------------------------------------------------------------------
+
+
+def _run_check(database_url: str | None) -> int:
+    with _connection(database_url) as conn:
+        delta = compute_delta(conn)
+    if delta.empty():
+        print("spec_sync: spec and migrations converge.")
+        return 0
+    print("spec_sync: spec <-> migrations delta:\n" + delta.report(), file=sys.stderr)
+    return 1
+
+
+def _run_author(name: str, *, allow_destructive: bool) -> int:
+    with _ephemeral_db() as conn:
+        delta = compute_delta(conn)
+    if delta.empty():
+        print("spec_sync: nothing to do — spec already matches migrations.")
+        return 0
+    sql = generate_migration(name, delta, allow_destructive=allow_destructive)
+    stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+    dest = _MIGRATIONS_DIR / f"{stamp}_{name}.sql"
+    dest.write_text(sql, encoding="utf-8")
+    print(f"spec_sync: wrote {dest.relative_to(_REPO_ROOT)}")
+    # Re-apply from zero (incl. the new file) and regenerate schema.sql.
+    subprocess.run([str(_REPO_ROOT / "scripts" / "dev-migrate.sh")], check=True)
+    with _ephemeral_db() as conn:
+        if not compute_delta(conn).empty():
+            print("spec_sync: generated migration did not close the delta.", file=sys.stderr)
+            return 1
+    print("spec_sync: migration applied; delta closed.")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="spec_sync", description=__doc__)
+    parser.add_argument("--check", action="store_true", help="gate mode (default)")
+    parser.add_argument("--name", help="author mode: slug for the generated migration")
+    parser.add_argument("--database-url", help="already-migrated DB for --check")
+    parser.add_argument("--allow-destructive", action="store_true", help="permit DROP COLUMN")
+    args = parser.parse_args(argv)
+
+    if args.name:
+        return _run_author(args.name, allow_destructive=args.allow_destructive)
+    return _run_check(args.database_url or os.environ.get("DATABASE_URL"))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

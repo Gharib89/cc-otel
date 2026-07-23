@@ -54,8 +54,12 @@ _Avoid_: aggregate table, summary view
 An Azure Blob Storage container (`raw`) holding the **redacted-raw** OTLP payloads — the full body with only secret-bearing fields stripped (`full_command`, `bash_command`, `file_path`, `error`), everything else kept verbatim. Purpose: keep Postgres lean while preserving raw for **drift** discovery and future-parser replay. Not the source of truth (the report reads Postgres marts); queried ad-hoc with DuckDB. See ADR-0005.
 _Avoid_: raw dump, blob backup
 
+**Column spec**:
+`cc_otel_sink/column_spec.py` — the authoritative machine-readable attr-to-column-to-status catalogue. The parser maps, store column tuples, and redaction denylist derive from it at import; `meta.column_registry` is its deployed projection. `tools.spec_sync` proves the two converge.
+_Avoid_: attr map, column table
+
 **Column registry**:
-`meta.column_registry` — the curated catalogue of every promoted column and known `attrs` key: type, description, what it's useful for, status. Source of truth for the generated data dictionary.
+`meta.column_registry` — the deployed projection of the **Column spec** in Postgres: every promoted column and known `attrs` key with type, description, what it's useful for, status. Source of truth for the generated data dictionary and the sweep's live-drift check.
 
 **Drift**:
 An `attrs`/`resource` key observed in the raw reservoir but absent from the column registry — the signal that Anthropic added new telemetry. Surfaced on demand by prepared DuckDB queries (`tools/`) over the reservoir; analysis is manual. Postgres cannot detect it — schema-v2 drops the JSONB there.

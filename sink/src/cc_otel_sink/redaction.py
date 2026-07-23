@@ -26,16 +26,16 @@ from dataclasses import dataclass
 from typing import Any
 
 from .attrs import event_name as _event_name_of
+from .column_spec import defense_in_depth, denylist, tool_param_keys
 
+# The three strip families, derived from the spec's denied rows (by deny_mode).
 # POC four — secret-bearing, stripped wherever seen.
-DENYLIST = frozenset({"full_command", "bash_command", "file_path", "error"})
-
+DENYLIST = denylist()
 # Recursive sweep inside tool_parameters (the "error" key is not a tool arg).
-TOOL_PARAM_KEYS = frozenset({"full_command", "bash_command", "file_path"})
+TOOL_PARAM_KEYS = tool_param_keys()
 TOOL_PARAM_EVENTS = frozenset({"tool_result", "tool_decision"})
-
 # Content keys already suppressed by client gates; a non-empty hit signals drift.
-DEFENSE_IN_DEPTH = frozenset({"prompt", "response", "body", "body_ref"})
+DEFENSE_IN_DEPTH = defense_in_depth()
 
 
 @dataclass

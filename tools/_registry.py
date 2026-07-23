@@ -1,5 +1,12 @@
 """Match extracted key paths against ``meta.column_registry``.
 
+This is the sweep's *runtime adapter* over the deployed environment's registry: it
+discovers drift and redaction leaks against what is *live* (which may lag repo
+HEAD). The authoritative attr -> column -> status catalogue is
+``cc_otel_sink.column_spec``; ``meta.column_registry`` is its deployed projection
+and ``tools.spec_sync`` proves the two converge. This module no longer compensates
+for hand-sync — it reads whatever the target DB actually holds.
+
 Pure matching (``Registry``) is split from the Postgres load (``load_registry``) so the
 diff rule can be unit-tested without a database.
 

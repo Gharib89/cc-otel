@@ -43,6 +43,8 @@ Assert-PSRule -InputPath ./iac/ -Module PSRule.Rules.Azure  # Bicep static analy
 uv run pre-commit run -a     # all hooks
 dbmate new <name>            # new migration in db/migrations/
 scripts/dev-migrate.sh       # apply migrations + regenerate schema.sql on throwaway Docker Postgres (the authoring loop)
+uv run python -m tools.spec_sync --check       # gate: column_spec.py <-> migrations converge (needs Docker)
+uv run python -m tools.spec_sync --name <slug> # author: spec delta -> new migration + schema.sql regen
 scripts/ship/local-gate.sh   # path-aware local mirror of CI (JSON verdict; the ship skill's phase-5 gate)
 psql "$DATABASE_URL"         # ad-hoc DB access (Azure otel real data / cc_otel)
 ```
