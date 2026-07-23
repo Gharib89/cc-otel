@@ -115,9 +115,11 @@ if touches '^sink/|^db/|^collector/|^tools/|^tests/integration/|^pyproject\.toml
   docker_gate integration:pytest uv run pytest -m integration
 fi
 
-# --- schema-drift (integration.yml) — regenerates schema.sql in place ---------
+# --- schema-drift + spec_sync (integration.yml) — regenerates schema.sql ------
 # On drift the regenerated dump is left in the tree (that IS the fix: commit it).
-if touches '^db/'; then
+# column_spec.py rides this gate: a spec edit without its migration drifts even
+# though schema.sql itself is unchanged, so spec_sync --check catches it (#167).
+if touches '^db/|^sink/src/cc_otel_sink/column_spec\.py$'; then
   if [ "$DOCKER" = present ] && have dbmate && have pg_dump; then
     run_gate schema-drift bash -c 'scripts/dev-migrate.sh && git diff --quiet -- db/schema.sql'
   elif [ "$DOCKER" = absent ]; then
@@ -125,6 +127,9 @@ if touches '^db/'; then
   else
     record schema-drift unavailable; TOOLING=1
   fi
+  # spec_sync self-spins a throwaway container; unset DATABASE_URL so it never
+  # reaches for a real DB (.env points at Azure — CLAUDE.md).
+  docker_gate spec-sync bash -c 'unset DATABASE_URL; uv run python -m tools.spec_sync --check'
 fi
 
 # --- iac (iac.yml) -------------------------------------------------------------

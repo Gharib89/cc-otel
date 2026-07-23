@@ -61,6 +61,10 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/cc_otel?sslmode=disable
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
 
       - name: Install pg_dump 17 (matches the committed schema.sql generator)
         run: |
@@ -83,6 +87,9 @@ jobs:
         run: |
           export PATH="/usr/lib/postgresql/17/bin:$PATH"
           dbmate up
+
+      - name: Verify column_spec converges with the migrations (#167)
+        run: uv run python -m tools.spec_sync --check --database-url "$DATABASE_URL"
 
       - name: Fail on schema drift
         run: |

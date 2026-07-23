@@ -12,88 +12,13 @@ from typing import Any
 
 from psycopg_pool import AsyncConnectionPool
 
-# Column order matches raw.metrics / raw.events DDL (append-only, no PK).
-METRIC_COLUMNS = (
-    "ts",
-    "metric_name",
-    "metric_type",
-    "value",
-    "count",
-    "value_kind",
-    "user_email",
-    "user_account_id",
-    "organization_id",
-    "session_id",
-    "model",
-    "type_label",
-    "tool_name",
-    "decision",
-    "source",
-    "language",
-    "usage_window",
-    "cc_version",
-    "query_source",
-    "effort",
-    "speed",
-    "agent_name",
-    "skill_name",
-    "plugin_name",
-    "marketplace_name",
-    "start_type",
-    "scope_name",
-    "scope_version",
-)
+from .column_spec import table_columns
 
-EVENT_COLUMNS = (
-    "event_time",
-    "event_name",
-    "severity",
-    "body",
-    "user_email",
-    "user_account_id",
-    "organization_id",
-    "session_id",
-    "prompt_id",
-    "model",
-    "tool_name",
-    "duration_ms",
-    "input_tokens",
-    "output_tokens",
-    "cache_creation_tokens",
-    "cache_read_tokens",
-    "cost_usd",
-    "cc_version",
-    "event_sequence",
-    "request_id",
-    "speed",
-    "effort",
-    "query_source",
-    "prompt_length",
-    "command_name",
-    "command_source",
-    "hook_name",
-    "hook_event",
-    "from_mode",
-    "to_mode",
-    "trigger",
-    "skill_name",
-    "agent_name",
-    "plugin_name",
-    "marketplace_name",
-    "mcp_server_name",
-    "mcp_tool_name",
-    "mention_type",
-    "success_bool",
-    "tool_use_id",
-    "decision",
-    "source",
-    "scope_name",
-    "scope_version",
-    "severity_number",
-    "log_trace_id",
-    "log_span_id",
-    "dropped_attributes_count",
-)
+# Promoted columns per raw table, derived from the authoritative spec. Insert
+# order is free — ``_insert_sql`` names its columns, so it need not match the DDL
+# ordinal order (the spec_sync gate compares column sets + types, not ordinals).
+METRIC_COLUMNS = table_columns("metrics")
+EVENT_COLUMNS = table_columns("events")
 
 
 def _insert_sql(table: str, columns: tuple[str, ...]) -> str:

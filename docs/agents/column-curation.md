@@ -5,10 +5,18 @@ tools live in `tools/` and run as modules from the repo root:
 
 ```sh
 uv run python -m tools.sweep --days 7
+uv run python -m tools.spec_sync --check           # gate: spec <-> migrations converge
+uv run python -m tools.spec_sync --name <slug>     # author: spec delta -> new migration
 uv run python -m tools.gen_data_dictionary
 uv run python -m tools.scrub  --since <d> --until <d> [--execute]
 uv run python -m tools.replay --since <d> --until <d> [--execute]
 ```
+
+The attr-to-column-to-status catalogue is `sink/src/cc_otel_sink/column_spec.py` (**Column
+spec** in CONTEXT.md) — the parser maps, store column tuples, and redaction denylist all
+derive from it at import. `meta.column_registry` + the `raw.*` DDL are its deployed
+projection; `tools.spec_sync` proves the two converge (CI `integration` job +
+`local-gate.sh`). Curation edits start at the spec row, never at the migration.
 
 All read the sink's own config: `DATABASE_URL` plus `CC_OTEL_BLOB_CONNECTION_STRING` or
 `CC_OTEL_BLOB_ACCOUNT_URL` (+ `CC_OTEL_BLOB_CONTAINER`, default `raw`). Point them at an
@@ -55,20 +63,27 @@ key unclassified "for later" — an unclassified promoted-worthy key is silently
 
 Promoting a key (or adding any registry row) ships as **one PR** carrying, together:
 
-1. **Migration** (`dbmate new …`) — the `raw.*` DDL change (for `promoted`) **and** the
-   `meta.column_registry` row(s). Registry rows are migration data; they must not drift
-   from the DDL (that is why they live in the same `db/` migration stream).
-2. **Parser** — map the OTLP key to the new column in `sink/src/cc_otel_sink/parser.py`.
-3. **Tests** — sink unit tests covering the new column; integration coverage if it feeds a
+1. **Spec row** — add the `ColumnSpec(...)` to `sink/src/cc_otel_sink/column_spec.py`. A
+   plain attribute promotion is `kind="attr"` (the flat `attr_columns` map picks it up with
+   no parser edit); a value read from OTLP structure is `kind="structural"` and a hand
+   coalesce is `kind="derived"` — those two need matching parser code. The import-time
+   invariants reject a malformed row immediately.
+2. **Generate the migration** — `uv run python -m tools.spec_sync --name <slug>` diffs the
+   spec against a from-zero DB, writes the `raw.*` DDL + `meta.column_registry` migration
+   closing the delta, applies it, and regenerates `db/schema.sql`. (**Needs Docker** — in an
+   unattended run, do this before hand-off.) Renames/type changes are refused: hand-author
+   those and let `--check` prove convergence.
+3. **Parser** (structural/derived columns only) — add the extraction/coalesce code in
+   `sink/src/cc_otel_sink/parser.py`; a fixture test proves every promoted column is
+   populated.
+4. **Tests** — sink unit tests covering the new column; integration coverage if it feeds a
    mart.
-4. **Schema regen** — `scripts/dev-migrate.sh` to apply the migration and regenerate
-   `db/schema.sql` (CI's schema-drift gate fails otherwise).
 5. **Dictionary regen** — `uv run python -m tools.gen_data_dictionary`, commit
    `docs/data-dictionary.md`.
 
 `kept`/`denied` decisions ship the same way minus the DDL/parser/dictionary-stat changes
-(they have no column) — still a migration row + schema regen + dictionary regen (the
-kept/denied section lists them).
+(they have no column) — still a spec row + `spec_sync --name` (registry-only migration) +
+dictionary regen (the kept/denied section lists them).
 
 ## 4. Data dictionary
 
@@ -93,8 +108,10 @@ one-off, not a standing tool. Record the backfill window in the registry row's `
 
 When a key becomes `denied`:
 
-1. Add the deny to the sink redaction denylist and ship the `denied` registry row
-   (promotion-PR bundle, minus DDL).
+1. Add a `denied` spec row with the right `deny_mode` (`strip` / `tool_param_sweep` /
+   `defense_in_depth`) — `redaction.py`'s `DENYLIST` / `TOOL_PARAM_KEYS` /
+   `DEFENSE_IN_DEPTH` derive from it, so there is no separate denylist to edit — then
+   `spec_sync --name <slug>` ships the registry row (promotion-PR bundle, minus DDL).
 2. Blobs written before the deploy still hold the key. Rewrite the exposed window in place
    with `tools.scrub` (dry-run first, then `--execute`). Scrub runs each blob back through
    the sink's `redact` and overwrites it; it is idempotent on already-clean blobs and

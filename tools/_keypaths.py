@@ -11,9 +11,11 @@ vocabulary (see db/migrations/…_seed_column_registry.sql):
   resource-block attrs (recorded once, uniform across signals)
 * ``attr_path``   — the raw OTLP attribute ``key``
 
-Only keys that live in an ``attributes`` list are emitted — structural registry paths
+Only keys that live in an ``attributes`` list are emitted — structural paths
 (``timeUnixNano``, ``dataPoint.value``, ``scope.name``) are read from JSON structure by
 the sink parser, never as attributes, so they are deliberately not extracted here.
+Those paths are recorded in ``cc_otel_sink.column_spec`` as ``kind="structural"``
+rows (the authoritative catalogue); this module does not re-list them.
 """
 
 from __future__ import annotations

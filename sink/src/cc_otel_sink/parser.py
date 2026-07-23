@@ -1,8 +1,8 @@
 """OTLP/JSON → raw-table rows.
 
-The promoted-column list is hard-coded here (issue #16: no registry-driven
-dynamic dispatch) and mirrors the ``meta.column_registry`` seed. Attribute keys
-are globally unique to their target column, so a flat ``attr → column`` map is
+The promoted-column maps are derived at import from the authoritative spec
+(``column_spec``) — no registry-driven dynamic dispatch (#16). Attribute keys are
+globally unique to their target column, so the flat ``attr → column`` map is
 equivalent to the registry's per-signal grouping.
 
 Anything not mapped here is dropped from Postgres — it survives verbatim in the
@@ -15,85 +15,15 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .attrs import event_name, flatten
+from .column_spec import attr_columns, bool_columns, float_columns, int_columns
 
-# attr key → raw.metrics column (universal + per-signal, flattened).
-METRIC_ATTR_COLUMNS: dict[str, str] = {
-    "session.id": "session_id",
-    "user.email": "user_email",
-    "organization.id": "organization_id",
-    "model": "model",
-    "query_source": "query_source",
-    "effort": "effort",
-    "speed": "speed",
-    "agent.name": "agent_name",
-    "skill.name": "skill_name",
-    "plugin.name": "plugin_name",
-    "marketplace.name": "marketplace_name",
-    "type": "type_label",
-    "tool_name": "tool_name",
-    "decision": "decision",
-    "source": "source",
-    "language": "language",
-    "start_type": "start_type",
-    "window": "usage_window",
-}
+# attr key → raw column (flat, per signal); derived from the promoted attr rows.
+METRIC_ATTR_COLUMNS: dict[str, str] = attr_columns("metrics")
+EVENT_ATTR_COLUMNS: dict[str, str] = attr_columns("events")
 
-# attr key → raw.events column (universal + per-signal, flattened).
-EVENT_ATTR_COLUMNS: dict[str, str] = {
-    "session.id": "session_id",
-    "prompt.id": "prompt_id",
-    "user.email": "user_email",
-    "organization.id": "organization_id",
-    "model": "model",
-    "request_id": "request_id",
-    "speed": "speed",
-    "effort": "effort",
-    "query_source": "query_source",
-    "skill.name": "skill_name",
-    "agent.name": "agent_name",
-    "plugin.name": "plugin_name",
-    "marketplace.name": "marketplace_name",
-    "mcp_server.name": "mcp_server_name",
-    "mcp_tool.name": "mcp_tool_name",
-    "tool_name": "tool_name",
-    "tool_use_id": "tool_use_id",
-    "decision": "decision",
-    "source": "source",
-    "hook_name": "hook_name",
-    "hook_event": "hook_event",
-    "event.sequence": "event_sequence",
-    "input_tokens": "input_tokens",
-    "output_tokens": "output_tokens",
-    "cache_creation_tokens": "cache_creation_tokens",
-    "cache_read_tokens": "cache_read_tokens",
-    "cost_usd": "cost_usd",
-    "duration_ms": "duration_ms",
-    "prompt_length": "prompt_length",
-    "command_name": "command_name",
-    "command_source": "command_source",
-    "from_mode": "from_mode",
-    "to_mode": "to_mode",
-    "trigger": "trigger",
-    "mention_type": "mention_type",
-    "success": "success_bool",
-}
-
-_INT_COLUMNS = frozenset(
-    {
-        "count",
-        "duration_ms",
-        "input_tokens",
-        "output_tokens",
-        "cache_creation_tokens",
-        "cache_read_tokens",
-        "event_sequence",
-        "prompt_length",
-        "severity_number",
-        "dropped_attributes_count",
-    }
-)
-_FLOAT_COLUMNS = frozenset({"value", "cost_usd"})
-_BOOL_COLUMNS = frozenset({"success_bool"})
+_INT_COLUMNS = int_columns()
+_FLOAT_COLUMNS = float_columns()
+_BOOL_COLUMNS = bool_columns()
 
 _TRUE_STRINGS = frozenset({"true", "t", "1", "yes"})
 
