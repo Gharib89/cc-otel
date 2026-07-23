@@ -398,6 +398,42 @@ def registry_rows(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> tuple[RegistryR
     )
 
 
+# --- signal catalog: literals mart SQL may reference (#168) -------------------
+#
+# Mart SQL re-encodes metric-name and enum literals verbatim; a typo silently
+# yields zero rows. ``tools.spec_sync`` lints ``db/migrations/*.sql`` against this
+# catalog so an unknown literal fails the gate. Seeded from the data dictionary
+# (metric names) and the promoted enum decisions above (``type_label`` /
+# ``value_kind`` descriptions).
+
+METRIC_NAMES: frozenset[str] = frozenset(
+    {
+        "claude_code.session.count",
+        "claude_code.lines_of_code.count",
+        "claude_code.pull_request.count",
+        "claude_code.commit.count",
+        "claude_code.cost.usage",
+        "claude_code.token.usage",
+        "claude_code.code_edit_tool.decision",
+        "claude_code.active_time.total",
+        "claude_code.usage.utilization",
+        "claude_code.usage.reset_in_seconds",
+    }
+)
+
+# Enum value sets keyed by the raw/staging column that carries them. Flat per
+# column (not per metric): the lint is a tripwire, not a SQL parser.
+ENUM_VALUES: dict[str, frozenset[str]] = {
+    # token.usage: input/output/cacheRead/cacheCreation; active_time: user/cli;
+    # lines_of_code: added/removed.
+    "type_label": frozenset(
+        {"input", "output", "cacheRead", "cacheCreation", "user", "cli", "added", "removed"}
+    ),
+    # derived staging classification (dataPoint.value_kind).
+    "value_kind": frozenset({"gauge_last", "sum_delta", "sum_cumulative", "hist_sum"}),
+}
+
+
 # --- invariants (run once at import) ------------------------------------------
 
 
@@ -431,6 +467,13 @@ def _check_invariants() -> None:
             if prev is not None and prev != r.data_type:
                 raise ValueError(f"column {r.column_name} has conflicting types in {r.signal}")
             col_types[grp] = r.data_type
+
+    # invariant 4: every named metric grain is in the lint catalog (#168) — the
+    # catalog carries metrics with no spec row too (commit/pr/cost), so this is
+    # subset, not equality.
+    spec_metrics = {r.signal_name for r in COLUMN_SPEC if r.signal == "metrics" and r.signal_name != "*"}
+    if not spec_metrics <= METRIC_NAMES:
+        raise ValueError(f"metric grains absent from METRIC_NAMES: {spec_metrics - METRIC_NAMES}")
 
 
 _check_invariants()

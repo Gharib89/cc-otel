@@ -5,9 +5,11 @@
 tool is the convergence gate between the two.
 
     uv run python -m tools.spec_sync --check [--database-url URL]
-        Gate: exit 1 on any spec <-> migrations delta. Connects to an
-        already-migrated DB (``--database-url`` / ``$DATABASE_URL``) or, with
-        neither, spins its own throwaway ``postgres:16`` and applies migrations.
+        Gate: exit 1 on any spec <-> migrations delta, or on any metric-name/enum
+        literal in ``db/migrations/*.sql`` absent from the spec catalog (the
+        mart-literal lint, #168). Connects to an already-migrated DB
+        (``--database-url`` / ``$DATABASE_URL``) or, with neither, spins its own
+        throwaway ``postgres:16`` and applies migrations.
 
     uv run python -m tools.spec_sync --name <slug>
         Author: diff the spec against a from-zero DB, write a migration closing
@@ -26,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import time
@@ -34,9 +37,17 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import NamedTuple
 
 import psycopg
-from cc_otel_sink.column_spec import COLUMN_SPEC, ColumnSpec, RegistryRow, registry_rows
+from cc_otel_sink.column_spec import (
+    COLUMN_SPEC,
+    ENUM_VALUES,
+    METRIC_NAMES,
+    ColumnSpec,
+    RegistryRow,
+    registry_rows,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _MIGRATIONS_DIR = _REPO_ROOT / "db" / "migrations"
@@ -234,6 +245,45 @@ def generate_migration(name: str, delta: Delta, *, allow_destructive: bool = Fal
     return f"-- migrate:up\n-- spec_sync: {name}\n\n{body_up}\n\n-- migrate:down\n\n{body_down}\n"
 
 
+# --- mart-literal lint (#168) -------------------------------------------------
+#
+# Mart SQL re-encodes metric-name/enum literals verbatim; a typo silently yields
+# zero rows in the affected fact. This is a tripwire, not a SQL parser: per line,
+# match a catalogued column against its bound string literal(s) and fail on any
+# literal absent from the spec catalog. Set membership (``IN (...)`` / ``= ANY
+# (...)``) is single-line only — the forms the migrations actually use.
+
+_LINT_CATALOG: dict[str, frozenset[str]] = {"metric_name": METRIC_NAMES, **ENUM_VALUES}
+_STR_LIT = re.compile(r"'([^']*)'")
+
+
+class LiteralViolation(NamedTuple):
+    path: Path
+    line: int
+    column: str
+    literal: str
+
+
+def _scan_line(col: str, line: str) -> Iterator[str]:
+    """Literals bound to ``col`` on one line, across ``=``/``IN``/``ANY`` (#168 forms)."""
+    for m in re.finditer(rf"\b{col}\b\s*=\s*'([^']*)'", line):
+        yield m.group(1)
+    for m in re.finditer(rf"\b{col}\b\s*(?:=\s*ANY\s*|\bIN\s*)\(([^)]*)\)", line, re.IGNORECASE):
+        yield from _STR_LIT.findall(m.group(1))
+
+
+def lint_mart_literals(migrations_dir: Path = _MIGRATIONS_DIR) -> list[LiteralViolation]:
+    """Flag metric-name/enum literals in migration SQL absent from the catalog."""
+    violations: list[LiteralViolation] = []
+    for path in sorted(migrations_dir.glob("*.sql")):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            for col, allowed in _LINT_CATALOG.items():
+                for lit in _scan_line(col, line):
+                    if lit not in allowed:
+                        violations.append(LiteralViolation(path, lineno, col, lit))
+    return violations
+
+
 # --- ephemeral DB (self-provision when no URL is given) -----------------------
 
 
@@ -301,13 +351,23 @@ def _connection(database_url: str | None) -> Iterator[psycopg.Connection]:
 
 
 def _run_check(database_url: str | None) -> int:
+    rc = 0
+    lint = lint_mart_literals()
+    if lint:
+        rc = 1
+        report = "\n".join(
+            f"  {v.path.name}:{v.line} {v.column} = '{v.literal}' not in spec catalog"
+            for v in lint
+        )
+        print("spec_sync: mart-literal lint:\n" + report, file=sys.stderr)
     with _connection(database_url) as conn:
         delta = compute_delta(conn)
-    if delta.empty():
-        print("spec_sync: spec and migrations converge.")
-        return 0
-    print("spec_sync: spec <-> migrations delta:\n" + delta.report(), file=sys.stderr)
-    return 1
+    if not delta.empty():
+        rc = 1
+        print("spec_sync: spec <-> migrations delta:\n" + delta.report(), file=sys.stderr)
+    if rc == 0:
+        print("spec_sync: spec and migrations converge; mart literals catalogued.")
+    return rc
 
 
 def _run_author(name: str, *, allow_destructive: bool) -> int:
