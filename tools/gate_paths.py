@@ -76,8 +76,14 @@ def _pull_request_paths(data: dict[str, Any], workflow_path: Path) -> list[str] 
     paths = pr.get("paths")
     if not paths:
         return ["**"]
+    # A scalar (`paths: "**/*.py"`) would iterate as characters below — fail
+    # loudly on any shape that isn't a list of strings.
+    if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
+        raise UnsupportedFilterError(
+            f"{workflow_path}: paths must be a list of strings, got {paths!r}"
+        )
     for p in paths:
-        if isinstance(p, str) and p.startswith("!"):
+        if p.startswith("!"):
             raise UnsupportedFilterError(
                 f"{workflow_path}: negated path pattern {p!r} is unsupported"
             )

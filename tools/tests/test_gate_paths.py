@@ -82,6 +82,16 @@ def test_negated_pattern_raises(tmp_path: Path):
         triggered_workflows(["README.md"], tmp_path)
 
 
+def test_scalar_paths_raises(tmp_path: Path):
+    _write_workflow(
+        tmp_path,
+        "w.yml",
+        "name: w\non:\n  pull_request:\n    paths: '**/*.py'\n",
+    )
+    with pytest.raises(UnsupportedFilterError):
+        triggered_workflows(["a.py"], tmp_path)
+
+
 def test_paths_ignore_raises(tmp_path: Path):
     _write_workflow(
         tmp_path,
