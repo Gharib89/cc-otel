@@ -33,6 +33,20 @@ class Signal:
 
 
 SIGNALS: tuple[Signal, ...] = (
-    Signal("metrics", "metrics", "metrics", "ts", "metric_name", "/v1/metrics"),
-    Signal("logs", "events", "events", "event_time", "event_name", "/v1/logs"),
+    Signal(
+        route="metrics",
+        registry_name="metrics",
+        raw_table="metrics",
+        time_col="ts",
+        name_col="metric_name",
+        ingest_path="/v1/metrics",
+    ),
+    Signal(
+        route="logs",
+        registry_name="events",
+        raw_table="events",
+        time_col="event_time",
+        name_col="event_name",
+        ingest_path="/v1/logs",
+    ),
 )

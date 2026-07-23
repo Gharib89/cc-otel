@@ -1,3 +1,7 @@
+import dataclasses
+
+import pytest
+
 from tools.signals import SIGNALS, Signal
 
 
@@ -15,9 +19,5 @@ def test_route_and_registry_name_diverge_for_logs():
 
 
 def test_signal_is_frozen():
-    import dataclasses
-
-    import pytest
-
     with pytest.raises(dataclasses.FrozenInstanceError):
         SIGNALS[0].route = "other"  # type: ignore[misc]
