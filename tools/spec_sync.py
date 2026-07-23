@@ -265,8 +265,8 @@ class LiteralViolation(NamedTuple):
 
 
 def _scan_line(col: str, line: str) -> Iterator[str]:
-    """Literals bound to ``col`` on one line, across ``=``/``<>``/``IN``/``ANY``."""
-    for m in re.finditer(rf"\b{col}\b\s*(?:=|<>|!=)\s*'([^']*)'", line):
+    """Literals bound to ``col`` on one line, across ``=``/``IN``/``ANY`` (#168 forms)."""
+    for m in re.finditer(rf"\b{col}\b\s*=\s*'([^']*)'", line):
         yield m.group(1)
     for m in re.finditer(rf"\b{col}\b\s*(?:=\s*ANY\s*|\bIN\s*)\(([^)]*)\)", line, re.IGNORECASE):
         yield from _STR_LIT.findall(m.group(1))

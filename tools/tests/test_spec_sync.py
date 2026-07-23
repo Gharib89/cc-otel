@@ -85,15 +85,11 @@ def test_lint_passes_on_known_literals(tmp_path) -> None:
     assert lint_mart_literals(tmp_path) == []
 
 
-def test_lint_flags_unknown_metric_name_with_file_line() -> None:
-    import tempfile
-    from pathlib import Path
-
-    with tempfile.TemporaryDirectory() as d:
-        (Path(d) / "m.sql").write_text(
-            "SELECT 1\nWHERE metric_name = 'claude_code.comit.count'\n", encoding="utf-8"
-        )
-        v = lint_mart_literals(Path(d))
+def test_lint_flags_unknown_metric_name_with_file_line(tmp_path) -> None:
+    (tmp_path / "m.sql").write_text(
+        "SELECT 1\nWHERE metric_name = 'claude_code.comit.count'\n", encoding="utf-8"
+    )
+    v = lint_mart_literals(tmp_path)
     assert len(v) == 1
     assert v[0].path.name == "m.sql"
     assert v[0].line == 2
@@ -122,4 +118,6 @@ def test_lint_is_green_on_real_migrations() -> None:
     from tools.spec_sync import _MIGRATIONS_DIR
 
     violations = lint_mart_literals(_MIGRATIONS_DIR)
-    assert violations == [], "\n".join(f"{v.path.name}:{v.line} {v.column}={v.literal!r}" for v in violations)
+    assert violations == [], "\n".join(
+        f"{v.path.name}:{v.line} {v.column}={v.literal!r}" for v in violations
+    )
