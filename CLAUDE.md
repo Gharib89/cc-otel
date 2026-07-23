@@ -74,7 +74,7 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 - Interim env: VS-benefits subscription (`rg-cc-otel-interim`, swedencentral) until IS grants the production RG; Bicep is dual-target.
 - Secrets: ACA secrets + GitHub repo secrets with `INTERIM_`/`PROD_` prefixes — no Key Vault.
 - Merge triggers CI only. All deploys are manual `workflow_dispatch` with an environment input; migrations run before image rollout.
-- **Prod DB access**: no allow-all firewall rule — humans reach the public endpoint over the ITWorx VPN (IS-confirmed egress ranges in `prod.bicepparam`) and authenticate with their own Entra ID identity; password auth remains only for the app path (sink `DATABASE_URL`), CI migrations, and the Power BI read login. Runbook: `bootstrap/README.md` "Team access".
+- **Prod DB access**: no allow-all firewall rule — humans reach the public endpoint over the ITWorx VPN (IS-confirmed egress ranges in `iac/params/prod.bicepparam`) and authenticate with their own Entra ID identity; password auth remains only for the app path (sink `DATABASE_URL`), CI migrations, and the Power BI read login. Runbook: `bootstrap/README.md` "Team access".
 - **One-time env bring-up** (identity/RBAC, secret fan-out, first infra deploy, DB logins, gates): `bootstrap/bootstrap.ps1 -Environment <interim|prod>` drives the whole ordered spine (or one `-Step <slug>`), deriving every value from `.env.<env>` via `lib/Get-BootstrapConfig.ps1`; `bootstrap/README.md` is the reference for gate reasoning + the per-step table. `sync-secrets.ps1` treats `.env.<env>` as the single source of truth for the prefixed GitHub secrets.
 - Full design: issues #11 (secrets/CI-CD) and #23 (Bicep IaC).
 

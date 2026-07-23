@@ -159,7 +159,9 @@ resource firewall 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-
       startIpAddress: rule.startIpAddress
       endIpAddress: rule.endIpAddress
     }
-    dependsOn: [cronDatabase]
+    // Gated behind entraAdmin (itself behind the configuration chain) so the rule
+    // writes never race the server-level administrators operation.
+    dependsOn: [entraAdmin]
   }
 ]
 

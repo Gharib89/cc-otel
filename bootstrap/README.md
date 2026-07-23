@@ -297,7 +297,8 @@ allow-all firewall rule, no shared password for humans.**
 
 ### Add a team member
 
-Run as the Entra administrator (needs `az login`; interim tenant `a1a5384f`):
+Run as the Entra administrator (needs `az login` in the shared tenant
+`a1a5384f` — gate G3):
 
 ```powershell
 $env:PGPASSWORD = az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv
