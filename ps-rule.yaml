@@ -39,9 +39,9 @@ rule:
     - Azure.PostgreSQL.GeoRedundantBackup
     - Azure.PostgreSQL.ZoneRedundantHA
 
-    # Password auth on the single admin login (the documented secrets shape, #11);
-    # Entra-only auth would need a directory principal this deploy doesn't own.
-    - Azure.PostgreSQL.AAD
+    # Entra auth is enabled with an Entra admin (#93 — satisfies Azure.PostgreSQL.AAD),
+    # but password auth stays on beside it: the app path (sink DATABASE_URL), CI
+    # migrations, and the Power BI read login authenticate with passwords (#11).
     - Azure.PostgreSQL.AADOnly
 
     # No customer-controlled maintenance window — Azure-managed scheduling is fine

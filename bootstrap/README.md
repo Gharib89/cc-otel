@@ -278,6 +278,58 @@ prod-only gates **first**:
   credential (`federated-cred`) is already in place from interim and no-ops. The
   deploy uses `iac/params/prod.bicepparam` automatically.
 
+## Team access (prod) — VPN firewall + Entra ID
+
+Prod's access model ([#93](https://github.com/Gharib89/cc-otel/issues/93)): **no
+allow-all firewall rule, no shared password for humans.**
+
+- **Network:** the IS-confirmed ITWorx VPN/corporate egress ranges are firewall
+  rules in `iac/params/prod.bicepparam` — anyone on the VPN reaches the public
+  endpoint. `AllowAllAzureServices` stays for the ACA sink and the Power BI
+  Service refresh. The `operator-<initials>` rule is deleted on prod after the
+  VPN ranges deploy (`-Step close-ip`); `open-ip`/`close-ip` remain the
+  break-glass for off-VPN emergencies — open a pinhole, close it when done.
+- **Auth:** Entra ID auth is enabled (Bicep `authConfig`) with Ahmed's identity
+  as the server's Entra administrator. Humans connect as their own ITWorx
+  identity — revocable via offboarding, no password to rotate. **Password auth
+  stays enabled** for the app path (sink `DATABASE_URL`), CI migrations, and the
+  Power BI read login; `ccotel_admin` remains the break-glass admin.
+
+### Add a team member
+
+Run as the Entra administrator (needs `az login`; interim tenant `a1a5384f`):
+
+```powershell
+$env:PGPASSWORD = az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv
+psql "host=ccotel-pg-prod.postgres.database.azure.com dbname=cc_otel user=Ahmed.Gharib@itworx.com sslmode=require"
+```
+
+```sql
+SELECT * FROM pgaadauth_create_principal('First.Last@itworx.com', false, false);
+GRANT cc_otel_read TO "First.Last@itworx.com";
+```
+
+Membership in `cc_otel_read` grants read over `raw`, `meta`, and `marts` (the
+group role from migration `...170001`) — the full day-to-day query surface.
+Writes are not granted by default; a write need is a deliberate one-off grant.
+
+The member then connects the same way with their **own** UPN — token as
+password, from the VPN:
+
+```powershell
+$env:PGPASSWORD = az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv
+psql "host=ccotel-pg-prod.postgres.database.azure.com dbname=cc_otel user=First.Last@itworx.com sslmode=require"
+```
+
+### Remove a team member
+
+```sql
+DROP ROLE "First.Last@itworx.com";
+```
+
+(Entra offboarding already kills their token issuance; the `DROP ROLE` is
+hygiene so `pg_roles` reflects reality.)
+
 ## GATE G5 — fleet cutover + POC decommission
 
 Once prod is proven, cut the fleet over to the prod sink and retire the POC
