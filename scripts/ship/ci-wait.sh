@@ -9,12 +9,16 @@
 #
 # Usage: scripts/ship/ci-wait.sh <pr-number> [--timeout <seconds>]
 set -uo pipefail
+# No `set -e` here, so guard the source: a failed load must still emit the
+# JSON verdict contract (a tooling failure), not "command not found" to stdout.
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh" \
+  || { printf '{"status":"tooling","failing":[]}\n'; exit 2; }
 
 pr=${1:?usage: scripts/ship/ci-wait.sh <pr-number> [--timeout <seconds>]}
 limit=1800
 [ "${2:-}" = "--timeout" ] && limit=${3:?--timeout needs seconds}
 
-emit() { printf '{"status":"%s","failing":%s}\n' "$1" "${2:-[]}"; }
+emit() { ship_emit status "$(ship_qstr "$1")" failing "${2:-[]}"; }
 
 m=$(gh pr view "$pr" --json mergeable,mergeStateStatus \
   --jq '"\(.mergeable) \(.mergeStateStatus)"') || { emit tooling; exit 2; }

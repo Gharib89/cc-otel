@@ -11,6 +11,10 @@
 #
 # Usage: scripts/ship/merge.sh <pr-number> <issue-number> [--worktree <path>]
 set -uo pipefail
+# No `set -e` here (see below), so guard the source explicitly: a failed load
+# must still emit a contract-shaped verdict, not a cascade of "command not found".
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh" \
+  || { printf '{"error":"cannot source _lib.sh"}\n'; exit 1; }
 
 pr=${1:?usage: scripts/ship/merge.sh <pr> <issue> [--worktree <path>]}
 issue=${2:?usage: scripts/ship/merge.sh <pr> <issue> [--worktree <path>]}
@@ -21,14 +25,14 @@ wt=""
 # `|| finish 1` / `|| true`, and `git ls-remote --exit-code` returning non-zero
 # is a *success* signal (branch gone); `-e` would abort the ritual mid-clean.
 # The one command whose failure must halt is the cd, guarded here.
-root=$(git rev-parse --show-toplevel) || { echo '{"error":"not a git repo"}'; exit 1; }
-cd "$root" || { echo '{"error":"cd to repo root failed"}'; exit 1; }
+root=$(git rev-parse --show-toplevel) || { ship_emit error "$(ship_qstr "not a git repo")"; exit 1; }
+cd "$root" || { ship_emit error "$(ship_qstr "cd to repo root failed")"; exit 1; }
 
 merged=false issue_closed=false remote_deleted=false wt_removed=false main_updated=false
 
 finish() {
-  printf '{"merged":%s,"issue_closed":%s,"remote_branch_deleted":%s,"worktree_removed":%s,"main_updated":%s}\n' \
-    "$merged" "$issue_closed" "$remote_deleted" "$wt_removed" "$main_updated"
+  ship_emit merged "$merged" issue_closed "$issue_closed" remote_branch_deleted "$remote_deleted" \
+    worktree_removed "$wt_removed" main_updated "$main_updated"
   exit "$1"
 }
 
@@ -36,7 +40,7 @@ branch=$(gh pr view "$pr" --json headRefName --jq .headRefName) || finish 1
 
 # Copy gitignored env files out of the worktree before it is destroyed.
 if [ -n "$wt" ]; then
-  for f in .env .env.interim .env.prod; do
+  for f in "${SHIP_ENV_FILES[@]}"; do
     [ -f "$wt/$f" ] && [ ! -f "$root/$f" ] && cp "$wt/$f" "$root/$f"
   done
 fi

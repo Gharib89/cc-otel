@@ -15,6 +15,8 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/python.yml"
+      # ship mechanics (bash) — covered by tools/tests/test_ship_lib.py (#230)
+      - "scripts/ship/**"
   pull_request:
     paths: *paths
 

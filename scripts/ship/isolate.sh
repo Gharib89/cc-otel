@@ -8,6 +8,7 @@
 # Usage: scripts/ship/isolate.sh <issue-number> <type> <slug>
 #        e.g. scripts/ship/isolate.sh 135 feat script-skills
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 n=${1:?usage: scripts/ship/isolate.sh <issue> <type> <slug>}
 type=${2:?usage: scripts/ship/isolate.sh <issue> <type> <slug>}
@@ -17,13 +18,13 @@ slug=${3:?usage: scripts/ship/isolate.sh <issue> <type> <slug>}
 # (--git-common-dir points at the primary .git regardless).
 root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
 cd "$root"
-branch="$type/$slug-$n"
+branch=$(ship_branch "$type" "$slug" "$n")
 wt="$(dirname "$root")/$(basename "$root")-$n"
 
 git fetch origin main >&2
 
 if git show-ref --verify --quiet "refs/heads/$branch" || [ -e "$wt" ]; then
-  printf '{"error":"branch %s or worktree %s already exists"}\n' "$branch" "$wt"
+  ship_emit error "$(ship_qstr "branch $branch or worktree $wt already exists")"
   exit 1
 fi
 
@@ -31,12 +32,12 @@ git worktree add "$wt" -b "$branch" origin/main >&2
 
 copied="[]"
 files=""
-for f in .env .env.interim .env.prod; do
+for f in "${SHIP_ENV_FILES[@]}"; do
   if [ -f "$f" ]; then
     cp "$f" "$wt/$f"
-    files="$files${files:+,}\"$f\""
+    files="$files${files:+,}$(ship_qstr "$f")"
   fi
 done
 [ -n "$files" ] && copied="[$files]"
 
-printf '{"worktree":"%s","branch":"%s","env_files":%s}\n' "$wt" "$branch" "$copied"
+ship_emit worktree "$(ship_qstr "$wt")" branch "$(ship_qstr "$branch")" env_files "$copied"

@@ -10,11 +10,12 @@
 #
 # Usage: scripts/ship/preflight.sh <issue-number>
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 n=${1:?usage: scripts/ship/preflight.sh <issue-number>}
 
 emit() { # emit <true|false> <reason>
-  printf '{"actionable":%s,"reason":"%s","assignees":%s}\n' "$1" "$2" "${assignees:-[]}"
+  ship_emit actionable "$1" reason "$(ship_qstr "$2")" assignees "${assignees:-[]}"
 }
 
 state=$(gh issue view "$n" --json state --jq .state) \
@@ -29,14 +30,14 @@ fi
 
 # A non-closed PR on a `…-<issue>` branch means in flight (OPEN) or shipped (MERGED).
 pr=$(gh pr list --state all --json number,state,headRefName \
-  --jq "[.[] | select(.headRefName | test(\"-$n\$\")) | select(.state != \"CLOSED\")] | first | if . then \"PR #\(.number) (\(.state)) on \(.headRefName)\" else \"\" end") \
+  --jq "[.[] | select(.headRefName | test(\"$(ship_branch_suffix_re "$n")\")) | select(.state != \"CLOSED\")] | first | if . then \"PR #\(.number) (\(.state)) on \(.headRefName)\" else \"\" end") \
   || { emit false "gh pr list failed"; exit 2; }
 if [ -n "$pr" ]; then
   emit false "$pr already exists"
   exit 1
 fi
 
-branch=$(git ls-remote --heads origin | awk '{print $2}' | grep -E -- "-$n\$" | head -1 || true)
+branch=$(git ls-remote --heads origin | awk '{print $2}' | grep -E -- "$(ship_branch_suffix_re "$n")" | head -1 || true)
 if [ -n "$branch" ]; then
   emit false "remote branch ${branch#refs/heads/} already exists"
   exit 1
