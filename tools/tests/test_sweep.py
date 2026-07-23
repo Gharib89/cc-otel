@@ -46,9 +46,26 @@ def test_read_or_credential_ioexception_is_not_swallowed():
 
 def test_reads_and_counts_blobs():
     payload = json.dumps(
-        {"resourceLogs": [{"scopeLogs": [{"logRecords": [{"attributes": [
-            {"key": "event.name", "value": {"stringValue": "tool_result"}}
-        ]}]}]}]}
+        {
+            "resourceLogs": [
+                {
+                    "scopeLogs": [
+                        {
+                            "logRecords": [
+                                {
+                                    "attributes": [
+                                        {
+                                            "key": "event.name",
+                                            "value": {"stringValue": "tool_result"},
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
     )
     con = _Con([([(payload,)], None)])
     keys, blobs = _read_blob_keys(con, ["azure://raw/signal=logs/dt=2026-07-14/*.json.gz"])

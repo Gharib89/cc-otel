@@ -220,9 +220,7 @@ def generate_migration(name: str, delta: Delta, *, allow_destructive: bool = Fal
             f"generated DELETE: {[r[:4] for r in delta.orphan_rows]}"
         )
     if delta.orphan_columns and not allow_destructive:
-        raise ValueError(
-            f"column drop needs --allow-destructive: {delta.orphan_columns}"
-        )
+        raise ValueError(f"column drop needs --allow-destructive: {delta.orphan_columns}")
 
     up: list[str] = []
     down: list[str] = []
@@ -306,20 +304,32 @@ def _ephemeral_db() -> Iterator[psycopg.Connection]:
     subprocess.run(["docker", "rm", "-f", name], capture_output=True, check=False)
     subprocess.run(
         [
-            "docker", "run", "-d", "--name", name,
-            "-e", "POSTGRES_USER=postgres",
-            "-e", "POSTGRES_PASSWORD=postgres",
-            "-e", "POSTGRES_DB=cc_otel",
-            "-p", "127.0.0.1::5432",
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            name,
+            "-e",
+            "POSTGRES_USER=postgres",
+            "-e",
+            "POSTGRES_PASSWORD=postgres",
+            "-e",
+            "POSTGRES_DB=cc_otel",
+            "-p",
+            "127.0.0.1::5432",
             "postgres:16",
         ],
         check=True,
         capture_output=True,
     )
     try:
-        port = subprocess.run(
-            ["docker", "port", name, "5432"], check=True, capture_output=True, text=True
-        ).stdout.strip().rsplit(":", 1)[-1]
+        port = (
+            subprocess.run(
+                ["docker", "port", name, "5432"], check=True, capture_output=True, text=True
+            )
+            .stdout.strip()
+            .rsplit(":", 1)[-1]
+        )
         url = f"postgres://postgres:postgres@127.0.0.1:{port}/cc_otel?sslmode=disable"
         conn = None
         for _ in range(30):
@@ -356,8 +366,7 @@ def _run_check(database_url: str | None) -> int:
     if lint:
         rc = 1
         report = "\n".join(
-            f"  {v.path.name}:{v.line} {v.column} = '{v.literal}' not in spec catalog"
-            for v in lint
+            f"  {v.path.name}:{v.line} {v.column} = '{v.literal}' not in spec catalog" for v in lint
         )
         print("spec_sync: mart-literal lint:\n" + report, file=sys.stderr)
     with _connection(database_url) as conn:

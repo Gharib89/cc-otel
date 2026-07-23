@@ -1,8 +1,9 @@
 name: python
 
 # Path-filtered per concern (CLAUDE.md): Python + SQL sources and their dep lock.
-# Lint (ruff + sqlfluff) and the fast unit tests only — the Docker-backed
-# integration suite lives in integration.yml, gated on its own paths (#37).
+# The full pre-commit config (lint + format) plus mypy and the fast unit tests
+# only — the Docker-backed integration suite lives in integration.yml, gated on
+# its own paths (#37).
 on:
   push:
     branches: [main]
@@ -33,10 +34,17 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --frozen
-      - run: uv run ruff check .
+      # Lint gate is the full pre-commit config (#234): .pre-commit-config.yaml is
+      # the single source of truth for lint/format standards, so ruff-check,
+      # ruff-format, and sqlfluff drift all fail CI here. Cache the hook envs so
+      # they don't rebuild cold every run (metered minutes, #32).
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+      - run: uv run pre-commit run --all-files
       # Strict static typing, sink ingest path only (#113): a type error here is
       # silent and permanent — bad telemetry lands in `raw`. Scope is set in the
       # `[tool.mypy]` config (files = sink/src).
       - run: uv run mypy
-      - run: uv run sqlfluff lint db/
       - run: uv run pytest -m "not integration"

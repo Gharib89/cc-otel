@@ -23,8 +23,14 @@ def test_check_is_green_from_zero(conn) -> None:
 def test_author_mode_round_trips(conn) -> None:
     # A temp promoted row => a generated migration that closes its own delta.
     extra = ColumnSpec(
-        "metrics", "*", "test.synthetic", "promoted", "synthetic_col", "TEXT",
-        description="round-trip probe.", decided_at="2026-07-13",
+        "metrics",
+        "*",
+        "test.synthetic",
+        "promoted",
+        "synthetic_col",
+        "TEXT",
+        description="round-trip probe.",
+        decided_at="2026-07-13",
     )
     augmented = (*COLUMN_SPEC, extra)
 
@@ -38,6 +44,4 @@ def test_author_mode_round_trips(conn) -> None:
         assert compute_delta(conn, augmented).empty()
     finally:
         conn.execute("ALTER TABLE raw.metrics DROP COLUMN IF EXISTS synthetic_col")
-        conn.execute(
-            "DELETE FROM meta.column_registry WHERE attr_path = 'test.synthetic'"
-        )
+        conn.execute("DELETE FROM meta.column_registry WHERE attr_path = 'test.synthetic'")
