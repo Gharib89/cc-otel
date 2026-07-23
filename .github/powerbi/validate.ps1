@@ -1,7 +1,7 @@
 # Local dev mirror of the ci-powerbi gate: runs the same validators against
 # the on-disk PBIP/PBIR report and TMDL model so an edit-then-validate loop closes
-# on the dev machine before a push. Pinned to the exact tool versions CI pins
-# (ajv 8.17.1, fab-inspector v3.4.0, Tabular Editor 2 2.28.0). A fourth leg runs
+# on the dev machine before a push. Pinned to the exact tool versions CI pins,
+# read from the shared .github/powerbi/tool-versions.json (issue #227). A fourth leg runs
 # Microsoft's conformance CLI, BLOCKING since issue #112 promoted it (it catches
 # renders-but-wrong role/theme defects none of the other three can see). A fifth
 # leg (#135) lints the statically checkable pbir-gotchas traps (gotchas-lint.mjs).
@@ -30,10 +30,13 @@ $GotchaMjs = Join-Path $RepoRoot '.github/powerbi/gotchas-lint.mjs'
 $DrillPiiMjs = Join-Path $RepoRoot '.github/powerbi/drill-pii-lint.mjs'
 $Cache     = Join-Path $RepoRoot '.pbi-tools'
 
-$FabVersion = 'v3.4.0'
-$Te2Version = '2.28.0'
-$AjvVersion = '8.17.1'
-$MsCliSpec  = '@microsoft/powerbi-report-authoring-cli@0.1.4'
+# Single source of truth for the four tool pins, shared with ci-powerbi.yml
+# (issue #227). A version bump lands once, here.
+$Pins       = Get-Content (Join-Path $PSScriptRoot 'tool-versions.json') -Raw | ConvertFrom-Json
+$FabVersion = $Pins.fab
+$Te2Version = $Pins.te2
+$AjvVersion = $Pins.ajv
+$MsCliSpec  = "@microsoft/powerbi-report-authoring-cli@$($Pins.msCli)"
 
 $failed  = $false   # a validator reported a report/model error -> exit 1
 $tooling = $false   # a tool failed to run/download -> exit 2
