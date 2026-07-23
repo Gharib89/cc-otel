@@ -299,13 +299,30 @@ function Test-ContainerImage {
 # Step bodies - each returns 0 to continue, non-zero to halt the run.
 # =============================================================================
 
+function Invoke-NativeStep {
+    <#
+    .SYNOPSIS
+        Run a native command for effect; show its output, return the exit code only.
+    .DESCRIPTION
+        The single owner of the native-call contract. Routing stdout+stderr to the
+        host (2>&1 | Out-Host) keeps it off the pipeline, so the return is a lone
+        [int] and never @(<tool output>, 0) - the shape a caller's `$rc -ne 0`
+        reads as a truthy array and false-halts on (the #143 leak class).
+    #>
+    [OutputType([int])]
+    param([Parameter(Mandatory)][scriptblock]$Command)
+    & $Command 2>&1 | Out-Host
+    return $LASTEXITCODE
+}
+
 function Invoke-StepScript {
     <# .SYNOPSIS Run a co-located bootstrap script with -Environment; return its exit code. #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Environment',
+        Justification = 'Consumed inside the scriptblock passed to Invoke-NativeStep; PSSA does not track scriptblock variable capture.')]
     [OutputType([int])]
     param([Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][string]$Environment)
     $path = Join-Path $PSScriptRoot $Name
-    & $path -Environment $Environment
-    return $LASTEXITCODE
+    return (Invoke-NativeStep -Command { & $path -Environment $Environment })
 }
 
 function Invoke-Precheck {
@@ -380,23 +397,40 @@ function Invoke-StepDeploy {
     $params = Join-Path $repoRoot (Join-Path 'iac' (Join-Path 'params' "$($Config.Environment).bicepparam"))
     # The .bicepparam files resolve the ACA secret params via
     # readEnvironmentVariable(...) - Bicep reads them from this process's
-    # environment, not from $Config. Export them here (from the validated .env)
-    # so a local deploy sets real secret values; omitting them makes Bicep fall
-    # back to '' and Azure rejects the empty ACA secrets (ContainerAppSecretInvalid).
-    $env:FLEET_TOKENS = $Config.FleetTokens
-    $env:DATABASE_URL = $Config.DatabaseUrl
-    $env:GHCR_USERNAME = $Config.GhcrUsername
-    $env:GHCR_TOKEN = $Config.GhcrToken
-    $env:PG_ADMIN_PASSWORD = $Config.PgAdminPassword
-    $state = az deployment group create --resource-group $Config.ResourceGroup `
-        --template-file $template --parameters $params `
-        --query 'properties.provisioningState' -o tsv
-    if ($LASTEXITCODE -ne 0) {
-        Write-BootstrapLog 'Bicep deploy failed. On `CapacityNotAvailable` in swedencentral, re-run (fresh zone) or pin postgresAvailabilityZone=1|2|3 (README deploy / CapacityNotAvailable note).' 'FAIL'
-        return 1
+    # environment, not from $Config. Set them from the validated .env only for
+    # the span of the az call, then restore the prior values in finally. Leaving
+    # them exported would leak into every later step's native children (psql, az,
+    # gh); notably DATABASE_URL is dbmate's default config var, so a later dbmate
+    # call omitting --url would silently target this deploy-step export.
+    # Omitting them makes Bicep fall back to '' and Azure rejects the empty ACA
+    # secrets (ContainerAppSecretInvalid).
+    $secretEnv = [ordered]@{
+        FLEET_TOKENS      = $Config.FleetTokens
+        DATABASE_URL      = $Config.DatabaseUrl
+        GHCR_USERNAME     = $Config.GhcrUsername
+        GHCR_TOKEN        = $Config.GhcrToken
+        PG_ADMIN_PASSWORD = $Config.PgAdminPassword
     }
-    Write-BootstrapLog "Deploy provisioningState: $state"
-    return 0
+    $prior = [ordered]@{}
+    foreach ($name in $secretEnv.Keys) { $prior[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
+    try {
+        foreach ($name in $secretEnv.Keys) { Set-Item -LiteralPath "env:$name" -Value $secretEnv[$name] }
+        $state = az deployment group create --resource-group $Config.ResourceGroup `
+            --template-file $template --parameters $params `
+            --query 'properties.provisioningState' -o tsv
+        if ($LASTEXITCODE -ne 0) {
+            Write-BootstrapLog 'Bicep deploy failed. On `CapacityNotAvailable` in swedencentral, re-run (fresh zone) or pin postgresAvailabilityZone=1|2|3 (README deploy / CapacityNotAvailable note).' 'FAIL'
+            return 1
+        }
+        Write-BootstrapLog "Deploy provisioningState: $state"
+        return 0
+    }
+    finally {
+        foreach ($name in $secretEnv.Keys) {
+            if ($null -eq $prior[$name]) { Remove-Item -LiteralPath "env:$name" -ErrorAction SilentlyContinue }
+            else { Set-Item -LiteralPath "env:$name" -Value $prior[$name] }
+        }
+    }
 }
 
 function Invoke-StepPgCronGate {
@@ -434,6 +468,8 @@ function Invoke-StepPgCronGate {
 }
 
 function Invoke-StepMigrate {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Config',
+        Justification = 'Consumed inside the scriptblock passed to Invoke-NativeStep; PSSA does not track scriptblock variable capture.')]
     [OutputType([int])]
     param([Parameter(Mandatory)]$Config)
     # --no-dump-schema: a bring-up applies migrations against the live target
@@ -441,26 +477,22 @@ function Invoke-StepMigrate {
     # the canonical CI image by scripts/dev-migrate.sh. Dumping against Azure PG
     # instead injects environment-specific noise (server-version string, pg_cron
     # placement) that dirties the tree and fails the CI schema-drift gate.
-    #
-    # Out-Host keeps dbmate's stdout (e.g. "Applying:") off the pipeline. Left on
-    # it, that output falls into the function's return value, making it
-    # @(<text>, 0); the dispatcher's `$rc -ne 0` then sees a truthy array and
-    # false-halts a migration that actually succeeded.
-    dbmate --url $Config.DatabaseUrl --no-dump-schema up 2>&1 | Out-Host
-    if ($LASTEXITCODE -ne 0) { Write-BootstrapLog 'dbmate up failed.' 'FAIL'; return 1 }
+    $rc = Invoke-NativeStep -Command { dbmate --url $Config.DatabaseUrl --no-dump-schema up }
+    if ($rc -ne 0) { Write-BootstrapLog 'dbmate up failed.' 'FAIL'; return 1 }
     return 0
 }
 
 function Invoke-StepDbLogin {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Config',
+        Justification = 'Consumed inside the scriptblock passed to Invoke-NativeStep; PSSA does not track scriptblock variable capture.')]
     [OutputType([int])]
     param([Parameter(Mandatory)]$Config)
     $sql = Join-Path $PSScriptRoot 'create-db-logins.sql'
-    # Out-Host keeps psql's stdout (CREATE ROLE, NOTICE, ...) off the pipeline;
-    # left on it, it pollutes the return value into @(<psql output>, 0) and the
-    # dispatcher false-halts (same class as the dbmate leak above).
-    psql $Config.DatabaseUrl -v ON_ERROR_STOP=1 `
-        -v ingest_pw="$($Config.IngestPassword)" -v read_pw="$($Config.ReadPassword)" -f $sql 2>&1 | Out-Host
-    if ($LASTEXITCODE -ne 0) { Write-BootstrapLog 'create-db-logins.sql failed.' 'FAIL'; return 1 }
+    $rc = Invoke-NativeStep -Command {
+        psql $Config.DatabaseUrl -v ON_ERROR_STOP=1 `
+            -v ingest_pw="$($Config.IngestPassword)" -v read_pw="$($Config.ReadPassword)" -f $sql
+    }
+    if ($rc -ne 0) { Write-BootstrapLog 'create-db-logins.sql failed.' 'FAIL'; return 1 }
     Write-BootstrapLog 'DB logins created/converged.'
     return 0
 }
@@ -481,13 +513,12 @@ function Invoke-StepPgCronVerify {
 }
 
 function Invoke-StepRollImage {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Config',
+        Justification = 'Consumed inside the scriptblock passed to Invoke-NativeStep; PSSA does not track scriptblock variable capture.')]
     [OutputType([int])]
     param([Parameter(Mandatory)]$Config)
-    # Out-Host keeps gh's stdout off the pipeline; left on it, it pollutes the
-    # return value into @(<gh output>, 0) and the dispatcher false-halts a
-    # successful dispatch (same class as the dbmate/psql leaks above).
-    gh workflow run deploy.yml -f environment=$($Config.Environment) 2>&1 | Out-Host
-    if ($LASTEXITCODE -ne 0) { Write-BootstrapLog 'deploy.yml dispatch failed.' 'FAIL'; return 1 }
+    $rc = Invoke-NativeStep -Command { gh workflow run deploy.yml -f environment=$($Config.Environment) }
+    if ($rc -ne 0) { Write-BootstrapLog 'deploy.yml dispatch failed.' 'FAIL'; return 1 }
     Write-BootstrapLog 'Dispatched deploy.yml; watch it with `gh run watch`.'
     return 0
 }
