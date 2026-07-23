@@ -2,7 +2,7 @@
 
 One gzipped file per batch, Hive-partitioned ``signal=<metrics|logs>/dt=<date>/``.
 Written after the 200 response via a background task; any failure logs a warning
-and never affects ingest. Unconfigured ⇒ a no-op reservoir.
+and never affects ingest. Unconfigured ⇒ a no-op :class:`NullReservoir`.
 """
 
 from __future__ import annotations
@@ -10,8 +10,9 @@ from __future__ import annotations
 import gzip
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from .config import Settings
 
@@ -20,6 +21,53 @@ if TYPE_CHECKING:
     from azure.storage.blob import ContainerClient
 
 logger = logging.getLogger("cc_otel_sink.blob")
+
+
+class Reservoir(Protocol):
+    """The reservoir contract the ingest path depends on — a real blob writer or
+    a no-op stand-in, so callers never branch on ``None``."""
+
+    def write(self, signal: str, payload: bytes) -> None: ...
+
+    def close(self) -> None: ...
+
+
+@dataclass(frozen=True)
+class ConnectionStringBackend:
+    connection_string: str
+    container: str
+
+
+@dataclass(frozen=True)
+class ManagedIdentityBackend:
+    account_url: str
+    container: str
+
+
+Backend = ConnectionStringBackend | ManagedIdentityBackend | None
+
+
+def select_backend(settings: Settings) -> Backend:
+    """Pure choice of blob backend from settings; ``None`` when unconfigured.
+
+    Connection string wins over account URL. No Azure SDK objects are touched —
+    construction is the caller's thin adapter (:meth:`BlobReservoir.from_settings`).
+    """
+    if settings.blob_connection_string:
+        return ConnectionStringBackend(settings.blob_connection_string, settings.blob_container)
+    if settings.blob_account_url:
+        return ManagedIdentityBackend(settings.blob_account_url, settings.blob_container)
+    return None
+
+
+class NullReservoir:
+    """No-op reservoir used when blob storage is unconfigured (ADR-0005)."""
+
+    def write(self, signal: str, payload: bytes) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
 
 
 class BlobReservoir:
@@ -32,29 +80,30 @@ class BlobReservoir:
         self._credential = credential
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> BlobReservoir | None:
-        """Build a reservoir from settings, or None when blob storage is unconfigured."""
+    def from_settings(cls, settings: Settings) -> Reservoir:
+        """Build a reservoir from settings; a :class:`NullReservoir` when unconfigured."""
         try:
             from azure.storage.blob import ContainerClient
         except ImportError:  # pragma: no cover - dependency always present in prod
-            return None
+            return NullReservoir()
 
-        if settings.blob_connection_string:
+        backend = select_backend(settings)
+        if isinstance(backend, ConnectionStringBackend):
             client = ContainerClient.from_connection_string(
-                settings.blob_connection_string, settings.blob_container
+                backend.connection_string, backend.container
             )
             return cls(client)
-        elif settings.blob_account_url:
+        if isinstance(backend, ManagedIdentityBackend):
             from azure.identity import DefaultAzureCredential
 
             credential = DefaultAzureCredential()
             client = ContainerClient(
-                settings.blob_account_url,
-                settings.blob_container,
+                backend.account_url,
+                backend.container,
                 credential=credential,
             )
             return cls(client, credential)
-        return None
+        return NullReservoir()
 
     def write(self, signal: str, payload: bytes) -> None:
         """Upload one gzipped batch. Best-effort: warns on failure, never raises."""

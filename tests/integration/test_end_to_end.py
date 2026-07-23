@@ -28,6 +28,7 @@ from cc_otel_sink.config import Settings  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 SESSION_ID = "3c9f0000-0000-0000-0000-000000000001"
+PROMPT_ID = "3c9f0000-0000-0000-0000-0000000000ff"
 
 # Distinctive secret values so the redaction-at-rest assertion can't false-match.
 SECRET_PATH = "/home/dev/.ssh/id_rsa_SECRET"
@@ -262,6 +263,106 @@ def test_redaction_runs_before_the_idempotency_hash(client: TestClient, db: str)
         (batch_count,) = c.execute("SELECT count(*) FROM meta.processed_batches").fetchone()
     assert event_count == 2  # both events from the first batch only
     assert batch_count == 1
+
+
+# Promoted-column round-trip, folded from the retired tests/integration/test_sink.py
+# (which called parse_* + Store.write_batch directly — a seam no real caller crosses).
+# Exercised here through the HTTP path the collector actually uses.
+ROUNDTRIP_METRICS = {
+    "resourceMetrics": [
+        {
+            "resource": {"attributes": [_attr("service.version", {"stringValue": "2.1.0"})]},
+            "scopeMetrics": [
+                {
+                    "scope": {"name": "cc", "version": "1.0"},
+                    "metrics": [
+                        {
+                            "name": "claude_code.token.usage",
+                            "gauge": {
+                                "dataPoints": [
+                                    {
+                                        "timeUnixNano": "1700000000000000000",
+                                        "asDouble": 42.0,
+                                        "attributes": [
+                                            _attr("type", {"stringValue": "input"}),
+                                            _attr("model", {"stringValue": "opus"}),
+                                            _attr("user.email", {"stringValue": " Dev@Corp.com "}),
+                                            _attr("session.id", {"stringValue": SESSION_ID}),
+                                        ],
+                                    }
+                                ]
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+    ]
+}
+
+ROUNDTRIP_LOGS = {
+    "resourceLogs": [
+        {
+            "resource": {"attributes": []},
+            "scopeLogs": [
+                {
+                    "logRecords": [
+                        {
+                            "timeUnixNano": "1700000000000000000",
+                            "severityText": "INFO",
+                            "body": {"stringValue": "api_request"},
+                            "attributes": [
+                                _attr("event.name", {"stringValue": "api_request"}),
+                                _attr("session.id", {"stringValue": SESSION_ID}),
+                                _attr("prompt.id", {"stringValue": PROMPT_ID}),
+                                _attr("input_tokens", {"intValue": "120"}),
+                                _attr("output_tokens", {"intValue": "45"}),
+                                _attr("success", {"boolValue": True}),
+                            ],
+                        }
+                    ]
+                }
+            ],
+        }
+    ]
+}
+
+
+def test_promoted_columns_round_trip_through_http(client: TestClient, db: str):
+    _post(client, "/v1/metrics", ROUNDTRIP_METRICS)
+    _post(client, "/v1/logs", ROUNDTRIP_LOGS)
+
+    with psycopg.connect(db) as c:
+        metric_row = c.execute(
+            "SELECT metric_name, value, value_kind, type_label, model, user_email, "
+            "session_id, cc_version, scope_name FROM raw.metrics"
+        ).fetchone()
+        event_row = c.execute(
+            "SELECT event_name, input_tokens, output_tokens, success_bool, "
+            "session_id, prompt_id, body FROM raw.events"
+        ).fetchone()
+
+    # user_email normalized (trim + lowercase); session/prompt ids coerced to UUID.
+    assert metric_row == (
+        "claude_code.token.usage",
+        42.0,
+        "gauge_last",
+        "input",
+        "opus",
+        "dev@corp.com",
+        uuid.UUID(SESSION_ID),
+        "2.1.0",
+        "cc",
+    )
+    assert event_row == (
+        "api_request",
+        120,
+        45,
+        True,
+        uuid.UUID(SESSION_ID),
+        uuid.UUID(PROMPT_ID),
+        "api_request",
+    )
 
 
 def test_redaction_at_rest_in_blob_reservoir_payload(db: str):
