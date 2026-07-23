@@ -137,6 +137,56 @@ Fallback (not used): Fabric/PBI REST `exportToFile` gives unattended auto-refres
 renders but requires a Premium/Embedded/Fabric-capacity workspace — the Service
 stack the report effort (#104) excludes.
 
+## Headless DAX read — `dax-eval.ps1` (#200)
+
+The independent numeric check for the model/mixed verification loop: with the
+report open in Desktop, read a measure value straight off the embedded Analysis
+Services and assert it. It **supplements**, never replaces, the screenshot +
+Postgres cross-check — a wrong-but-rendering measure (a proration bug that still
+produces a plausible number) survives a screenshot but not a DAX read.
+
+```powershell
+pwsh .github/powerbi/dax-eval.ps1 '[Total Sessions]'                      # bare scalar auto-wrapped in EVALUATE ROW(...)
+pwsh .github/powerbi/dax-eval.ps1 'EVALUATE ROW("s",[Total Sessions])'    # full DAX statement
+pwsh .github/powerbi/dax-eval.ps1 '[Active Users]' -Port 61754            # explicit port
+```
+
+Output is tab-separated rows, a header of column names first (always emitted,
+even when the query returns zero data rows). Exit codes: `0` the query ran; `1` a
+DAX/query error (bad measure name, syntax); `2` a tooling failure (no `msmdsrv`,
+ambiguous port, download/load failure) — the message goes to stderr, legible, no
+dialog.
+
+- **Runtime + client.** pwsh 7 (.NET 8), same as `validate.ps1`. Loads the
+  **ADOMD.NET client** (`Microsoft.AnalysisServices.AdomdClient` 19.114.8, the
+  net8 build). The four files a local connection needs — the managed client, its
+  two `Runtime.*` companions, and the native `msasxpress.dll` — self-fetch from
+  one NuGet package into `.pbi-tools/adomd-19.114.8/` (gitignored, version-pinned)
+  on first run, the same cache convention as TE2 and fab-inspector. An
+  `AssemblyResolve` handler loads the companions from that folder. No admin, no
+  machine-wide registration, and **no MSAL** — it is referenced only on the Azure
+  AD auth path, never for a `localhost` embedded connection.
+- **Port discovery** mirrors the TMDL-refresh path: `Get-NetTCPConnection` for the
+  loopback listen port of the `msmdsrv` process. Every open Desktop spawns its own
+  `msmdsrv`, so with more than one instance the helper refuses to guess and asks
+  for `-Port`.
+- **Why ADOMD, not the alternatives.** MSOLAP (the AS OLE DB provider) is not
+  registered on the fleet box and the Store-Appx Desktop does not register it;
+  registering it needs admin on an IS-managed machine. DAX Studio / `dscmd` is a
+  full extra install with no cache-pattern fit. AMO's `Server.Execute` (the TE2
+  `Tabular.dll` already cached) returns an XMLA diffgram that was not reliably
+  parseable into values (#173) — the trigger for this ticket. The `.retail.amd64`
+  ADOMD package is net45-only and would force WinPS 5.1, off the pbi tooling's
+  pwsh runtime.
+- **Cross-check discipline.** `DISTINCTCOUNT` counts a BLANK as a member, so the
+  Postgres equivalent of an `Active Users`-style measure is
+  `COUNT(*) FROM (SELECT DISTINCT col ...)`, **not** `COUNT(DISTINCT col)` (which
+  drops NULL). The interim marts live at `ccotel-pg-interim ... /cc_otel` (schema
+  `marts`); `.env.interim`'s `DATABASE_URL` reaches it for the cross-check.
+  Refresh the model first (a TOM `RequestRefresh(Full)` + `SaveChanges` on the
+  embedded instance uses Desktop's cached credentials) so the cache matches
+  current Postgres before comparing.
+
 ## Model-layer (TMDL) verification loop — traps from #118
 
 Findings from driving semantic-model edits through Desktop headlessly:
@@ -164,8 +214,9 @@ Findings from driving semantic-model edits through Desktop headlessly:
   Desktop's embedded AS instance works —
   `Model.Tables["x"].RequestRefresh(RefreshType.Full)` + `SaveChanges()` on
   `localhost:<port>` (port via `Get-NetTCPConnection` on the `msmdsrv` process).
-  Same connection answers ad-hoc DAX through ADOMD — measure values verify
-  headlessly, no report visuals needed.
+  The same embedded instance answers ad-hoc DAX for headless measure
+  verification through `dax-eval.ps1` (the ADOMD.NET read; see "Headless DAX
+  read" above) — no report visuals needed.
 - **DAX trap: `DATESINPERIOD` with an anchor outside the date column's range
   clamps to the nearest stored date instead of returning empty** — a "prior 28d"
   window before first ingest silently leaks current-window rows. Use
