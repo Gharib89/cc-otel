@@ -75,9 +75,11 @@ def _(UTC, datetime, load_settings, resolve_window):
 @app.cell
 def _(SIGNALS, configure_duckdb, days, duckdb, read_payloads, settings):
     con = duckdb.connect()
-    configure_duckdb(con, settings)
-    payloads = read_payloads(con, settings.blob_container, SIGNALS, days)
-    con.close()
+    try:
+        configure_duckdb(con, settings)
+        payloads = read_payloads(con, settings.blob_container, SIGNALS, days)
+    finally:
+        con.close()
     return (payloads,)
 
 
