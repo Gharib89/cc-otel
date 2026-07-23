@@ -206,7 +206,7 @@ Describe 'Invoke-Bootstrap (orchestration)' {
     }
 
     It 'halts on the #143 leak shape (a step returning @(text, 0)) rather than passing it as success' {
-        Mock Invoke-BootstrapStep { $script:called.Add($Slug); if ($Slug -eq 'precheck') { , @('Applying: ...', 0) } else { 0 } }
+        Mock Invoke-BootstrapStep { $script:called.Add($Slug); if ($Slug -eq 'precheck') { @('Applying: ...', 0) } else { 0 } }
         Invoke-Bootstrap -Environment 'interim' | Should -Not -Be 0
         $script:called | Should -Not -Contain 'federated-cred'   # halted at precheck
     }
