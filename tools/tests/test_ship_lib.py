@@ -74,3 +74,8 @@ def test_emit_builds_a_json_object_with_raw_and_quoted_values():
 
 def test_qstr_escapes_quotes_and_backslashes():
     assert _run(r'ship_qstr "a\"b\\c"').strip() == r'"a\"b\\c"'
+
+
+def test_qstr_escapes_control_characters():
+    # newline / tab / carriage return must become \n \t \r so the JSON stays valid
+    assert _run("ship_qstr $'a\\tb\\nc\\rd'").strip() == r'"a\tb\nc\rd"'

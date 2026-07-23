@@ -26,10 +26,13 @@ ship_branch_suffix_re() { # ship_branch_suffix_re <issue> -> anchored "-<issue>$
 }
 
 # 3. JSON emit ---------------------------------------------------------------
-ship_qstr() { # ship_qstr <string> -> a JSON string literal (escapes \ and ")
+ship_qstr() { # ship_qstr <string> -> a JSON string literal (escapes \ " and \t \r \n)
   local s=$1
   s=${s//\\/\\\\}
   s=${s//\"/\\\"}
+  s=${s//$'\t'/\\t}
+  s=${s//$'\r'/\\r}
+  s=${s//$'\n'/\\n}
   printf '"%s"' "$s"
 }
 

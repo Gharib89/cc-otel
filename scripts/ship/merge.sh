@@ -11,7 +11,10 @@
 #
 # Usage: scripts/ship/merge.sh <pr-number> <issue-number> [--worktree <path>]
 set -uo pipefail
-source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+# No `set -e` here (see below), so guard the source explicitly: a failed load
+# must still emit a contract-shaped verdict, not a cascade of "command not found".
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh" \
+  || { printf '{"error":"cannot source _lib.sh"}\n'; exit 1; }
 
 pr=${1:?usage: scripts/ship/merge.sh <pr> <issue> [--worktree <path>]}
 issue=${2:?usage: scripts/ship/merge.sh <pr> <issue> [--worktree <path>]}
