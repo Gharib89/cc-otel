@@ -39,16 +39,6 @@
               },
               "queryRef": "_Measures.Commits per Active User (Weekly)",
               "nativeQueryRef": "Commits per Active User (Weekly)"
-            },
-            {
-              "field": {
-                "Measure": {
-                  "Expression": { "SourceRef": { "Entity": "_Measures" } },
-                  "Property": "PRs per Active User (Weekly)"
-                }
-              },
-              "queryRef": "_Measures.PRs per Active User (Weekly)",
-              "nativeQueryRef": "PRs per Active User (Weekly)"
             }
           ]
         }
@@ -67,15 +57,15 @@
         {
           "properties": {
             "showAxisTitle": { "expr": { "Literal": { "Value": "false" } } },
-            "labelColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#7E8CA0'" } } } } }
+            "labelColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#7E8CA0'" } } } } },
+            "start": { "expr": { "Literal": { "Value": "0D" } } }
           }
         }
       ],
       "legend": [
         {
           "properties": {
-            "show": { "expr": { "Literal": { "Value": "true" } } },
-            "position": { "expr": { "Literal": { "Value": "'Bottom'" } } }
+            "show": { "expr": { "Literal": { "Value": "false" } } }
           }
         }
       ],
@@ -101,7 +91,7 @@
             "altText": {
               "expr": {
                 "Literal": {
-                  "Value": "'Weekly trend lines of commits and pull requests per active user.'"
+                  "Value": "'Weekly trend line of commits per active user.'"
                 }
               }
             }
@@ -112,7 +102,7 @@
         {
           "properties": {
             "show": { "expr": { "Literal": { "Value": "true" } } },
-            "text": { "expr": { "Literal": { "Value": "'OUTPUT PER ACTIVE USER BY WEEK'" } } },
+            "text": { "expr": { "Literal": { "Value": "'COMMITS PER ACTIVE USER BY WEEK'" } } },
             "alignment": { "expr": { "Literal": { "Value": "'center'" } } },
             "background": { "solid": { "color": { "expr": { "Literal": { "Value": "'#00197F'" } } } } },
             "fontColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#FFFFFF'" } } } } },
