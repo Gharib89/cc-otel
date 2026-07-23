@@ -136,7 +136,7 @@ def test_name_falls_back_to_file_stem(tmp_path: Path):
 # --- real fixture: one assertion per actual repo workflow file ----------------
 
 
-def test_real_workflows_python_and_integration_and_docker(tmp_path: Path):
+def test_real_workflows_python_and_integration_and_docker():
     assert triggered_workflows(["sink/src/cc_otel_sink/app.py"], WORKFLOWS_DIR) == [
         "docker",
         "integration",
@@ -144,14 +144,14 @@ def test_real_workflows_python_and_integration_and_docker(tmp_path: Path):
     ]
 
 
-def test_real_workflows_db_migration(tmp_path: Path):
+def test_real_workflows_db_migration():
     assert triggered_workflows(["db/migrations/x.sql"], WORKFLOWS_DIR) == [
         "integration",
         "python",
     ]
 
 
-def test_real_workflows_pyproject(tmp_path: Path):
+def test_real_workflows_pyproject():
     assert triggered_workflows(["pyproject.toml"], WORKFLOWS_DIR) == [
         "integration",
         "python",
