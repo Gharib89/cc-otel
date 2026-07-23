@@ -207,17 +207,17 @@ WITH seg AS (
         window_type,
         window_end,
         segment_no,
-        min(ts) AS first_sample_ts,
-        max(ts) AS last_sample_ts,
-        count(*) AS sample_count,
-        (array_agg(util_pct ORDER BY ts DESC))[1] AS end_pct,
-        max(util_pct) AS peak_pct,
-        (array_agg(ts ORDER BY util_pct DESC, ts ASC))[1] AS peak_ts
+        MIN(ts) AS first_sample_ts,
+        MAX(ts) AS last_sample_ts,
+        COUNT(*) AS sample_count,
+        (ARRAY_AGG(util_pct ORDER BY ts DESC))[1] AS end_pct,
+        MAX(util_pct) AS peak_pct,
+        (ARRAY_AGG(ts ORDER BY util_pct DESC, ts ASC))[1] AS peak_ts
     FROM staging.stg_utilization_segments
     GROUP BY user_email, window_type, window_end, segment_no
 )
 
-SELECT
+SELECT  -- noqa: ST06
     COALESCE(user_email, '(unknown)') AS user_email,
     window_type,
     window_end,
@@ -229,13 +229,13 @@ SELECT
     last_sample_ts,
     sample_count,
     window_end - CASE window_type
-        WHEN '5h' THEN INTERVAL '5 hours'
-        WHEN '7d' THEN INTERVAL '7 days'
-        ELSE INTERVAL '0'
+        WHEN '5h' THEN interval '5 hours'
+        WHEN '7d' THEN interval '7 days'
+        ELSE interval '0'
     END AS window_start,
-    max(segment_no) OVER (PARTITION BY user_email, window_type, window_end) > 1
+    MAX(segment_no) OVER (PARTITION BY user_email, window_type, window_end) > 1
         AS is_reset_split,
-    peak_pct / nullif(extract(EPOCH FROM (peak_ts - first_sample_ts)) / 3600.0, 0)
+    peak_pct / NULLIF(EXTRACT(EPOCH FROM (peak_ts - first_sample_ts)) / 3600.0, 0)
         AS pace_pct_per_hour
 FROM seg;
 
@@ -249,14 +249,14 @@ GRANT SELECT ON marts.fact_usage_window TO cc_otel_read;
 DROP MATERIALIZED VIEW marts.fact_utilization_hourly;
 
 CREATE MATERIALIZED VIEW marts.fact_utilization_hourly AS
-SELECT
+SELECT  -- noqa: ST06
     COALESCE(user_email, '(unknown)') AS user_email,
     window_type,
-    date_trunc('hour', ts) AS hour,
-    avg(util_pct) AS avg_pct,
-    max(util_pct) AS max_pct
+    DATE_TRUNC('hour', ts) AS hour,
+    AVG(util_pct) AS avg_pct,
+    MAX(util_pct) AS max_pct
 FROM staging.stg_utilization_segments
-GROUP BY user_email, window_type, date_trunc('hour', ts);
+GROUP BY user_email, window_type, DATE_TRUNC('hour', ts);
 
 CREATE UNIQUE INDEX fact_utilization_hourly_pk ON marts.fact_utilization_hourly
 (user_email, window_type, hour);
@@ -273,11 +273,11 @@ CREATE MATERIALIZED VIEW marts.fact_utilization_hourly AS
 SELECT
     user_email,
     window_type,
-    date_trunc('hour', ts) AS hour,
-    avg(util_pct) AS avg_pct,
-    max(util_pct) AS max_pct
+    DATE_TRUNC('hour', ts) AS hour,
+    AVG(util_pct) AS avg_pct,
+    MAX(util_pct) AS max_pct
 FROM staging.stg_utilization_segments
-GROUP BY user_email, window_type, date_trunc('hour', ts);
+GROUP BY user_email, window_type, DATE_TRUNC('hour', ts);
 
 CREATE UNIQUE INDEX fact_utilization_hourly_pk ON marts.fact_utilization_hourly
 (user_email, window_type, hour);
@@ -293,12 +293,12 @@ WITH seg AS (
         window_type,
         window_end,
         segment_no,
-        min(ts) AS first_sample_ts,
-        max(ts) AS last_sample_ts,
-        count(*) AS sample_count,
-        (array_agg(util_pct ORDER BY ts DESC))[1] AS end_pct,
-        max(util_pct) AS peak_pct,
-        (array_agg(ts ORDER BY util_pct DESC, ts ASC))[1] AS peak_ts
+        MIN(ts) AS first_sample_ts,
+        MAX(ts) AS last_sample_ts,
+        COUNT(*) AS sample_count,
+        (ARRAY_AGG(util_pct ORDER BY ts DESC))[1] AS end_pct,
+        MAX(util_pct) AS peak_pct,
+        (ARRAY_AGG(ts ORDER BY util_pct DESC, ts ASC))[1] AS peak_ts
     FROM staging.stg_utilization_segments
     GROUP BY user_email, window_type, window_end, segment_no
 )
@@ -315,13 +315,13 @@ SELECT
     last_sample_ts,
     sample_count,
     window_end - CASE window_type
-        WHEN '5h' THEN INTERVAL '5 hours'
-        WHEN '7d' THEN INTERVAL '7 days'
-        ELSE INTERVAL '0'
+        WHEN '5h' THEN interval '5 hours'
+        WHEN '7d' THEN interval '7 days'
+        ELSE interval '0'
     END AS window_start,
-    max(segment_no) OVER (PARTITION BY user_email, window_type, window_end) > 1
+    MAX(segment_no) OVER (PARTITION BY user_email, window_type, window_end) > 1
         AS is_reset_split,
-    peak_pct / nullif(extract(EPOCH FROM (peak_ts - first_sample_ts)) / 3600.0, 0)
+    peak_pct / NULLIF(EXTRACT(EPOCH FROM (peak_ts - first_sample_ts)) / 3600.0, 0)
         AS pace_pct_per_hour
 FROM seg;
 
