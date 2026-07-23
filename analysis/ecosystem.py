@@ -41,52 +41,27 @@ def _():
 
     from collections import Counter
     from datetime import UTC, datetime
-    from typing import Any
 
     import duckdb
     from cc_otel_sink.config import load_settings
 
-    from analysis._common import read_payloads
+    from analysis._common import iter_attrs, read_payloads, scalar
     from tools._reservoir import configure_duckdb
     from tools._window import SIGNALS, resolve_window
 
     return (
-        Any,
         Counter,
         SIGNALS,
         UTC,
         configure_duckdb,
         datetime,
         duckdb,
+        iter_attrs,
         load_settings,
         read_payloads,
         resolve_window,
+        scalar,
     )
-
-
-@app.cell
-def _(Any):
-    def iter_attrs(obj: Any):
-        """Yield every OTLP ``(key, AnyValue)`` attribute pair anywhere in a payload."""
-        if isinstance(obj, dict):
-            if isinstance(obj.get("key"), str) and "value" in obj:
-                yield obj["key"], obj["value"]
-            for _v in obj.values():
-                yield from iter_attrs(_v)
-        elif isinstance(obj, list):
-            for _v in obj:
-                yield from iter_attrs(_v)
-
-    def scalar(anyvalue: Any) -> str:
-        """Flatten an OTLP AnyValue to a display string (first scalar field wins)."""
-        if not isinstance(anyvalue, dict):
-            return str(anyvalue)
-        for _field in ("stringValue", "intValue", "doubleValue", "boolValue"):
-            if _field in anyvalue:
-                return str(anyvalue[_field])
-        return str(anyvalue)
-
-    return (iter_attrs, scalar)
 
 
 @app.cell

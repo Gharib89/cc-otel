@@ -19,8 +19,10 @@ def _(mo):
 
         Blob-reservoir attribute keys that are **kept** (blob-only) or **unclassified**
         — the candidates to promote into the marts via the #16 curation flow. For each
-        key path this shows how many export blobs in the window carry it (fill rate);
-        high-fill kept keys are the strongest promotion candidates.
+        key path this shows its fill rate (share of export blobs carrying it), value
+        cardinality, and example values — the stats curation needs to size a column.
+        Value stats are pooled per attribute key (across signals). High-fill kept keys
+        are the strongest promotion candidates.
 
         Complements `tools.sweep` (which reports the drift verdict); this ranks the
         candidates by prevalence so curation can triage.
@@ -41,27 +43,25 @@ def _():
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
-    from collections import Counter
     from datetime import UTC, datetime
 
     import duckdb
     import psycopg
     from cc_otel_sink.config import load_settings
 
-    from analysis._common import read_payloads
-    from tools._keypaths import extract_key_paths
+    from analysis._common import attr_value_samples, fill_counts, read_payloads
     from tools._registry import load_registry
     from tools._reservoir import configure_duckdb
     from tools._window import SIGNALS, resolve_window
 
     return (
-        Counter,
         SIGNALS,
         UTC,
+        attr_value_samples,
         configure_duckdb,
         datetime,
         duckdb,
-        extract_key_paths,
+        fill_counts,
         load_registry,
         load_settings,
         psycopg,
@@ -91,24 +91,22 @@ def _(SIGNALS, configure_duckdb, days, duckdb, read_payloads, settings):
 
 
 @app.cell
-def _(Counter, extract_key_paths, payloads):
-    # Blob-level fill count: in how many export blobs each key path appears.
-    fill = Counter()
-    for _payload in payloads:
-        for _kp in extract_key_paths(_payload):
-            fill[_kp] += 1
+def _(attr_value_samples, fill_counts, payloads):
+    fill = fill_counts(payloads)  # blob-level: how many payloads carry each key path
+    values = attr_value_samples(payloads)  # attr key -> value Counter (cardinality/examples)
     total_blobs = len(payloads) or 1
-    return (fill, total_blobs)
+    return (fill, total_blobs, values)
 
 
 @app.cell
-def _(fill, load_registry, psycopg, settings, total_blobs):
+def _(fill, load_registry, psycopg, settings, total_blobs, values):
     with psycopg.connect(settings.database_url) as _pg:
         registry = load_registry(_pg)
 
     rows = []
     for (_signal, _name, _attr), _c in fill.most_common():
         status = registry.status_of(_signal, _name, _attr) or "unclassified"
+        _vals = values.get(_attr)
         rows.append(
             {
                 "signal": _signal,
@@ -117,6 +115,8 @@ def _(fill, load_registry, psycopg, settings, total_blobs):
                 "status": status,
                 "blobs": _c,
                 "fill_pct": round(100 * _c / total_blobs, 1),
+                "cardinality": len(_vals) if _vals else 0,
+                "examples": ", ".join(v for v, _ in _vals.most_common(3)) if _vals else "",
             }
         )
     candidates = [r for r in rows if r["status"] in ("kept", "unclassified")]

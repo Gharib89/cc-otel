@@ -69,7 +69,7 @@ def _(UTC, datetime, load_settings, resolve_window):
     window_days = 3
     settings = load_settings()
     days = resolve_window(window_days, None, None, datetime.now(UTC).date())
-    return (days, settings)
+    return (days, settings, window_days)
 
 
 @app.cell
@@ -86,12 +86,12 @@ def _(SIGNALS, con, days, read_payloads, settings):
 
 
 @app.cell
-def _(mo, payloads):
+def _(mo, payloads, window_days):
     n_metrics = sum(1 for p in payloads if p.get("resourceMetrics"))
     n_logs = sum(1 for p in payloads if p.get("resourceLogs"))
     mo.md(
         f"""
-        **Window:** last 30 days &nbsp;|&nbsp; **export blobs read:** {len(payloads)}
+        **Window:** last {window_days} days &nbsp;|&nbsp; **export blobs read:** {len(payloads)}
 
         | signal | export blobs |
         |---|--:|

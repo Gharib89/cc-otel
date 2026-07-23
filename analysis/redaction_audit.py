@@ -38,27 +38,24 @@ def _():
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
-    from collections import Counter
     from datetime import UTC, datetime
 
     import duckdb
     import psycopg
     from cc_otel_sink.config import load_settings
 
-    from analysis._common import read_payloads
-    from tools._keypaths import extract_key_paths
+    from analysis._common import fill_counts, read_payloads
     from tools._registry import load_registry
     from tools._reservoir import configure_duckdb
     from tools._window import SIGNALS, resolve_window
 
     return (
-        Counter,
         SIGNALS,
         UTC,
         configure_duckdb,
         datetime,
         duckdb,
-        extract_key_paths,
+        fill_counts,
         load_registry,
         load_settings,
         psycopg,
@@ -88,11 +85,8 @@ def _(SIGNALS, configure_duckdb, days, duckdb, read_payloads, settings):
 
 
 @app.cell
-def _(Counter, extract_key_paths, payloads):
-    fill = Counter()
-    for _payload in payloads:
-        for _kp in extract_key_paths(_payload):
-            fill[_kp] += 1
+def _(fill_counts, payloads):
+    fill = fill_counts(payloads)  # blob-level: how many payloads carry each key path
     return (fill,)
 
 

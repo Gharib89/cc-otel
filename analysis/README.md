@@ -49,7 +49,11 @@ uv run --group analysis marimo export html analysis/overview.py -o overview.html
 ## Conventions
 
 - **Notebooks are committed as `.py`** (marimo's pure-Python format) — repo-wide
-  ruff (`python.yml`, `**/*.py`) covers them; no dedicated CI workflow.
+  ruff (`python.yml`, `**/*.py`) covers them; no dedicated CI workflow. That also
+  means no `scripts/ship/local-gate.sh` exclusion entry is needed: the gate keys
+  its `EXCLUDED` list on *triggered workflow names*, and `analysis/` triggers the
+  existing `python` gate rather than a workflow of its own — so there is no name
+  to exclude.
 - **Outputs are not committed** — only the `.py` source. Export HTML locally when
   a snapshot needs sharing.
 - **No new abstraction** — notebooks reuse the `tools/` reservoir helpers
