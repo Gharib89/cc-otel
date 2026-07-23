@@ -21,7 +21,11 @@ that reversal so the design sources stop contradicting the shipped schema.
 - **Cross-checked, never blindly trusted.** The promoted sum is reconciled against the
   independent `claude_code.cost.usage` counter each refresh; a divergence past tolerance (>1%
   relative *and* >$0.01 absolute) is recorded as a `cost_promotion_divergence` DQ finding rather
-  than silently accepted.
+  than silently accepted. The reconciliation is scoped to the live window (activity/ts >=
+  `2026-07-17`): the backfilled POC counter is inflated ~4x vs the promoted per-request cost
+  (POC-era per-request counter emission, not a mart defect — diagnosed in #198/#215), so an
+  all-time reconciliation would fire every refresh over known-irreconcilable history. The
+  promoted mart still spans all history and is accurate; the check monitors ongoing fidelity.
 
 ## Consequences
 
