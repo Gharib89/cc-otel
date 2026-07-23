@@ -5,7 +5,10 @@ Config + helper for `.github/workflows/ci-powerbi.yml`, which validates the
 in the workflow. The `fab-inspector` and BPA rulesets are vendored here (no runtime
 dependency on upstream `master`). The `pbir-schema` job is the one exception: it
 fetches the Fabric JSON schemas from `developer.microsoft.com` at runtime, pinned
-by the exact `$schema` version each report file declares.
+by the exact `$schema` version each report file declares. An unreachable schema
+(an unpublished version Desktop bumped to, 404, or an offline run) is skipped with
+a warning rather than failing the gate (#195); only invalid PBIR against a
+reachable schema fails.
 
 | File | Job | Source |
 |---|---|---|

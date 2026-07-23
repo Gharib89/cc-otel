@@ -83,7 +83,7 @@ Folder naming itself is linted. The runtime trap: Desktop must be **CLOSED** bef
 
 The repo validator (`.github/powerbi/validate-pbir.mjs`, run via `validate.ps1`) fetches the **exact** `$schema` URL each file declares over HTTP and validates against it — there is no version-fallback map. Desktop and pbi-cli sometimes emit different `visualContainer` schema versions (baseline here is `2.9.0`; pbi-cli emits `2.7.0` — both valid against their own declared `$schema`).
 
-The trap: if Desktop writes a `$schema` URL for a version Microsoft hasn't published yet on `developer.microsoft.com`, the ajv fetch returns HTTP 404 and the gate fails with `fetch ... -> HTTP 404` (not a rule violation). Fix by aligning that file's `$schema` line to the nearest **published** version.
+The trap: if Desktop writes a `$schema` URL for a version Microsoft hasn't published yet on `developer.microsoft.com`, the ajv fetch returns HTTP 404. As of #195 the validator treats an unreachable schema (404 or offline) as a **skip with a warning** (`schema unreachable, validation skipped: ...`), matching the MS conformance CLI, so the gate stays green and no hand-reverting of Desktop's `$schema` bump is needed. Genuinely invalid PBIR against a *reachable* schema still fails. Aligning the `$schema` line to the nearest **published** version is now optional cleanup, not a gate requirement.
 
 ## 9. `theme.json` transparency overrides per-visual transparency
 
