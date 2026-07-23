@@ -24,11 +24,10 @@ from pathlib import Path
 import psycopg
 from cc_otel_sink.config import load_settings
 
+from .signals import SIGNALS as _SIGNALS
+
 # (raw table, signal-name column, event-time column, registry signal)
-_TABLES = [
-    ("metrics", "metric_name", "ts", "metrics"),
-    ("events", "event_name", "event_time", "events"),
-]
+_TABLES = [(s.raw_table, s.name_col, s.time_col, s.registry_name) for s in _SIGNALS]
 
 
 @dataclass(frozen=True)

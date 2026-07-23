@@ -7,10 +7,11 @@
 #
 # Usage: scripts/ship/reflect.sh <issue-number> <pr-url>
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 n=${1:?usage: scripts/ship/reflect.sh <issue> <pr-url>}
 url=${2:?usage: scripts/ship/reflect.sh <issue> <pr-url>}
 
 gh issue comment "$n" --body "PR: $url" >/dev/null \
-  || { printf '{"issue":%s,"error":"gh issue comment failed"}\n' "$n"; exit 2; }
-printf '{"issue":%s,"reflected":"%s"}\n' "$n" "$url"
+  || { ship_emit issue "$n" error "$(ship_qstr "gh issue comment failed")"; exit 2; }
+ship_emit issue "$n" reflected "$(ship_qstr "$url")"

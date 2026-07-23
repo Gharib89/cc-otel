@@ -87,7 +87,9 @@ The deterministic phase mechanics live in `scripts/ship/` (bash). Contract: one
 JSON verdict on **stdout**, a failing step's log tail on **stderr** — never a
 full log — exit 0 ok / 1 real failure / 2 tooling. Act on the JSON; don't
 re-derive what a script already checked, and never spawn a subagent to do a
-script's job.
+script's job. The phase scripts share `scripts/ship/_lib.sh` (sourced, not run)
+for the env-file inventory, the `<type>/<slug>-<issue>` branch convention, and
+the JSON emit — one source so the two sides of a paired concern can't drift.
 
 | Phase | Script |
 |---|---|

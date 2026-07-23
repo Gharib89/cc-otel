@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-SIGNALS = ("metrics", "logs")
+from .signals import SIGNALS as _SIGNAL_TABLE
+
+SIGNALS = tuple(s.route for s in _SIGNAL_TABLE)
 
 
 def date_range(since: date, until: date) -> list[date]:
@@ -28,13 +30,16 @@ def resolve_window(days: int, since: date | None, until: date | None, today: dat
     return date_range(since, until)
 
 
+def partition_prefix(signal: str, day: date) -> str:
+    """Hive partition prefix ``signal=<sig>/dt=<YYYY-MM-DD>/`` (blob.py layout)."""
+    return f"signal={signal}/dt={day:%Y-%m-%d}/"
+
+
 def prefixes(signals: tuple[str, ...], days: list[date]) -> list[str]:
     """Blob-name prefixes for ``ContainerClient.list_blobs`` (scrub / replay)."""
-    return [f"signal={s}/dt={d:%Y-%m-%d}/" for s in signals for d in days]
+    return [partition_prefix(s, d) for s in signals for d in days]
 
 
 def globs(container: str, signals: tuple[str, ...], days: list[date]) -> list[str]:
     """``azure://`` globs for DuckDB ``read_json_objects`` (sweep)."""
-    return [
-        f"azure://{container}/signal={s}/dt={d:%Y-%m-%d}/*.json.gz" for s in signals for d in days
-    ]
+    return [f"azure://{container}/{partition_prefix(s, d)}*.json.gz" for s in signals for d in days]

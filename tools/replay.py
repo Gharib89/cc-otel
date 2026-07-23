@@ -32,12 +32,10 @@ from cc_otel_sink.config import load_settings
 from ._progress import Progress
 from ._reservoir import CurationReservoir
 from ._window import SIGNALS, date_range, prefixes
+from .signals import SIGNALS as _SIGNAL_TABLE
 
 # raw table, event-time column, POST path — keyed by the blob's signal partition.
-_ROUTE = {
-    "metrics": ("metrics", "ts", "/v1/metrics"),
-    "logs": ("events", "event_time", "/v1/logs"),
-}
+_ROUTE = {s.route: (s.raw_table, s.time_col, s.ingest_path) for s in _SIGNAL_TABLE}
 
 
 def blob_hash(blob_bytes: bytes) -> str:
