@@ -506,7 +506,7 @@ CREATE MATERIALIZED VIEW marts.fact_api_usage AS
     model,
     effort,
     query_source,
-    (array_agg(user_email) FILTER (WHERE (user_email IS NOT NULL)))[1] AS user_email,
+    COALESCE((array_agg(user_email) FILTER (WHERE (user_email IS NOT NULL)))[1], '(unknown)'::text) AS user_email,
     sum(input_tokens) AS input_tokens,
     sum(output_tokens) AS output_tokens,
     sum(cache_creation_tokens) AS cache_creation_tokens,
@@ -559,7 +559,7 @@ CREATE MATERIALIZED VIEW marts.fact_edit_decision AS
     language,
     decision,
     source,
-    (array_agg(user_email) FILTER (WHERE (user_email IS NOT NULL)))[1] AS user_email,
+    COALESCE((array_agg(user_email) FILTER (WHERE (user_email IS NOT NULL)))[1], '(unknown)'::text) AS user_email,
     sum(value) AS decision_count
    FROM staging.stg_counter_delta
   WHERE ((metric_name = 'claude_code.code_edit_tool.decision'::text) AND (session_id IS NOT NULL))
@@ -595,7 +595,7 @@ CREATE MATERIALIZED VIEW marts.fact_session AS
         )
  SELECT sig.session_id,
     st.start_type,
-    (array_agg(sig.user_email ORDER BY sig.t) FILTER (WHERE (sig.user_email IS NOT NULL)))[1] AS user_email,
+    COALESCE((array_agg(sig.user_email ORDER BY sig.t) FILTER (WHERE (sig.user_email IS NOT NULL)))[1], '(unknown)'::text) AS user_email,
     min(sig.t) AS started_at,
     (array_agg(sig.cc_version ORDER BY sig.t DESC) FILTER (WHERE (sig.cc_version IS NOT NULL)))[1] AS cc_version,
     (EXTRACT(epoch FROM (max(sig.t) - min(sig.t))))::bigint AS duration_s
@@ -633,11 +633,12 @@ CREATE MATERIALIZED VIEW marts.fact_session_daily AS
           GROUP BY events.session_id, ((events.event_time)::date)
         )
  SELECT COALESCE(m.session_id, p.session_id) AS session_id,
+    COALESCE(
         CASE
             WHEN (m.user_email ~~ '%@itworx.com'::text) THEN m.user_email
             WHEN (p.user_email ~~ '%@itworx.com'::text) THEN p.user_email
             ELSE COALESCE(m.user_email, p.user_email)
-        END AS user_email,
+        END, '(unknown)'::text) AS user_email,
     COALESCE(m.activity_date, p.activity_date) AS activity_date,
     COALESCE(p.prompts, (0)::bigint) AS prompts,
     COALESCE(m.commits, (0)::double precision) AS commits,
@@ -726,7 +727,7 @@ CREATE MATERIALIZED VIEW marts.fact_usage_window AS
            FROM staging.stg_utilization_segments
           GROUP BY stg_utilization_segments.user_email, stg_utilization_segments.window_type, stg_utilization_segments.window_end, stg_utilization_segments.segment_no
         )
- SELECT user_email,
+ SELECT COALESCE(user_email, '(unknown)'::text) AS user_email,
     window_type,
     window_end,
     segment_no,
@@ -742,7 +743,7 @@ CREATE MATERIALIZED VIEW marts.fact_usage_window AS
             WHEN '7d'::text THEN '7 days'::interval
             ELSE '00:00:00'::interval
         END) AS window_start,
-    (max(segment_no) OVER (PARTITION BY user_email, window_type, window_end) > 1) AS is_reset_split,
+    (max(segment_no) OVER (PARTITION BY seg.user_email, window_type, window_end) > 1) AS is_reset_split,
     (peak_pct / (NULLIF((EXTRACT(epoch FROM (peak_ts - first_sample_ts)) / 3600.0), (0)::numeric))::double precision) AS pace_pct_per_hour
    FROM seg
   WITH NO DATA;
@@ -753,7 +754,7 @@ CREATE MATERIALIZED VIEW marts.fact_usage_window AS
 --
 
 CREATE MATERIALIZED VIEW marts.fact_utilization_hourly AS
- SELECT user_email,
+ SELECT COALESCE(user_email, '(unknown)'::text) AS user_email,
     window_type,
     date_trunc('hour'::text, ts) AS hour,
     avg(util_pct) AS avg_pct,
@@ -1068,4 +1069,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260722031957'),
     ('20260722120000'),
     ('20260722140000'),
-    ('20260723070059');
+    ('20260723070059'),
+    ('20260723074556');
