@@ -47,20 +47,6 @@
               },
               "queryRef": "_Measures.Commits (Weekly)",
               "nativeQueryRef": "Commits (Weekly)"
-            },
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "_Measures"
-                    }
-                  },
-                  "Property": "PRs (Weekly)"
-                }
-              },
-              "queryRef": "_Measures.PRs (Weekly)",
-              "nativeQueryRef": "PRs (Weekly)"
             }
           ]
         }
@@ -111,6 +97,13 @@
                   }
                 }
               }
+            },
+            "start": {
+              "expr": {
+                "Literal": {
+                  "Value": "0D"
+                }
+              }
             }
           }
         }
@@ -121,14 +114,7 @@
             "show": {
               "expr": {
                 "Literal": {
-                  "Value": "true"
-                }
-              }
-            },
-            "position": {
-              "expr": {
-                "Literal": {
-                  "Value": "'Bottom'"
+                  "Value": "false"
                 }
               }
             }
@@ -169,7 +155,7 @@
             "altText": {
               "expr": {
                 "Literal": {
-                  "Value": "'Weekly trend lines of commits and pull requests.'"
+                  "Value": "'Weekly trend line of commits.'"
                 }
               }
             }
@@ -189,7 +175,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'COMMITS & PRS BY WEEK'"
+                  "Value": "'COMMITS BY WEEK'"
                 }
               }
             },
