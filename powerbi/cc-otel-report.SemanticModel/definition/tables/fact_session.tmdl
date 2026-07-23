@@ -46,7 +46,8 @@ table fact_session
 		dataType: int64
 		formatString: 0
 		lineageTag: 8d17ae72-05c0-4967-9c79-474b50c987d5
-		summarizeBy: sum
+		summarizeBy: none
+		isHidden
 		sourceColumn: duration_s
 
 		annotation SummarizationSetBy = Automatic

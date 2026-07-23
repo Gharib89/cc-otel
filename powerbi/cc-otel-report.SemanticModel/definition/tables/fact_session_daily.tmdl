@@ -30,7 +30,8 @@ table fact_session_daily
 		dataType: int64
 		formatString: 0
 		lineageTag: 270bd216-137b-4ea6-82a4-e20f0d5feb95
-		summarizeBy: sum
+		summarizeBy: none
+		isHidden
 		sourceColumn: prompts
 
 		annotation SummarizationSetBy = Automatic
@@ -38,7 +39,8 @@ table fact_session_daily
 	column commits
 		dataType: double
 		lineageTag: 38193402-6d6d-4cc2-a796-f660cba2ef4a
-		summarizeBy: sum
+		summarizeBy: none
+		isHidden
 		sourceColumn: commits
 
 		annotation SummarizationSetBy = Automatic
@@ -46,7 +48,8 @@ table fact_session_daily
 	column prs
 		dataType: double
 		lineageTag: f381e39d-bc84-4437-bca9-4cbe3ac3eeb6
-		summarizeBy: sum
+		summarizeBy: none
+		isHidden
 		sourceColumn: prs
 
 		annotation SummarizationSetBy = Automatic
@@ -54,7 +57,8 @@ table fact_session_daily
 	column loc_added
 		dataType: double
 		lineageTag: 2b0353d0-b448-402d-b764-c49193c60b7f
-		summarizeBy: sum
+		summarizeBy: none
+		isHidden
 		sourceColumn: loc_added
 
 		annotation SummarizationSetBy = Automatic
@@ -62,7 +66,8 @@ table fact_session_daily
 	column loc_removed
 		dataType: double
 		lineageTag: af78c6fb-92bc-4b84-b411-54d522fe8e94
-		summarizeBy: sum
+		summarizeBy: none
+		isHidden
 		sourceColumn: loc_removed
 
 		annotation SummarizationSetBy = Automatic
@@ -70,7 +75,8 @@ table fact_session_daily
 	column active_time_user_s
 		dataType: double
 		lineageTag: ea3b1101-80d8-470a-b149-f7148d29fd4f
-		summarizeBy: sum
+		summarizeBy: none
+		isHidden
 		sourceColumn: active_time_user_s
 
 		annotation SummarizationSetBy = Automatic
@@ -78,7 +84,8 @@ table fact_session_daily
 	column active_time_cli_s
 		dataType: double
 		lineageTag: 2ae659e7-7e31-44c6-9824-e97ef5fe4f39
-		summarizeBy: sum
+		summarizeBy: none
+		isHidden
 		sourceColumn: active_time_cli_s
 
 		annotation SummarizationSetBy = Automatic
@@ -86,7 +93,8 @@ table fact_session_daily
 	column active_time_total_s
 		dataType: double
 		lineageTag: 86af78b4-15f8-45c5-bc3b-5813e4994686
-		summarizeBy: sum
+		summarizeBy: none
+		isHidden
 		sourceColumn: active_time_total_s
 
 		annotation SummarizationSetBy = Automatic
