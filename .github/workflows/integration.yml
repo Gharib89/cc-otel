@@ -38,27 +38,12 @@ jobs:
       - run: uv run pytest -m integration
 
   # Schema-drift gate: regenerating db/schema.sql from the migrations must not
-  # change it. Uses dbmate + pg_dump 17 to match the committed dump's generator;
-  # the two `-- Dumped ...` version-comment lines vary by toolchain minor and are
-  # normalized before the structural diff.
+  # change it. The verdict — regenerate, normalize the `-- Dumped ...` version
+  # comments, diff — is owned by scripts/dev-migrate.sh --check (#225), which
+  # self-spins its throwaway postgres:16 container; local-gate.sh runs the
+  # identical call.
   schema-drift:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: cc_otel
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/cc_otel?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -83,20 +68,13 @@ jobs:
             https://github.com/amacneil/dbmate/releases/download/v2.34.1/dbmate-linux-amd64
           sudo chmod +x /usr/local/bin/dbmate
 
-      - name: Apply migrations and regenerate schema.sql
-        run: |
-          export PATH="/usr/lib/postgresql/17/bin:$PATH"
-          dbmate up
-
-      - name: Verify column_spec converges with the migrations (#167)
-        run: uv run python -m tools.spec_sync --check --database-url "$DATABASE_URL"
-
       - name: Fail on schema drift
         run: |
-          norm() { sed -E 's/^-- Dumped (from database version|by pg_dump version).*/-- Dumped <normalized>/'; }
-          git show HEAD:db/schema.sql | norm > /tmp/committed.sql
-          norm < db/schema.sql > /tmp/regenerated.sql
-          if ! diff -u /tmp/committed.sql /tmp/regenerated.sql; then
-            echo "::error::db/schema.sql is out of date — run 'dbmate up' and commit the regenerated dump."
-            exit 1
-          fi
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+          scripts/dev-migrate.sh --check
+
+      # spec_sync self-spins its own throwaway container (--database-url is
+      # optional) — dev-migrate tears its DB down on exit, same as under
+      # local-gate.
+      - name: Verify column_spec converges with the migrations (#167)
+        run: uv run python -m tools.spec_sync --check

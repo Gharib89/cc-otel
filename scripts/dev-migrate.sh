@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
 # Apply migrations and regenerate db/schema.sql against a throwaway Postgres.
 #
-# Mirrors the CI schema-drift gate (.github/workflows/integration.yml) byte-for-
-# byte: an ephemeral `postgres:16` container, dbmate up, dump via `pg_dump 17`.
-# Authoring against a from-zero container — instead of the persistent Azure dev
-# DB — means "green locally" equals "green in CI": no drift from accumulated
-# state, no Azure firewall dance. Requires dbmate + pg_dump 17 on PATH (already
-# needed to produce a CI-matching dump) and a running Docker daemon.
+# Owns the schema-drift verdict (#225): with --check, after regeneration it
+# normalizes the `-- Dumped ...` version-comment lines on both the committed
+# (HEAD) and regenerated dump, diffs, and exits nonzero on drift — the CI
+# schema-drift job and local-gate.sh both run this same call. An ephemeral
+# `postgres:16` container, dbmate up, dump via `pg_dump 17`. Authoring against
+# a from-zero container — instead of the persistent Azure dev DB — means
+# "green locally" equals "green in CI": no drift from accumulated state, no
+# Azure firewall dance. Requires dbmate + pg_dump 17 on PATH (already needed
+# to produce a CI-matching dump) and a running Docker daemon.
 #
-# Usage: scripts/dev-migrate.sh   (run from anywhere; cds to repo root)
+# Usage: scripts/dev-migrate.sh [--check]   (run from anywhere; cds to repo root)
+#
+#   --check  diff the regenerated dump against HEAD (pg_dump version comments
+#            normalized); exit 1 on drift, leaving the regenerated dump in the
+#            tree — that IS the fix: commit it.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -16,6 +23,13 @@ cd "$(dirname "$0")/.."
 NAME=cc-otel-dev-migrate
 
 die() { echo "error: $*" >&2; exit 1; }
+
+CHECK=0
+case "${1:-}" in
+  --check) CHECK=1 ;;
+  "") ;;
+  *) die "unknown argument: $1 (usage: scripts/dev-migrate.sh [--check])" ;;
+esac
 
 command -v dbmate >/dev/null 2>&1 \
   || die "dbmate not found on PATH — see https://github.com/amacneil/dbmate (pin v2.34.1 to match CI)"
@@ -56,4 +70,14 @@ done
 # db/migrations, db/schema.sql).
 dbmate up
 
-echo "db/schema.sql regenerated. Review 'git diff db/schema.sql' and commit it."
+if [ "$CHECK" = 1 ]; then
+  # The two `-- Dumped ...` lines vary by toolchain minor and are normalized
+  # before the structural diff (mirrored from the retired CI norm() step).
+  norm() { sed -E 's/^-- Dumped (from database version|by pg_dump version).*/-- Dumped <normalized>/'; }
+  if ! diff -u <(git show HEAD:db/schema.sql | norm) <(norm < db/schema.sql); then
+    die "db/schema.sql is out of date — the regenerated dump is left in the tree; commit it."
+  fi
+  echo "db/schema.sql matches the migrations (version comments normalized)."
+else
+  echo "db/schema.sql regenerated. Review 'git diff db/schema.sql' and commit it."
+fi

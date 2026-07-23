@@ -44,6 +44,7 @@ Assert-PSRule -InputPath ./iac/ -Module PSRule.Rules.Azure  # Bicep static analy
 uv run pre-commit run -a     # all hooks
 dbmate new <name>            # new migration in db/migrations/
 scripts/dev-migrate.sh       # apply migrations + regenerate schema.sql on throwaway Docker Postgres (the authoring loop)
+scripts/dev-migrate.sh --check  # schema-drift verdict: normalized diff vs HEAD, exit 1 on drift (CI + local gate run this)
 uv run python -m tools.spec_sync --check       # gate: column_spec.py <-> migrations converge + mart-literal lint (needs Docker)
 uv run python -m tools.spec_sync --name <slug> # author: spec delta -> new migration + schema.sql regen
 scripts/ship/local-gate.sh   # path-aware local mirror of CI (JSON verdict; the ship skill's phase-5 gate)
