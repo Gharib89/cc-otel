@@ -116,12 +116,14 @@ if touches '^sink/|^db/|^collector/|^tools/|^tests/integration/|^pyproject\.toml
 fi
 
 # --- schema-drift + spec_sync (integration.yml) — regenerates schema.sql ------
-# On drift the regenerated dump is left in the tree (that IS the fix: commit it).
+# The drift verdict (regenerate, normalize pg_dump version comments, diff) is
+# owned by dev-migrate.sh --check (#225) — CI runs the identical call. On drift
+# the regenerated dump is left in the tree (that IS the fix: commit it).
 # column_spec.py rides this gate: a spec edit without its migration drifts even
 # though schema.sql itself is unchanged, so spec_sync --check catches it (#167).
-if touches '^db/|^sink/src/cc_otel_sink/column_spec\.py$'; then
+if touches '^db/|^sink/src/cc_otel_sink/column_spec\.py$|^\.github/workflows/integration\.yml$'; then
   if [ "$DOCKER" = present ] && have dbmate && have pg_dump; then
-    run_gate schema-drift bash -c 'scripts/dev-migrate.sh && git diff --quiet -- db/schema.sql'
+    run_gate schema-drift scripts/dev-migrate.sh --check
   elif [ "$DOCKER" = absent ]; then
     record schema-drift deferred-to-ci
   else

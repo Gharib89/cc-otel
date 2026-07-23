@@ -44,6 +44,7 @@ Assert-PSRule -InputPath ./iac/ -Module PSRule.Rules.Azure  # Bicep static analy
 uv run pre-commit run -a     # all hooks
 dbmate new <name>            # new migration in db/migrations/
 scripts/dev-migrate.sh       # apply migrations + regenerate schema.sql on throwaway Docker Postgres (the authoring loop)
+scripts/dev-migrate.sh --check  # schema-drift verdict: normalized diff vs HEAD, exit 1 on drift (CI + local gate run this)
 uv run python -m tools.spec_sync --check       # gate: column_spec.py <-> migrations converge + mart-literal lint (needs Docker)
 uv run python -m tools.spec_sync --name <slug> # author: spec delta -> new migration + schema.sql regen
 scripts/ship/local-gate.sh   # path-aware local mirror of CI (JSON verdict; the ship skill's phase-5 gate)
@@ -64,7 +65,7 @@ The shell here is **PowerShell** (pwsh primary, WinPS 5.1 on the fleet). Four tr
 
 ## Dev database
 
-**Authoring migrations:** run `scripts/dev-migrate.sh` — it spins a throwaway `postgres:16` container (matching the CI service image), applies migrations, and regenerates `db/schema.sql` via `pg_dump 17`, mirroring the CI schema-drift gate byte-for-byte. Authoring from-zero avoids drift that a persistent DB accumulates when a migration is edited after being applied. Requires `dbmate` (pin v2.34.1) + `pg_dump 17` on PATH and a running Docker daemon.
+**Authoring migrations:** run `scripts/dev-migrate.sh` — it spins a throwaway `postgres:16` container, applies migrations, and regenerates `db/schema.sql` via `pg_dump 17`; with `--check` it also diffs the dump against HEAD (pg_dump version comments normalized) and exits nonzero on drift. CI's schema-drift job and the local gate run that same `--check` call, so the verdict has one owner. Authoring from-zero avoids drift that a persistent DB accumulates when a migration is edited after being applied. Requires `dbmate` (pin v2.34.1) + `pg_dump 17` on PATH and a running Docker daemon.
 
 _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` holds `DATABASE_URL` pointing at the retired POC's Azure Postgres Flexible Server (a dedicated `cc_otel` database for this repo; real POC telemetry lives in the sibling `otel` database). Migrations no longer target it — `.env` `DATABASE_URL` is for ad-hoc `psql` only. `.env` also carries the Azure identity vars (`AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_CLIENT_ID`, …) used by deploy tooling.
 
