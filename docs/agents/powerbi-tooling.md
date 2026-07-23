@@ -151,10 +151,11 @@ pwsh .github/powerbi/dax-eval.ps1 'EVALUATE ROW("s",[Total Sessions])'    # full
 pwsh .github/powerbi/dax-eval.ps1 '[Active Users]' -Port 61754            # explicit port
 ```
 
-Output is tab-separated rows, a header of column names first. Exit codes: `0`
-rows printed; `1` a DAX/query error (bad measure name, syntax); `2` a tooling
-failure (no `msmdsrv`, ambiguous port, download/load failure) — the message goes
-to stderr, legible, no dialog.
+Output is tab-separated rows, a header of column names first (always emitted,
+even when the query returns zero data rows). Exit codes: `0` the query ran; `1` a
+DAX/query error (bad measure name, syntax); `2` a tooling failure (no `msmdsrv`,
+ambiguous port, download/load failure) — the message goes to stderr, legible, no
+dialog.
 
 - **Runtime + client.** pwsh 7 (.NET 8), same as `validate.ps1`. Loads the
   **ADOMD.NET client** (`Microsoft.AnalysisServices.AdomdClient` 19.114.8, the

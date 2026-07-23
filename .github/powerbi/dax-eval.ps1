@@ -18,7 +18,7 @@
 #
 # Output: tab-separated rows on stdout, a header row of column names first.
 # Exit codes:
-#   0  query ran, rows printed
+#   0  query ran (prints a header row of column names, then any result rows)
 #   1  a query/DAX error (bad measure name, syntax) -- your DAX, not the tool
 #   2  tooling failure (no msmdsrv found, ambiguous port, download/load failure)
 
@@ -98,19 +98,25 @@ try {
 # --- 3. Discover the embedded msmdsrv port (or take an explicit -Port) --------
 # Every open Desktop spawns its own msmdsrv; with more than one instance the port
 # is ambiguous, so require -Port rather than guess.
+# Wrapped whole: a throw from Get-Process/Get-NetTCPConnection (cmdlet missing,
+# permission) would otherwise escape to exit 1 and break the exit-2 contract.
+# Fail-Tooling's `exit 2` is not caught here -- `exit` terminates, it is not an
+# exception -- so the intended tooling-failure paths still exit 2 cleanly.
 if (-not $Port) {
   try {
     $msm = @(Get-Process msmdsrv -ErrorAction SilentlyContinue)
-  } catch { $msm = @() }
-  if ($msm.Count -eq 0) { Fail-Tooling 'no msmdsrv process found -- open the report in Power BI Desktop first' }
-  $ports = @($msm | ForEach-Object {
-      Get-NetTCPConnection -OwningProcess $_.Id -State Listen -ErrorAction SilentlyContinue |
-        Where-Object { $_.LocalAddress -eq '127.0.0.1' -or $_.LocalAddress -eq '::1' } |
-        Select-Object -ExpandProperty LocalPort
-    } | Sort-Object -Unique)
-  if ($ports.Count -eq 0) { Fail-Tooling 'msmdsrv is running but not listening on loopback yet -- wait for the data model to load' }
-  if ($ports.Count -gt 1) { Fail-Tooling "multiple embedded instances on ports $($ports -join ', ') -- pass -Port to disambiguate" }
-  $Port = $ports[0]
+    if ($msm.Count -eq 0) { Fail-Tooling 'no msmdsrv process found -- open the report in Power BI Desktop first' }
+    $ports = @($msm | ForEach-Object {
+        Get-NetTCPConnection -OwningProcess $_.Id -State Listen -ErrorAction SilentlyContinue |
+          Where-Object { $_.LocalAddress -eq '127.0.0.1' -or $_.LocalAddress -eq '::1' } |
+          Select-Object -ExpandProperty LocalPort
+      } | Sort-Object -Unique)
+    if ($ports.Count -eq 0) { Fail-Tooling 'msmdsrv is running but not listening on loopback yet -- wait for the data model to load' }
+    if ($ports.Count -gt 1) { Fail-Tooling "multiple embedded instances on ports $($ports -join ', ') -- pass -Port to disambiguate" }
+    $Port = $ports[0]
+  } catch {
+    Fail-Tooling "port discovery failed: $($_.Exception.Message)"
+  }
 }
 
 # --- 4. A bare scalar expression is wrapped so measures verify ergonomically --
