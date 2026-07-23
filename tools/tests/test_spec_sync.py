@@ -7,7 +7,13 @@ from __future__ import annotations
 
 import pytest
 
-from tools.spec_sync import Delta, generate_migration, spec_raw_columns, spec_registry_rows
+from tools.spec_sync import (
+    Delta,
+    generate_migration,
+    lint_mart_literals,
+    spec_raw_columns,
+    spec_registry_rows,
+)
 
 _ROW = ("metrics", "*", "x.y", "promoted", "xy", "TEXT", "desc", None, "2026-07-13", None)
 
@@ -65,3 +71,55 @@ def test_sql_literal_escapes_quotes() -> None:
     delta = Delta(missing_rows=[_ROW[:6] + ("it's a note", None, "2026-07-13", None)])
     sql = generate_migration("x", delta)
     assert "'it''s a note'" in sql
+
+
+# --- mart-literal lint (#168) -------------------------------------------------
+
+
+def test_lint_passes_on_known_literals(tmp_path) -> None:
+    (tmp_path / "1.sql").write_text(
+        "metric_name = 'claude_code.session.count' AND type_label = 'added'\n"
+        "value_kind = 'sum_delta'\n",
+        encoding="utf-8",
+    )
+    assert lint_mart_literals(tmp_path) == []
+
+
+def test_lint_flags_unknown_metric_name_with_file_line() -> None:
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as d:
+        (Path(d) / "m.sql").write_text(
+            "SELECT 1\nWHERE metric_name = 'claude_code.comit.count'\n", encoding="utf-8"
+        )
+        v = lint_mart_literals(Path(d))
+    assert len(v) == 1
+    assert v[0].path.name == "m.sql"
+    assert v[0].line == 2
+    assert v[0].column == "metric_name"
+    assert v[0].literal == "claude_code.comit.count"
+
+
+def test_lint_flags_unknown_enum_values(tmp_path) -> None:
+    (tmp_path / "1.sql").write_text(
+        "type_label = 'addded'\nvalue_kind = 'sum_bogus'\n", encoding="utf-8"
+    )
+    assert {v.literal for v in lint_mart_literals(tmp_path)} == {"addded", "sum_bogus"}
+
+
+def test_lint_covers_in_and_any_set_forms(tmp_path) -> None:
+    (tmp_path / "1.sql").write_text(
+        "type_label IN ('user', 'cli', 'bogus')\n"
+        "metric_name = ANY (ARRAY['claude_code.commit.count', 'claude_code.nope'])\n",
+        encoding="utf-8",
+    )
+    assert {v.literal for v in lint_mart_literals(tmp_path)} == {"bogus", "claude_code.nope"}
+
+
+def test_lint_is_green_on_real_migrations() -> None:
+    # Acceptance: the catalog covers every literal the live mart SQL references.
+    from tools.spec_sync import _MIGRATIONS_DIR
+
+    violations = lint_mart_literals(_MIGRATIONS_DIR)
+    assert violations == [], "\n".join(f"{v.path.name}:{v.line} {v.column}={v.literal!r}" for v in violations)
