@@ -11,6 +11,7 @@ on:
       - "**/*.py"
       - "db/**/*.sql"
       - ".sqlfluff"
+      - ".pre-commit-config.yaml"
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/python.yml"
