@@ -102,8 +102,8 @@ if [ -n "$SMALL" ]; then
 else
 
 # Workflow names with no local mirror at all (manual workflow_dispatch only —
-# never triggered by a PR diff, but listed explicitly so a real hit still
-# fails loudly instead of silently vanishing).
+# never triggered by a PR diff today). Listed explicitly so they are skipped as
+# a deliberate decision; any OTHER unmapped triggered name fails loudly below.
 EXCLUDED=' deploy publish-images '
 KNOWN_GATES=' python integration docker iac installer bootstrap ci-powerbi '
 
