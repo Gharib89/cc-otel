@@ -50,10 +50,14 @@ issues, so the assignee **is** the claim. Reflect the PR (phase 6) with
 release (`claim.sh <n> --release`) so the issue re-enters the frontier — or hand
 it to a human per the cloud routine's rules when in a fire.
 
-## local-gate.sh's path→gate map is coupled to CI
+## local-gate.sh's workflow-name -> gate-group mapping is coupled to CI
 
-`scripts/ship/local-gate.sh` mirrors CI by lifting the path filters from
-`.github/workflows/*.yml` (python, integration, schema-drift, iac, installer,
-bootstrap, docker, powerbi) into its `touches` selectors. A new workflow or a
-path-filter change must update the script's map in the **same** PR — otherwise
-"local gate green" stops meaning "CI green".
+`scripts/ship/local-gate.sh` derives *which* workflows a diff triggers by
+parsing `.github/workflows/*.yml`'s own `paths:` filters (`tools/gate_paths.py`,
+#226) — a `paths:` edit alone no longer touches the script. What remains
+coupled is the **workflow name -> local gate-group mapping** (python,
+integration, docker, iac, installer, bootstrap, ci-powerbi) plus the explicit
+exclusion list (`deploy`, `publish-images` — workflows with no local mirror). A
+brand-new workflow needs a gate group or an exclusion-list entry in the same
+PR — otherwise the script fails loudly (`unavailable`/TOOLING) instead of
+silently letting "local gate green" mean less than "CI green".
