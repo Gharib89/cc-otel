@@ -38,6 +38,14 @@ const fetchCache = new Map();
 // -> warn + skip). Tag the error so the file loop can distinguish it from a real
 // schema-validation error and skip that file instead of reddening the gate.
 const SCHEMA_UNREACHABLE = 'SCHEMA_UNREACHABLE';
+// A fresh tagged Error (not a mutated caught value) — the caught fetch error may
+// be a non-extensible DOMException (AbortSignal.timeout) or already carry a `code`
+// (ENOTFOUND, ECONNRESET) worth keeping; preserve it as `cause`.
+const unreachable = (message, cause) => {
+  const err = new Error(message, cause === undefined ? undefined : { cause });
+  err.code = SCHEMA_UNREACHABLE;
+  return err;
+};
 const loadSchema = (uri) => {
   if (!fetchCache.has(uri)) {
     fetchCache.set(uri, (async () => {
@@ -46,14 +54,9 @@ const loadSchema = (uri) => {
         res = await fetch(uri, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
       } catch (err) {
         // Network failure / timeout — unreachable, not invalid.
-        err.code = SCHEMA_UNREACHABLE;
-        throw err;
+        throw unreachable(`fetch ${uri} -> ${err.message ?? err}`, err);
       }
-      if (!res.ok) {
-        const err = new Error(`fetch ${uri} -> HTTP ${res.status}`);
-        err.code = SCHEMA_UNREACHABLE;
-        throw err;
-      }
+      if (!res.ok) throw unreachable(`fetch ${uri} -> HTTP ${res.status}`);
       return res.json();
     })());
   }
