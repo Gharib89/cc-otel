@@ -80,6 +80,13 @@ verification loop:
 
 - **report** — PBIR only (visuals, pages, filters, themes, bookmarks).
   Verify: edit → `powerbi-desktop reload` → screenshot → read the PNG.
+- **metadata-only** — report-class edits where nothing moves on canvas (alt
+  text, tab order): pages render pixel-identical to `main`, so a screenshot
+  carries zero review signal. Verify structurally instead: programmatic
+  assertions covering the issue's ask exhaustively (e.g. every data visual
+  carries altText, every chrome/label at `tabOrder:-1`, no interactive or
+  structural visual touched) plus a clean `validate.ps1` against `main`'s
+  baseline.
 - **model** — TMDL only (measures, columns, relationships, hygiene).
   Verify: `validate.ps1`'s TE2/TOM legs parse it, but Desktop **load** is the
   real test and fails *silently* — close + reopen the `.pbip`, confirm the
@@ -87,7 +94,8 @@ verification loop:
   `powerbi-tooling.md`. `reload` does **not** apply TMDL changes.
 - **mixed** — both; run both loops (model first — visuals bind to the measures).
 
-There is no small lane: every class ends in rendered-page verification.
+Every class ends in evidence: rendered pages when pixels move, structural
+assertions when they don't.
 
 ## The pipeline
 
@@ -158,7 +166,8 @@ possible; fix it like any red, don't dismiss it as environmental.
 (store-install: `Start-Process "shell:AppsFolder\$appId" -ArgumentList $pbip`
 per `powerbi-tooling.md`), wait for `status` ready, then post the merge summary
 with the final screenshots **in chat** — format and approval mechanics in
-[reference/merge-gate.md](reference/merge-gate.md). The human reviews live in
+[reference/merge-gate.md](reference/merge-gate.md) (metadata-only class:
+textual evidence instead, per its variant there). The human reviews live in
 Desktop; remind them not to **save** there (a Desktop save re-serializes the
 whole pbip — wide churn on the branch). On "merge": close the run's Desktop
 instances first, then `merge.sh <pr> <issue> --worktree <path>`. On change

@@ -23,6 +23,16 @@ And `pbi-cli --version` misreports **3.10.10** even on a correct 3.11.1 install
 (stale hardcoded version string upstream); trust `uv tool list` (shows `v3.11.1`),
 not `--version`.
 
+**Plugin-pin trap:** the `.claude/settings.json` marketplace declaration installs
+nothing by itself (fresh machine → `Skill` tool fails "Unknown skill"), and
+`claude plugin install` clones the marketplace at default-branch HEAD, **ignoring
+the `ref: v26.25` pin** (26.26+ is a known breaking window, #105). Fresh-machine
+sequence: `claude plugin marketplace add`, then `git checkout v26.25` inside
+`~/.claude/plugins/marketplaces/power-bi-agentic-development`, then `claude plugin
+uninstall` + `install` for both plugins — "already installed" won't repoint the
+version; only a reinstall updates `installed_plugins.json` to the pinned cache
+path. Registered Skill invocation needs `/reload-plugins` or a new session.
+
 ## pbi-cli skills — keep offline, drop live
 
 `pbi-cli skills install` registers 13 skills. This repo has no live Desktop/AS
@@ -35,7 +45,12 @@ directly in the TMDL folder on disk — no `pbi connect`.
 Known pbi-cli gaps: no drillthrough authoring (hand-write `pageBinding` or set it
 once in Desktop — see `pbir-gotchas` trap 1); emits `visualContainer` schema
 `2.7.0` while Desktop's baseline is `2.9.0` (both ajv-valid against their own
-`$schema`).
+`$schema`); `report set-theme` writes report.json **invalid** against
+report/3.3.0 — `customTheme.reportVersionAtImport` as a string instead of a
+`{visual,page,report}` object, and the RegisteredResources item `type` as int
+`202` with a wrong `path` (must be string `"CustomTheme"` with a
+resource-folder-relative path, just `theme.json`). Hand-fix after `set-theme`;
+the ajv gate catches it.
 
 ## Design canon — on-demand
 
@@ -217,6 +232,27 @@ Findings from driving semantic-model edits through Desktop headlessly:
   The same embedded instance answers ad-hoc DAX for headless measure
   verification through `dax-eval.ps1` (the ADOMD.NET read; see "Headless DAX
   read" above) — no report visuals needed.
+- **New columns render (Blank) until the cache is refreshed.** `cache.abf` is
+  the imported-data snapshot; a column added to TMDL after the snapshot (or a
+  measure over one) has no data in it. A fresh open re-reads TMDL *structure*
+  but still binds the old cache ("Some of the tables have incomplete or no
+  data"). Fix: TOM `Full` on the affected table + a `Calculate` pass, then
+  reload + screenshot. Needs the worktree's `.env.interim` for Azure
+  connectivity.
+- **Prefer a DAX calculated column over a SQL sourceColumn for derived
+  columns** (e.g. `hour_of_day = HOUR([hour])`): a sourceColumn needs a full
+  re-import, and a TOM `RefreshType.Full` against Azure Postgres can hang
+  >15 min unattended with no error (refresh/credential-side, not
+  connectivity) — while a calc column materialises from already-imported data
+  via a local `Calculate` refresh in seconds. Reserve SQL sourceColumns (the
+  `activity_date` convention) for columns that need a real re-import anyway.
+  After adding one: reopen the `.pbip` (not `reload`), then `Calculate`. On a
+  slow fresh open the title reads `Untitled - Power BI Desktop` transiently —
+  wait for bridge `ready` before judging it a silent load failure.
+- **Sequence TOM refreshes after bridge `reload`, never concurrent** — two
+  mashup evaluations race and snap the engine pipe ("Pipe is broken" frown;
+  bridge stuck "Host is not ready"); recovery is kill + reopen (TMDL/report on
+  disk lose nothing). Wait for bridge `status: ready`, then one TOM pass.
 - **DAX trap: `DATESINPERIOD` with an anchor outside the date column's range
   clamps to the nearest stored date instead of returning empty** — a "prior 28d"
   window before first ingest silently leaks current-window rows. Use
