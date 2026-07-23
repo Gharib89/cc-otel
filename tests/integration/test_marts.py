@@ -302,10 +302,12 @@ def _cost_findings(conn):
 
 def test_cost_promotion_divergence_flagged(conn):
     # Promoted api_request cost ($1.00) vs the claude_code.cost.usage counter ($2.00):
-    # a 100% gap, far past the 1%/$0.01 tolerance -> one DQ finding.
+    # a 100% gap, far past the 1%/$0.01 tolerance -> one DQ finding. Seeded in the live
+    # window (>= 2026-07-17); the reconciliation is scoped there (backfilled POC counter
+    # is inflated, see #215/ADR-0007).
     ins_event(
         conn,
-        event_time="2026-07-01T10:00:00Z",
+        event_time="2026-07-20T10:00:00Z",
         event_name="api_request",
         session_id=S1,
         user_email="a@x.com",
@@ -316,7 +318,7 @@ def test_cost_promotion_divergence_flagged(conn):
     )
     ins_metric(
         conn,
-        ts="2026-07-01T10:00:00Z",
+        ts="2026-07-20T10:00:00Z",
         metric_name="claude_code.cost.usage",
         metric_type="sum",
         value=2.00,
@@ -335,10 +337,10 @@ def test_cost_promotion_divergence_flagged(conn):
 
 def test_cost_promotion_within_tolerance_no_finding(conn):
     # $1.00 promoted vs $1.005 counter: 0.5% relative and $0.005 absolute, inside
-    # both tolerance bounds -> no finding.
+    # both tolerance bounds -> no finding. Live-window dates (>= 2026-07-17).
     ins_event(
         conn,
-        event_time="2026-07-01T10:00:00Z",
+        event_time="2026-07-20T10:00:00Z",
         event_name="api_request",
         session_id=S1,
         user_email="a@x.com",
@@ -349,7 +351,7 @@ def test_cost_promotion_within_tolerance_no_finding(conn):
     )
     ins_metric(
         conn,
-        ts="2026-07-01T10:00:00Z",
+        ts="2026-07-20T10:00:00Z",
         metric_name="claude_code.cost.usage",
         metric_type="sum",
         value=1.005,
@@ -400,9 +402,10 @@ def test_fact_api_error_rate_per_day(conn):
 def test_cost_promotion_ignores_session_less_counter(conn):
     # The counter sum matches fact_api_usage's session_id IS NOT NULL grain, so a
     # session-less cost.usage row is excluded from reconciliation -> no false divergence.
+    # Live-window dates (>= 2026-07-17).
     ins_event(
         conn,
-        event_time="2026-07-01T10:00:00Z",
+        event_time="2026-07-20T10:00:00Z",
         event_name="api_request",
         session_id=S1,
         user_email="a@x.com",
@@ -413,7 +416,7 @@ def test_cost_promotion_ignores_session_less_counter(conn):
     )
     ins_metric(
         conn,
-        ts="2026-07-01T10:00:00Z",
+        ts="2026-07-20T10:00:00Z",
         metric_name="claude_code.cost.usage",
         metric_type="sum",
         value=1.00,
@@ -423,7 +426,7 @@ def test_cost_promotion_ignores_session_less_counter(conn):
     )
     ins_metric(
         conn,
-        ts="2026-07-01T10:00:00Z",
+        ts="2026-07-20T10:00:00Z",
         metric_name="claude_code.cost.usage",
         metric_type="sum",
         value=5.00,
