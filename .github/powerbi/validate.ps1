@@ -27,6 +27,7 @@ $Rules     = Join-Path $RepoRoot '.github/powerbi/fab-inspector-rules.json'
 $BpaRules  = Join-Path $RepoRoot '.github/powerbi/BPARules.json'
 $ValidMjs  = Join-Path $RepoRoot '.github/powerbi/validate-pbir.mjs'
 $GotchaMjs = Join-Path $RepoRoot '.github/powerbi/gotchas-lint.mjs'
+$DrillPiiMjs = Join-Path $RepoRoot '.github/powerbi/drill-pii-lint.mjs'
 $Cache     = Join-Path $RepoRoot '.pbi-tools'
 
 $FabVersion = 'v3.4.0'
@@ -87,6 +88,26 @@ if (-not (Test-Path $GotchaMjs)) {
   }
 } else {
   Write-Host '[TOOL] node required for the gotchas-lint leg' -ForegroundColor Red
+  $tooling = $true
+}
+
+# --- 1c. drill-pii lint (no deps, plain node) ---------------------------------
+Section 'drill-pii lint'
+if (-not (Test-Path $DrillPiiMjs)) {
+  # Same missing-script guard as the gotchas leg: a cannot-find-module exit 1
+  # would misread as PII violations, so treat a missing script as tooling (exit 2).
+  Write-Host "[TOOL] drill-pii-lint script not found at ${DrillPiiMjs}" -ForegroundColor Red
+  $tooling = $true
+} elseif (Have 'node') {
+  try {
+    & node $DrillPiiMjs (Join-Path $RepoRoot 'powerbi/cc-otel-report.Report') 2>&1 | Out-Host
+    if ($LASTEXITCODE -eq 1) { $failed = $true }
+    elseif ($LASTEXITCODE -ne 0) { $tooling = $true }
+  } catch {
+    Write-Host "[TOOL] drill-pii-lint leg failed to run: $_" -ForegroundColor Red; $tooling = $true
+  }
+} else {
+  Write-Host '[TOOL] node required for the drill-pii-lint leg' -ForegroundColor Red
   $tooling = $true
 }
 

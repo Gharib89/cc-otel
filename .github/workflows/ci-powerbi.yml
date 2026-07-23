@@ -44,6 +44,12 @@ jobs:
       - name: pbir-gotchas lint
         run: node .github/powerbi/gotchas-lint.mjs powerbi/cc-otel-report.Report
 
+      # Fails on a real email or session-id UUID persisted into a drillthrough
+      # filter (#183): Desktop re-serializes the last-used drill value on save,
+      # so this catches leaked PII at commit time. Pure node, no deps.
+      - name: drill-pii lint
+        run: node .github/powerbi/drill-pii-lint.mjs powerbi/cc-otel-report.Report
+
       # First-party PBIR conformance check, promoted to blocking by issue #112:
       # it catches role/theme defects that render silently wrong past ajv (whose
       # schemas model queryState as an open map). Pinned; preview tool.
