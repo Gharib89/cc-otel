@@ -62,6 +62,27 @@ Verify (backfill window only): both of
 and the `raw.events` / `event_time` equivalent return 0, and the `non_itworx_email_purge` DQ
 finding row is present.
 
+## One-shot purge of empty (NULL) user_email rows (#216)
+
+Follow-up to #214, and the complement of the non-itworx purge above (which kept NULL emails). The
+backfill carried POC rows that never resolved an email; #214 buckets them into dim_user's visible
+`'(unknown)'` member so the volume can be judged first. Once that volume is confirmed stale POC
+backfill (**#216 re-entry: Ahmed has reviewed the `'(unknown)'` bucket in the report**),
+`sql/purge_empty_user.sql` deletes the `user_email IS NULL` rows from `raw.metrics` / `raw.events`
+in one transaction and logs an `empty_user_purge` `marts.dq_finding`. Scoped to the same
+**backfill window** (`ts` / `event_time` `< 2026-07-14`), so live NULL-email rows are left
+untouched. Run once against interim, locally, then refresh:
+
+```sh
+psql "$INTERIM_DATABASE_URL" -f scripts/backfill/sql/purge_empty_user.sql   # prints deleted counts
+psql "$INTERIM_DATABASE_URL" -c 'SELECT marts.refresh_all()'
+```
+
+Verify (backfill window only): both of
+`SELECT count(*) FROM raw.metrics WHERE user_email IS NULL AND ts < DATE '2026-07-14'`
+and the `raw.events` / `event_time` equivalent return 0, and the `empty_user_purge` DQ finding row
+is present.
+
 ## Verification gate (run after load + refresh_all)
 
 1. `raw.metrics` / `raw.events` grew by the printed filtered POC counts (expected vs actual).
