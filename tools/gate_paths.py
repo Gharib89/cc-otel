@@ -104,6 +104,11 @@ def triggered_workflows(changed_files: list[str], workflows_dir: Path) -> list[s
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Force LF line endings even on Windows: local-gate.sh (git-bash) does exact
+    # line matching (`grep -qxF`) against this output, which a platform-default
+    # CRLF translation would silently break.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(newline="\n")
     argv = sys.argv[1:] if argv is None else argv
     workflows_dir = Path(argv[0]) if argv else Path(".github/workflows")
     changed_files = [line.strip() for line in sys.stdin if line.strip()]
