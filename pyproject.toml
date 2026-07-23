@@ -17,6 +17,16 @@ members = ["sink"]
 cc-otel-sink = { workspace = true }
 
 [dependency-groups]
+# On-demand notebook lab over the blob reservoir (#87, #249). Not a workspace
+# member and not synced by a plain `uv sync` — `uv sync --group analysis`.
+# azure-identity/azure-storage-blob come transitively via cc-otel-sink; the
+# notebooks reuse tools._reservoir + cc_otel_sink.config, so they only add the
+# notebook runtime (marimo) and the query engines here.
+analysis = [
+    "marimo>=0.11",
+    "duckdb>=1.1",
+    "psycopg[binary]>=3.2",
+]
 dev = [
     "ruff>=0.15",
     "mypy>=1.14",
@@ -53,7 +63,7 @@ asyncio_mode = "auto"
 # Repo root on sys.path so tests import the uninstalled `tools` package (the sink is
 # found via its installed workspace member; `tools/` is source-only).
 pythonpath = ["."]
-testpaths = ["sink/tests", "tools/tests", "tests/integration"]
+testpaths = ["sink/tests", "tools/tests", "analysis/tests", "tests/integration"]
 markers = [
     "integration: end-to-end test requiring Docker (testcontainers Postgres or docker compose); run with `-m integration`",
 ]

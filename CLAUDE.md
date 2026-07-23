@@ -33,6 +33,7 @@ The main checkout is shared — Ahmed runs commands in it concurrently. Rules:
 
 ```sh
 uv sync                      # install workspace deps
+uv sync --group analysis     # + marimo/DuckDB notebook lab (analysis/); see analysis/README.md
 uv run pytest                # unit (sink/tests) + integration (tests/integration)
 uv run pytest -m "not integration"  # unit only — the `python` CI job
 uv run pytest -m integration # integration only (needs Docker) — the `integration` CI job
@@ -89,6 +90,7 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 | `bootstrap/` | env bring-up runbook + PowerShell scripts (operator-run) |
 | `powerbi/` | `.pbip` semantic model + report + branding |
 | `tools/` | Curation + ops tooling over the blob reservoir (sweep, data dictionary, replay, scrub) |
+| `analysis/` | marimo + DuckDB notebook lab over the blob reservoir (on-demand local EDA, `--group analysis`; #87) |
 | `tests/integration/` | end-to-end suite |
 | `scripts/` | skill-sync + cloud-ship bootstrap + dev-migrate + `ship/` (the ship skill's deterministic mechanics: preflight, isolate, claim, local-gate, ci-wait, merge) + `backfill/` (one-shot POC→interim backfill, ADR-0006) |
 | `.claude/skills/` | tracked agent skills (vendored + project-native) |
