@@ -34,6 +34,7 @@ def _skill(root: Path, name: str, *md: tuple[str, str]) -> Path:
 
 # --- find_refs: regex ref extraction ------------------------------------------
 
+
 def test_find_refs_backticked_slash_and_bare(tmp_path: Path):
     d = _skill(tmp_path, "a", ("SKILL.md", "composes `/tdd` and `code-review` here"))
     assert sync_skills.find_refs(d, {"tdd", "code-review"}) == {"tdd", "code-review"}
@@ -66,6 +67,7 @@ def test_find_refs_empty_when_no_matches(tmp_path: Path):
 
 
 # --- resolve_closure: transitive dependency pull ------------------------------
+
 
 def test_resolve_closure_transitive(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Names are >=2 chars: `_REF` requires `[a-z][a-z0-9-]+`, so single letters
@@ -116,11 +118,10 @@ def test_resolve_closure_missing_source_dir_is_skipped(
 
 # --- strip_model_invocation_flag: frontmatter strip + body hazard -------------
 
+
 def test_strip_removes_flag_from_frontmatter(tmp_path: Path):
     md = tmp_path / "SKILL.md"
-    md.write_text(
-        "---\nname: x\ndisable-model-invocation: true\n---\nbody\n", encoding="utf-8"
-    )
+    md.write_text("---\nname: x\ndisable-model-invocation: true\n---\nbody\n", encoding="utf-8")
     assert sync_skills.strip_model_invocation_flag(md) is True
     assert "disable-model-invocation" not in md.read_text(encoding="utf-8")
     assert "name: x" in md.read_text(encoding="utf-8")
