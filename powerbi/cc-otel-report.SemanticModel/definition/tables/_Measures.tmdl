@@ -166,7 +166,7 @@ table _Measures
 
 	/// Second freshness signal — catches pg_cron death independently of the pipeline-silence signal (#9).
 	measure 'Last Mart Refresh' = MAX(mart_refresh_log[finished])
-		formatString: General Date
+		formatString: "Mart " dd MMM HH:mm
 		displayFolder: Ingest Health
 		lineageTag: 833b49f9-2225-4543-aaa6-a8a2b971b811
 
@@ -208,12 +208,6 @@ table _Measures
 		formatString: #,##0.0
 		displayFolder: Trends
 		lineageTag: a1c00008-0000-4000-8000-000000000176
-
-	/// Mean active duration per active day (contract "Avg active time per day"), in minutes.
-	measure 'Avg Active Time per Day' = DIVIDE(SUM(fact_session_daily[active_time_total_s]), [Active Days]) / 60
-		formatString: #,##0.0 "min"
-		displayFolder: Adoption
-		lineageTag: a1c00004-0000-4000-8000-000000000028
 
 	/// Mean session length (contract "Avg session duration"), in minutes.
 	measure 'Avg Session Duration' = AVERAGE(fact_session[duration_s]) / 60
@@ -296,15 +290,6 @@ table _Measures
 		formatString: #,##0
 		displayFolder: Seat ROI
 		lineageTag: bd969746-a64b-4bec-a015-c34ffbc8417c
-
-	/// Row-level flag for roster tables: TRUE when this seat had no activity in the selected window.
-	measure 'Is Idle Seat' =
-			IF (
-			    NOT ISBLANK ( SELECTEDVALUE ( seat_roster[user_email] ) ),
-			    COALESCE ( [Active Roster Users], 0 ) = 0
-			)
-		displayFolder: Seat ROI
-		lineageTag: 2f215bf4-5930-4fc4-8ba5-8602e4c8a432
 
 	/// #173 (map #153, adopt-findings #158 Q1/Q2/Q15; ADR-0007). Flat per-seat plan list price,
 	/// USD/seat/month, confirmed by Ahmed at PR #201 review (issue #173).
@@ -563,12 +548,6 @@ table _Measures
 		displayFolder: Usage & Capacity
 		lineageTag: f8d88307-ec8d-404f-a322-2e30a4736193
 
-	/// Mix share for model/effort visuals: this slice's tokens over everything selected.
-	measure 'Token Share' = DIVIDE ( [Total Tokens], CALCULATE ( [Total Tokens], ALLSELECTED () ) )
-		formatString: 0.0%;-0.0%;0.0%
-		displayFolder: Usage & Capacity
-		lineageTag: 35a220a4-bc51-4995-a524-893794e3e0f5
-
 	/// Ecosystem pattern (#117), one pair per bridge: distinct bridge sessions / [Total Sessions],
 	/// and distinct users whose sessions used the capability.
 	measure 'Sessions Using Agents %' = DIVIDE ( DISTINCTCOUNT ( bridge_session_agent[session_id] ), [Total Sessions] )
@@ -581,7 +560,7 @@ table _Measures
 			    DISTINCTCOUNT ( fact_session[user_email] ),
 			    KEEPFILTERS ( TREATAS ( VALUES ( bridge_session_agent[session_id] ), fact_session[session_id] ) )
 			)
-		formatString: #,##0
+		formatString: #,##0 "users"
 		displayFolder: Ecosystem
 		lineageTag: 6655c7df-d933-4068-a2cd-417338416c76
 
@@ -595,7 +574,7 @@ table _Measures
 			    DISTINCTCOUNT ( fact_session[user_email] ),
 			    KEEPFILTERS ( TREATAS ( VALUES ( bridge_session_skill[session_id] ), fact_session[session_id] ) )
 			)
-		formatString: #,##0
+		formatString: #,##0 "users"
 		displayFolder: Ecosystem
 		lineageTag: 52c5fda2-8fe1-48d0-9346-66d442c3b9fa
 
@@ -609,7 +588,7 @@ table _Measures
 			    DISTINCTCOUNT ( fact_session[user_email] ),
 			    KEEPFILTERS ( TREATAS ( VALUES ( bridge_session_mcp[session_id] ), fact_session[session_id] ) )
 			)
-		formatString: #,##0
+		formatString: #,##0 "users"
 		displayFolder: Ecosystem
 		lineageTag: 6b545f99-6015-4de5-a187-0d2dac007698
 
@@ -623,7 +602,7 @@ table _Measures
 			    DISTINCTCOUNT ( fact_session[user_email] ),
 			    KEEPFILTERS ( TREATAS ( VALUES ( bridge_session_hook[session_id] ), fact_session[session_id] ) )
 			)
-		formatString: #,##0
+		formatString: #,##0 "users"
 		displayFolder: Ecosystem
 		lineageTag: 00255e33-7c8c-43ed-85bc-04bbb13e9835
 
@@ -637,7 +616,7 @@ table _Measures
 			    DISTINCTCOUNT ( fact_session[user_email] ),
 			    KEEPFILTERS ( TREATAS ( VALUES ( bridge_session_plugin[session_id] ), fact_session[session_id] ) )
 			)
-		formatString: #,##0
+		formatString: #,##0 "users"
 		displayFolder: Ecosystem
 		lineageTag: a2a7369f-0c07-4f9e-8dc0-b716f8e8484e
 

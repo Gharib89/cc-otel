@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "crd_skills",
   "position": {
-    "x": 272,
-    "y": 182,
+    "x": 28,
+    "y": 180,
     "z": 303,
-    "height": 48,
+    "height": 40,
     "width": 232,
-    "tabOrder": 303
+    "tabOrder": 301
   },
   "visual": {
     "visualType": "card",
@@ -40,7 +40,7 @@
             "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "28D"
+                  "Value": "24D"
                 }
               }
             },

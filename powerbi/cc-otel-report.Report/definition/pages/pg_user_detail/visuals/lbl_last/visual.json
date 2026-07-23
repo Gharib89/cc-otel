@@ -1,12 +1,12 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "lbl_plugins",
+  "name": "lbl_last",
   "position": {
-    "x": 1004,
+    "x": 394,
     "y": 148,
-    "z": 308,
+    "z": 302,
     "height": 34,
-    "width": 232,
+    "width": 114,
     "tabOrder": -1
   },
   "visual": {
@@ -19,7 +19,7 @@
               {
                 "textRuns": [
                   {
-                    "value": "PLUGINS",
+                    "value": "LAST SEEN",
                     "textStyle": {
                       "fontWeight": "bold",
                       "fontSize": "8pt",
