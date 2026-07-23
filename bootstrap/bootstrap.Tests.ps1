@@ -163,3 +163,61 @@ Describe 'Get-SeedImagesDecision' {
         $d.Message | Should -Match 'sink'
     }
 }
+
+Describe 'Invoke-NativeStep' {
+    It 'returns the native command exit code' {
+        Invoke-NativeStep -Command { cmd /c exit 4 } | Should -Be 4
+    }
+    It 'returns a scalar int even when the command emits stdout (the #143 leak shape)' {
+        # The whole point of the shim: stdout goes to the host, never the pipeline,
+        # so the return is a lone int - not @(<text>, 0) that a caller's `-ne 0`
+        # would read as a truthy array and false-halt on.
+        $rc = Invoke-NativeStep -Command { cmd /c "echo noise & exit 0" }
+        $rc | Should -Be 0
+        $rc | Should -BeOfType [int]
+    }
+}
+
+Describe 'Invoke-Bootstrap (orchestration)' {
+    # Mock the per-step dispatcher so the loop is exercised through the real
+    # Invoke-Bootstrap interface without any az / psql / gh / .env dependency -
+    # the same shim-mocking pattern install.Tests.ps1 uses for Invoke-Install.
+    BeforeEach {
+        $script:called = [System.Collections.Generic.List[string]]::new()
+    }
+
+    It 'runs the full default spine in order and returns 0' {
+        Mock Invoke-BootstrapStep { $script:called.Add($Slug); 0 }
+        Invoke-Bootstrap -Environment 'interim' | Should -Be 0
+        $expected = (Get-BootstrapStepList | Where-Object InDefaultRun).Slug
+        $script:called.ToArray() | Should -Be $expected
+    }
+
+    It 'halts at the first non-zero step, propagates its rc, and skips the rest' {
+        Mock Invoke-BootstrapStep { $script:called.Add($Slug); if ($Slug -eq 'deploy') { 2 } else { 0 } }
+        Invoke-Bootstrap -Environment 'interim' | Should -Be 2
+        $script:called | Should -Contain 'deploy'
+        $script:called | Should -Not -Contain 'open-ip'   # the step right after deploy
+    }
+
+    It 'converts a step throw into a clean rc 1 halt' {
+        Mock Invoke-BootstrapStep { if ($Slug -eq 'precheck') { throw 'boom' } 0 }
+        Invoke-Bootstrap -Environment 'interim' | Should -Be 1
+    }
+
+    It 'halts on the #143 leak shape (a step returning @(text, 0)) rather than passing it as success' {
+        Mock Invoke-BootstrapStep { $script:called.Add($Slug); if ($Slug -eq 'precheck') { @('Applying: ...', 0) } else { 0 } }
+        Invoke-Bootstrap -Environment 'interim' | Should -Not -Be 0
+        $script:called | Should -Not -Contain 'federated-cred'   # halted at precheck
+    }
+
+    It 'runs exactly one step under -Step' {
+        Mock Invoke-BootstrapStep { $script:called.Add($Slug); 0 }
+        Invoke-Bootstrap -Environment 'interim' -Step 'migrate' | Should -Be 0
+        $script:called.ToArray() | Should -Be @('migrate')
+    }
+
+    It 'throws on an unknown -Step slug' {
+        { Invoke-Bootstrap -Environment 'interim' -Step 'nope' } | Should -Throw -ExpectedMessage '*nope*'
+    }
+}
