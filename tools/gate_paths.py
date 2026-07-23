@@ -89,7 +89,7 @@ def triggered_workflows(changed_files: list[str], workflows_dir: Path) -> list[s
     names: set[str] = set()
     for workflow_path in sorted(workflows_dir.glob("*.yml")):
         try:
-            data = yaml.safe_load(workflow_path.read_text())
+            data = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
         except yaml.YAMLError as err:
             raise UnsupportedFilterError(f"{workflow_path}: failed to parse YAML: {err}") from err
         if not isinstance(data, dict):
