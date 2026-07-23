@@ -13,6 +13,13 @@ to inspect.
 3. `screenshot-all` the affected pages at scale 2; attach the PNGs in chat.
 4. Post the summary below. **Wait.** No auto-merge.
 
+**Metadata-only class:** skip steps 1–3 — pages are pixel-identical to `main`,
+so a screenshot carries no review signal. In the summary, replace "Pages
+verified" with the structural evidence: the coverage assertions, and the
+`validate.ps1` verdict vs `main`'s baseline. Offer an optional Desktop render
+sanity-check (confirm no visual errored from the edit) — don't block on it.
+The hard stop stands.
+
 ## Post this summary, then stop
 
 ```

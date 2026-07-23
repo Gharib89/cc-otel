@@ -17,6 +17,7 @@ Pipeline: Claude Code OTel exporter → OTel Collector (bearer auth) → FastAPI
 - **Search before creating.** Before `gh issue create`, search open AND closed issues for the concern (`gh issue list --search "<keyword>" --state all`). Deferred tickets often carry an explicit "unblock when X" — wire/unblock (`--parent`, `--add-blocked-by`) instead of cutting a dup.
 - **One issue → one branch → one PR.** Squash-merge, conventional commit title, `Closes #n` in the body.
 - **HITL**: `ready-for-human` issues and anything touching schema, scope, or architecture resolve only through live exchange with Ahmed — never self-answered.
+- **Deferrals get tickets.** A "defer / revisit later" decision cuts a tracking issue carrying its re-entry condition, wired to its blocker (`--add-blocked-by`) — never a prose-only note. Decision-shaped deferrals get `ready-for-human`.
 - **Ad-hoc exemption**: small fixes spotted along the way (typos, one-liners, doc nits) ride along in the current PR or get a plain commit — no issue ceremony.
 
 ## Branch & worktree discipline
