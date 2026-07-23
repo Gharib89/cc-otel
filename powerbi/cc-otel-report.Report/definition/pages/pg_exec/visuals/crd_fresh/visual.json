@@ -84,7 +84,7 @@
             "altText": {
               "expr": {
                 "Literal": {
-                  "Value": "'Data freshness: date and time of the most recent successful data refresh.'"
+                  "Value": "'Data freshness: how recent the imported data is, and how many days the calendar snapshot trails the current date when it lags by 2 or more days.'"
                 }
               }
             }

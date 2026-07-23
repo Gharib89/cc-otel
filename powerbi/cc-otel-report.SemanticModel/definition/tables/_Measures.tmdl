@@ -170,6 +170,16 @@ table _Measures
 		displayFolder: Ingest Health
 		lineageTag: 833b49f9-2225-4543-aaa6-a8a2b971b811
 
+	/// #197 snapshot-calendar lag: calendar days the imported dim_date snapshot trails the viewer clock.
+	/// Import-mode datasets snapshot dim_date (dense to CURRENT_DATE) at refresh; a weekend/holiday refresh
+	/// gap leaves MAX(dim_date) behind TODAY(), shrinking the Now()-anchored relative-date slicer window
+	/// (#165). Isolates snapshot lag from telemetry quiet, which [Hours Since Last Signal] conflates; 0 on a
+	/// healthy same-day refresh. Consumed by [Data Freshness Badge] to surface the >= 2-day case.
+	measure 'Snapshot Calendar Lag' = INT ( TODAY () - MAX ( dim_date[date_day] ) )
+		formatString: #,##0
+		displayFolder: Ingest Health
+		lineageTag: a1970001-0000-4000-8000-000000000197
+
 	/// Report-data-contract user-page fields (#28). commits/prs are doubles in the daily mart.
 	measure 'Total Commits' = SUM(fact_session_daily[commits])
 		formatString: #,##0
@@ -648,9 +658,14 @@ table _Measures
 
 	/// Report-display helper: header data-freshness badge text.
 	/// Self-explanatory display label (Fresh/Delayed/Stale) — the internal status keys (Fresh/Amber/Red)
-	/// stay untouched so [Freshness Color] keeps mapping the pill colour.
+	/// stay untouched so [Freshness Color] keeps mapping the pill colour. #197: when the imported dim_date
+	/// snapshot trails the viewer clock by >= 2 days, the detail swaps "Xh ago" for "Nd behind" (calendar
+	/// lag, isolated from telemetry quiet via [Snapshot Calendar Lag]) so the reader sees why the
+	/// relative-date slicer window is short — a swap, not an append, because the header pill has no room
+	/// for both (append truncates; #197 width verification).
 	measure 'Data Freshness Badge' =
 			VAR H = [Hours Since Last Signal]
+			VAR SnapLag = [Snapshot Calendar Lag]
 			VAR Label =
 			    SWITCH (
 			        [Data Freshness Status],
@@ -659,8 +674,9 @@ table _Measures
 			        "Red", "Stale",
 			        [Data Freshness Status]
 			    )
+			VAR Detail = IF ( SnapLag >= 2, SnapLag & "d behind", FORMAT ( H, "#,##0" ) & "h ago" )
 			RETURN
-			    IF ( ISBLANK ( H ), "No data", Label & " · " & FORMAT ( H, "#,##0" ) & "h ago" )
+			    IF ( ISBLANK ( H ), "No data", Label & " · " & Detail )
 		displayFolder: Ingest Health
 		lineageTag: 5fee9ee6-e3d6-4277-8492-0091cbbbd88a
 
