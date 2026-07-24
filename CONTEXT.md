@@ -54,6 +54,10 @@ _Avoid_: aggregate table, summary view
 An Azure Blob Storage container (`raw`) holding the **redacted-raw** OTLP payloads — the full body with only secret-bearing fields stripped (`full_command`, `bash_command`, `file_path`, `error`), everything else kept verbatim. Purpose: keep Postgres lean while preserving raw for **drift** discovery and future-parser replay. Not the source of truth (the report reads Postgres marts); queried ad-hoc with DuckDB. See ADR-0005.
 _Avoid_: raw dump, blob backup
 
+**Blob backend**:
+`cc_otel_sink/blob_backend.py` — maps `Settings` to authenticated **Raw reservoir** container access, and holds the one copy of the auth-precedence rule (connection string wins, else account URL + managed identity, else none). Both the sink (`BlobReservoir`) and the curation tools (`CurationReservoir`, `configure_duckdb`) build their clients through it; the `None` case is each caller's own policy.
+_Avoid_: blob config, storage adapter
+
 **Column spec**:
 `cc_otel_sink/column_spec.py` — the authoritative machine-readable attr-to-column-to-status catalogue. The parser maps, store column tuples, and redaction denylist derive from it at import; `meta.column_registry` is its deployed projection. `tools.spec_sync` proves the two converge.
 _Avoid_: attr map, column table

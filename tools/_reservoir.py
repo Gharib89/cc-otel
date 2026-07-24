@@ -14,6 +14,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
+from cc_otel_sink.blob_backend import (
+    ConnectionStringBackend,
+    ManagedIdentityBackend,
+    build_container_client,
+    select_backend,
+)
 from cc_otel_sink.config import Settings
 
 if TYPE_CHECKING:
@@ -42,25 +48,11 @@ class CurationReservoir:
 
     @classmethod
     def from_settings(cls, settings: Settings) -> CurationReservoir:
-        from azure.storage.blob import ContainerClient
-
-        if settings.blob_connection_string:
-            return cls(
-                ContainerClient.from_connection_string(
-                    settings.blob_connection_string, settings.blob_container
-                )
-            )
-        if settings.blob_account_url:
-            from azure.identity import DefaultAzureCredential
-
-            credential = DefaultAzureCredential()
-            return cls(
-                ContainerClient(
-                    settings.blob_account_url, settings.blob_container, credential=credential
-                ),
-                credential,
-            )
-        raise ReservoirUnconfigured
+        built = build_container_client(settings)
+        if built is None:
+            raise ReservoirUnconfigured
+        client, credential = built
+        return cls(client, credential)
 
     def list_names(self, prefix: str) -> list[str]:
         return [b.name for b in self._container.list_blobs(name_starts_with=prefix)]
@@ -80,25 +72,28 @@ class CurationReservoir:
 def configure_duckdb(con: duckdb.DuckDBPyConnection, settings: Settings) -> None:
     """Install the Azure extension and register a secret from ``settings``."""
     con.execute("INSTALL azure; LOAD azure;")
-    if settings.blob_connection_string:
-        conn_str = settings.blob_connection_string.replace("'", "''")
-        con.execute(f"CREATE OR REPLACE SECRET blob (TYPE azure, CONNECTION_STRING '{conn_str}')")
-    elif settings.blob_account_url:
-        from azure.identity import DefaultAzureCredential
+    match select_backend(settings):
+        case ConnectionStringBackend(connection_string=connection_string):
+            conn_str = connection_string.replace("'", "''")
+            con.execute(
+                f"CREATE OR REPLACE SECRET blob (TYPE azure, CONNECTION_STRING '{conn_str}')"
+            )
+        case ManagedIdentityBackend(account_url=account_url):
+            from azure.identity import DefaultAzureCredential
 
-        account = _account_name(settings.blob_account_url)
-        # Fetch one OAuth token up front rather than PROVIDER credential_chain: DuckDB's chain
-        # re-acquires a token on blob opens and throttles/expires mid-read on large partitions
-        # (#99). One prefetched token (valid ~1h — ample for a sweep) is registered statically.
-        credential = DefaultAzureCredential()
-        try:
-            token = credential.get_token("https://storage.azure.com/.default").token
-        finally:
-            credential.close()
-        token = token.replace("'", "''")
-        con.execute(
-            "CREATE OR REPLACE SECRET blob "
-            f"(TYPE azure, PROVIDER access_token, ACCESS_TOKEN '{token}', ACCOUNT_NAME '{account}')"
-        )
-    else:
-        raise ReservoirUnconfigured
+            account = _account_name(account_url)
+            # Fetch one OAuth token up front rather than PROVIDER credential_chain: DuckDB's chain
+            # re-acquires a token on blob opens and throttles/expires mid-read on large partitions
+            # (#99). One prefetched token (valid ~1h — ample for a sweep) is registered statically.
+            credential = DefaultAzureCredential()
+            try:
+                token = credential.get_token("https://storage.azure.com/.default").token
+            finally:
+                credential.close()
+            token = token.replace("'", "''")
+            con.execute(
+                "CREATE OR REPLACE SECRET blob (TYPE azure, PROVIDER access_token, "
+                f"ACCESS_TOKEN '{token}', ACCOUNT_NAME '{account}')"
+            )
+        case None:
+            raise ReservoirUnconfigured
