@@ -88,7 +88,7 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 | `iac/` | Bicep only |
 | `sink/` | FastAPI OTLP sink (uv workspace member) |
 | `collector/` | OTel Collector config |
-| `db/` | dbmate migrations + `schema.sql` |
+| `db/` | dbmate migrations + `schema.sql` + `views/marts/` canonical mart definitions |
 | `installer/` | `install.ps1` fleet setup |
 | `bootstrap/` | env bring-up runbook + PowerShell scripts (operator-run) |
 | `powerbi/` | `.pbip` semantic model + report + branding |
