@@ -19,7 +19,10 @@ copies). Decisions locked in #254.
         — ``migrate:up`` is DROP + CREATE + index + GRANT from the current file;
         ``migrate:down`` embeds the *previous* body verbatim from git HEAD (dbmate
         migrations are self-contained — they cannot read sibling files at apply
-        time). Applies it, regenerates schema.sql, and verifies convergence.
+        time). Applies it on a throwaway DB, normalizes the file to the deparser
+        form, and verifies convergence. Regenerating schema.sql is left to its
+        owner, ``scripts/dev-migrate.sh`` (unlike ``spec_sync``, which shells out
+        to it — matview_sync stays shell-free so it runs on Windows and CI alike).
 
     uv run python -m tools.matview_sync --bootstrap [--database-url URL]
         One-time: extract every live mart body to its canonical file. Idempotent.

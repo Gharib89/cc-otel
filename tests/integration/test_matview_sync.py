@@ -9,8 +9,12 @@ Two guarantees the pure unit layer can't give:
 
 from __future__ import annotations
 
-import psycopg
+import shutil
 
+import psycopg
+import pytest
+
+from tools import matview_sync as ms
 from tools.matview_sync import (
     Mart,
     divergence,
@@ -70,3 +74,40 @@ def test_up_down_up_roundtrip_reverses_and_reconverges(conn: psycopg.Connection)
         assert down1 != up1  # down actually reverted to the previous body
     finally:
         conn.execute("DROP MATERIALIZED VIEW IF EXISTS marts._rt_probe")
+
+
+def test_author_new_mart_writes_migration_normalizes_and_converges(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Exercise the full --name glue (file write, git-HEAD lookup, normalization
+    # rewrite, convergence) against throwaway dirs, so the repo tree is untouched.
+    migrations = tmp_path / "db" / "migrations"
+    shutil.copytree(ms._MIGRATIONS_DIR, migrations)  # real migrations => schema + roles
+    # Real canonical files too: the final convergence check is global, so the 16
+    # existing marts must keep their files while we add a 17th.
+    views = tmp_path / "db" / "views" / "marts"
+    shutil.copytree(ms._VIEWS_DIR, views)
+    # A self-consistent fake repo root: dirs live under it (so display paths
+    # resolve) and it is not a git repo (so _git_head_file -> None: new-mart path).
+    monkeypatch.setattr(ms, "_REPO_ROOT", tmp_path)
+    monkeypatch.setattr(ms, "_MIGRATIONS_DIR", migrations)
+    monkeypatch.setattr(ms, "_VIEWS_DIR", views)
+
+    src = views / "_rt_author.sql"
+    src.write_text(
+        render_canonical(
+            Mart(
+                name="_rt_author",
+                definition=" SELECT 1 as k,2 as v;",  # hand-written, non-deparsed style
+                index_def="CREATE UNIQUE INDEX _rt_author_pk ON marts._rt_author USING btree (k)",
+            )
+        ),
+        encoding="utf-8",
+    )
+    before = src.read_text(encoding="utf-8")
+
+    assert ms._run_author("_rt_author") == 0  # returns 0 only when it converges
+    after = src.read_text(encoding="utf-8")
+    assert after != before  # file normalized to the deparser's own form
+    assert "CREATE MATERIALIZED VIEW marts._rt_author AS" in after
+    assert list(migrations.glob("*_rt_author.sql"))  # a migration was authored
