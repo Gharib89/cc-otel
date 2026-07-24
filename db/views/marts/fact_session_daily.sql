@@ -26,12 +26,7 @@ CREATE MATERIALIZED VIEW marts.fact_session_daily AS
           GROUP BY events.session_id, ((events.event_time)::date)
         )
  SELECT COALESCE(m.session_id, p.session_id) AS session_id,
-    COALESCE(
-        CASE
-            WHEN (m.user_email ~~ '%@itworx.com'::text) THEN m.user_email
-            WHEN (p.user_email ~~ '%@itworx.com'::text) THEN p.user_email
-            ELSE COALESCE(m.user_email, p.user_email)
-        END, '(unknown)'::text) AS user_email,
+    marts.email_bucket(marts.prefer_itworx(m.user_email, p.user_email)) AS user_email,
     COALESCE(m.activity_date, p.activity_date) AS activity_date,
     COALESCE(p.prompts, (0)::bigint) AS prompts,
     COALESCE(m.commits, (0)::double precision) AS commits,

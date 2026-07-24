@@ -3,7 +3,7 @@
 --   uv run python -m tools.matview_sync --name fact_utilization_hourly
 -- Verified against pg_matviews.definition by --check (CI + local gate).
 CREATE MATERIALIZED VIEW marts.fact_utilization_hourly AS
- SELECT COALESCE(user_email, '(unknown)'::text) AS user_email,
+ SELECT marts.email_bucket(user_email) AS user_email,
     window_type,
     date_trunc('hour'::text, ts) AS hour,
     avg(util_pct) AS avg_pct,

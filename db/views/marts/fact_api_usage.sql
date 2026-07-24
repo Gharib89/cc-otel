@@ -8,7 +8,7 @@ CREATE MATERIALIZED VIEW marts.fact_api_usage AS
     model,
     effort,
     query_source,
-    COALESCE((array_agg(user_email) FILTER (WHERE (user_email IS NOT NULL)))[1], '(unknown)'::text) AS user_email,
+    marts.email_bucket((array_agg(user_email) FILTER (WHERE (user_email IS NOT NULL)))[1]) AS user_email,
     sum(input_tokens) AS input_tokens,
     sum(output_tokens) AS output_tokens,
     sum(cache_creation_tokens) AS cache_creation_tokens,

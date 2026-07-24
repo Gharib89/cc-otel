@@ -44,6 +44,33 @@ CREATE SCHEMA staging;
 
 
 --
+-- Name: email_bucket(text); Type: FUNCTION; Schema: marts; Owner: -
+--
+
+CREATE FUNCTION marts.email_bucket(email text) RETURNS text
+    LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    BEGIN ATOMIC
+ SELECT COALESCE(email, '(unknown)'::text) AS "coalesce";
+END;
+
+
+--
+-- Name: prefer_itworx(text, text); Type: FUNCTION; Schema: marts; Owner: -
+--
+
+CREATE FUNCTION marts.prefer_itworx(a text, b text) RETURNS text
+    LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    BEGIN ATOMIC
+ SELECT
+         CASE
+             WHEN (a ~~ '%@itworx.com'::text) THEN a
+             WHEN (b ~~ '%@itworx.com'::text) THEN b
+             ELSE COALESCE(a, b)
+         END AS "coalesce";
+END;
+
+
+--
 -- Name: refresh_all(); Type: FUNCTION; Schema: marts; Owner: -
 --
 
@@ -416,7 +443,7 @@ CREATE MATERIALIZED VIEW marts.dim_user AS
             events.event_time
            FROM raw.events
         )
- SELECT COALESCE(user_email, '(unknown)'::text) AS user_email,
+ SELECT marts.email_bucket(user_email) AS user_email,
     (user_email IS NULL) AS is_unknown,
     min(seen_at) AS first_seen,
     max(seen_at) AS last_seen,
@@ -424,7 +451,7 @@ CREATE MATERIALIZED VIEW marts.dim_user AS
     (array_agg(organization_id) FILTER (WHERE (organization_id IS NOT NULL)))[1] AS organization_id,
     (array_agg(cc_version ORDER BY seen_at DESC) FILTER (WHERE (cc_version IS NOT NULL)))[1] AS last_cc_version
    FROM seen
-  GROUP BY COALESCE(user_email, '(unknown)'::text), (user_email IS NULL)
+  GROUP BY (marts.email_bucket(user_email)), (user_email IS NULL)
   WITH NO DATA;
 
 
@@ -506,7 +533,7 @@ CREATE MATERIALIZED VIEW marts.fact_api_usage AS
     model,
     effort,
     query_source,
-    COALESCE((array_agg(user_email) FILTER (WHERE (user_email IS NOT NULL)))[1], '(unknown)'::text) AS user_email,
+    marts.email_bucket((array_agg(user_email) FILTER (WHERE (user_email IS NOT NULL)))[1]) AS user_email,
     sum(input_tokens) AS input_tokens,
     sum(output_tokens) AS output_tokens,
     sum(cache_creation_tokens) AS cache_creation_tokens,
@@ -559,7 +586,7 @@ CREATE MATERIALIZED VIEW marts.fact_edit_decision AS
     language,
     decision,
     source,
-    COALESCE((array_agg(user_email) FILTER (WHERE (user_email IS NOT NULL)))[1], '(unknown)'::text) AS user_email,
+    marts.email_bucket((array_agg(user_email) FILTER (WHERE (user_email IS NOT NULL)))[1]) AS user_email,
     sum(value) AS decision_count
    FROM staging.stg_counter_delta
   WHERE ((metric_name = 'claude_code.code_edit_tool.decision'::text) AND (session_id IS NOT NULL))
@@ -595,7 +622,7 @@ CREATE MATERIALIZED VIEW marts.fact_session AS
         )
  SELECT sig.session_id,
     st.start_type,
-    COALESCE((array_agg(sig.user_email ORDER BY sig.t) FILTER (WHERE (sig.user_email IS NOT NULL)))[1], '(unknown)'::text) AS user_email,
+    marts.email_bucket((array_agg(sig.user_email ORDER BY sig.t) FILTER (WHERE (sig.user_email IS NOT NULL)))[1]) AS user_email,
     min(sig.t) AS started_at,
     (array_agg(sig.cc_version ORDER BY sig.t DESC) FILTER (WHERE (sig.cc_version IS NOT NULL)))[1] AS cc_version,
     (EXTRACT(epoch FROM (max(sig.t) - min(sig.t))))::bigint AS duration_s
@@ -633,12 +660,7 @@ CREATE MATERIALIZED VIEW marts.fact_session_daily AS
           GROUP BY events.session_id, ((events.event_time)::date)
         )
  SELECT COALESCE(m.session_id, p.session_id) AS session_id,
-    COALESCE(
-        CASE
-            WHEN (m.user_email ~~ '%@itworx.com'::text) THEN m.user_email
-            WHEN (p.user_email ~~ '%@itworx.com'::text) THEN p.user_email
-            ELSE COALESCE(m.user_email, p.user_email)
-        END, '(unknown)'::text) AS user_email,
+    marts.email_bucket(marts.prefer_itworx(m.user_email, p.user_email)) AS user_email,
     COALESCE(m.activity_date, p.activity_date) AS activity_date,
     COALESCE(p.prompts, (0)::bigint) AS prompts,
     COALESCE(m.commits, (0)::double precision) AS commits,
@@ -727,7 +749,7 @@ CREATE MATERIALIZED VIEW marts.fact_usage_window AS
            FROM staging.stg_utilization_segments
           GROUP BY stg_utilization_segments.user_email, stg_utilization_segments.window_type, stg_utilization_segments.window_end, stg_utilization_segments.segment_no
         )
- SELECT COALESCE(user_email, '(unknown)'::text) AS user_email,
+ SELECT marts.email_bucket(user_email) AS user_email,
     window_type,
     window_end,
     segment_no,
@@ -754,7 +776,7 @@ CREATE MATERIALIZED VIEW marts.fact_usage_window AS
 --
 
 CREATE MATERIALIZED VIEW marts.fact_utilization_hourly AS
- SELECT COALESCE(user_email, '(unknown)'::text) AS user_email,
+ SELECT marts.email_bucket(user_email) AS user_email,
     window_type,
     date_trunc('hour'::text, ts) AS hour,
     avg(util_pct) AS avg_pct,
@@ -1071,4 +1093,12 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260722140000'),
     ('20260723070059'),
     ('20260723074556'),
-    ('20260724071943');
+    ('20260724071943'),
+    ('20260724090737'),
+    ('20260724090951'),
+    ('20260724091019'),
+    ('20260724091026'),
+    ('20260724091032'),
+    ('20260724091038'),
+    ('20260724091043'),
+    ('20260724091053');
