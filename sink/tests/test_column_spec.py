@@ -7,7 +7,12 @@ consumers derive from the spec.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
+import pytest
 from cc_otel_sink import column_spec as cs
+from cc_otel_sink import parser
+from cc_otel_sink.column_spec import COLUMN_SPEC, ColumnSpec
 from cc_otel_sink.parser import EVENT_ATTR_COLUMNS, METRIC_ATTR_COLUMNS, parse_events, parse_metrics
 from cc_otel_sink.store import EVENT_COLUMNS, METRIC_COLUMNS
 
@@ -77,6 +82,19 @@ def test_attr_columns_match_the_flat_maps() -> None:
     assert cs.attr_columns("events") == _EXPECTED_EVENT_ATTR
 
 
+def test_derived_coalesce_orders_own_signal_then_resource() -> None:
+    # Own-signal derived rows in file order, then resource-signal derived rows in
+    # file order — reproducing the parser's attr-shadows-resource coalesce.
+    assert cs.derived_coalesce("metrics") == {
+        "user_account_id": ["user.account_uuid", "user.account_id"],
+        "cc_version": ["app.version", "service.version"],
+    }
+    assert cs.derived_coalesce("events") == {
+        "user_account_id": ["user.account_uuid", "user.account_id"],
+        "cc_version": ["app.version", "service.version"],
+    }
+
+
 def test_table_columns_cover_the_raw_ddl_column_sets() -> None:
     # Sets, not ordinals: the insert names its columns (store._insert_sql), so the
     # spec order is free (gate compares sets + types, per the design).
@@ -107,6 +125,40 @@ def test_redaction_sets_match() -> None:
     assert cs.denylist() == frozenset({"full_command", "bash_command", "file_path", "error"})
     assert cs.tool_param_keys() == frozenset({"full_command", "bash_command", "file_path"})
     assert cs.defense_in_depth() == frozenset({"prompt", "response", "body", "body_ref"})
+
+
+def test_duplicate_attr_key_to_different_columns_rejected() -> None:
+    # Same (signal, attr_path) mapping to two columns is silent last-write-wins in
+    # the flat attr map — reject it at import. Distinct signal_name keeps grain
+    # uniqueness (invariant 1) from firing first.
+    bad = COLUMN_SPEC + (
+        ColumnSpec("metrics", "claude_code.token.usage", "session.id", "promoted", "other", "TEXT"),
+    )
+    with pytest.raises(ValueError, match="multiple columns"):
+        cs._check_invariants(bad)
+
+
+def test_malformed_tool_param_sweep_path_rejected() -> None:
+    # A tool_param_sweep path must be tool_parameters.<leaf>; a bare key would
+    # IndexError in tool_param_keys() at import — turn it into a clear failure.
+    bad = COLUMN_SPEC + (
+        ColumnSpec("events", "tool_result", "full_command", "denied", deny_mode="tool_param_sweep"),
+    )
+    with pytest.raises(ValueError, match="tool_parameters"):
+        cs._check_invariants(bad)
+
+
+def test_wellformed_tool_param_sweep_path_accepted() -> None:
+    ok = COLUMN_SPEC + (
+        ColumnSpec(
+            "events",
+            "tool_result",
+            "tool_parameters.some_leaf",
+            "denied",
+            deny_mode="tool_param_sweep",
+        ),
+    )
+    cs._check_invariants(ok)  # no raise
 
 
 def _attr_list(pairs: dict[str, str]) -> list[dict[str, object]]:
@@ -174,6 +226,84 @@ def test_every_promoted_metric_column_is_populated_by_the_parser() -> None:
     for row in parse_metrics(payload):
         keys |= row.keys()
     assert set(cs.table_columns("metrics")) <= keys
+
+
+def test_new_derived_row_populates_through_parser_with_no_parser_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Adding derived spec rows flows to the parser purely through derived_coalesce
+    # — no _apply_promoted edit. Prove it: extend the spec, re-derive the coalesce
+    # map, feed it to the parser, and the new column populates (fallback source).
+    synthetic = COLUMN_SPEC + (
+        ColumnSpec("metrics", "*", "x.primary", "promoted", "x_col", "TEXT", "derived"),
+        ColumnSpec("metrics", "*", "x.fallback", "promoted", "x_col", "TEXT", "derived"),
+    )
+    coalesce = cs.derived_coalesce("metrics", synthetic)
+    assert coalesce["x_col"] == ["x.primary", "x.fallback"]
+    monkeypatch.setattr(parser, "METRIC_COALESCE", coalesce)
+    payload = {
+        "resourceMetrics": [
+            {
+                "resource": {"attributes": []},
+                "scopeMetrics": [
+                    {
+                        "scope": {"name": "cc", "version": "1"},
+                        "metrics": [
+                            {
+                                "name": "claude_code.session.count",
+                                "gauge": {
+                                    "dataPoints": [
+                                        {
+                                            "timeUnixNano": "1",
+                                            "asDouble": 1.0,
+                                            "attributes": _attr_list({"x.fallback": "fb"}),
+                                        }
+                                    ]
+                                },
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+    (row,) = parse_metrics(payload)
+    assert row["x_col"] == "fb"
+
+
+def test_structural_rename_breaks_the_population_guard() -> None:
+    # The population guard is `table_columns(signal) <= parser keys`. Renaming a
+    # structural column in the spec makes table_columns emit a literal the parser's
+    # hardcoded structural extraction never produces — so the guard would fail.
+    renamed = tuple(
+        replace(r, column_name="ts_renamed")
+        if (r.signal == "metrics" and r.column_name == "ts")
+        else r
+        for r in COLUMN_SPEC
+    )
+    payload = {
+        "resourceMetrics": [
+            {
+                "resource": {"attributes": []},
+                "scopeMetrics": [
+                    {
+                        "scope": {"name": "cc", "version": "1"},
+                        "metrics": [
+                            {
+                                "name": "claude_code.session.count",
+                                "gauge": {"dataPoints": [{"timeUnixNano": "1", "asDouble": 1.0}]},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+    keys: set[str] = set()
+    for row in parse_metrics(payload):
+        keys |= row.keys()
+    assert "ts_renamed" in cs.table_columns("metrics", renamed)
+    assert not set(cs.table_columns("metrics", renamed)) <= keys
 
 
 def test_every_promoted_event_column_is_populated_by_the_parser() -> None:
