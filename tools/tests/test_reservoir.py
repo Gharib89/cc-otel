@@ -1,7 +1,7 @@
 import pytest
 from cc_otel_sink.config import Settings
 
-from tools._reservoir import ReservoirUnconfigured, configure_duckdb
+from tools._reservoir import CurationReservoir, ReservoirUnconfigured, configure_duckdb
 
 
 def _settings(*, account_url=None, connection_string=None) -> Settings:
@@ -85,3 +85,9 @@ def test_connection_string_path_is_unchanged(fake_credential):
 def test_unconfigured_raises():
     with pytest.raises(ReservoirUnconfigured):
         configure_duckdb(_Con(), _settings())
+
+
+def test_curation_reservoir_unconfigured_raises():
+    # Policy stays with the caller: unconfigured -> raise (unlike the sink's NullReservoir).
+    with pytest.raises(ReservoirUnconfigured):
+        CurationReservoir.from_settings(_settings())
