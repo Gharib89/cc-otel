@@ -707,6 +707,25 @@ def test_refresh_writes_a_log_row_per_matview(conn):
     assert marts == 16 and complete == 16
 
 
+def test_refresh_all_picks_up_new_matview_from_catalog(conn):
+    """#262: refresh_all() derives its list from pg_matviews — a matview created
+    after the function was defined refreshes with no function edit."""
+    try:
+        conn.execute("CREATE MATERIALIZED VIEW marts.zz_throwaway AS SELECT 1 AS id WITH DATA")
+        # CONCURRENTLY requires a unique index.
+        conn.execute("CREATE UNIQUE INDEX ON marts.zz_throwaway (id)")
+        refresh(conn)
+        assert one(
+            conn,
+            "SELECT finished IS NOT NULL, row_count FROM marts.mart_refresh_log "
+            "WHERE mart = 'zz_throwaway'",
+        ) == (True, 1)
+    finally:
+        # pg_url is session-scoped — leaving the matview behind would leak into
+        # other tests' refresh_all() runs. IF EXISTS: setup may have failed part-way.
+        conn.execute("DROP MATERIALIZED VIEW IF EXISTS marts.zz_throwaway")
+
+
 def test_cumulative_rows_recorded_as_dq_finding(conn):
     ins_metric(
         conn,
