@@ -9,10 +9,6 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from .signals import SIGNALS as _SIGNAL_TABLE
-
-SIGNALS = tuple(s.route for s in _SIGNAL_TABLE)
-
 
 def date_range(since: date, until: date) -> list[date]:
     if since > until:

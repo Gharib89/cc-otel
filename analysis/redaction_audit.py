@@ -47,10 +47,11 @@ def _():
     from analysis._common import fill_counts, read_payloads
     from tools._registry import load_registry
     from tools._reservoir import configure_duckdb
-    from tools._window import SIGNALS, resolve_window
+    from tools._window import resolve_window
+    from tools.signals import ROUTES
 
     return (
-        SIGNALS,
+        ROUTES,
         UTC,
         configure_duckdb,
         datetime,
@@ -76,11 +77,11 @@ def _(UTC, datetime, load_settings, resolve_window):
 
 
 @app.cell
-def _(SIGNALS, configure_duckdb, days, duckdb, read_payloads, settings):
+def _(ROUTES, configure_duckdb, days, duckdb, read_payloads, settings):
     con = duckdb.connect()
     try:
         configure_duckdb(con, settings)
-        payloads = read_payloads(con, settings.blob_container, SIGNALS, days)
+        payloads = read_payloads(con, settings.blob_container, ROUTES, days)
     finally:
         con.close()
     return (payloads,)

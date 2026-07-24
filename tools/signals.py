@@ -50,3 +50,9 @@ SIGNALS: tuple[Signal, ...] = (
         ingest_path="/v1/logs",
     ),
 )
+
+ROUTES: tuple[str, ...] = tuple(s.route for s in SIGNALS)
+"""OTLP route names (blob partition names), in table order — CLI ``--signal`` choices."""
+
+BY_ROUTE: dict[str, Signal] = {s.route: s for s in SIGNALS}
+"""Signal records keyed by :attr:`Signal.route` — the per-signal lookup replay uses."""

@@ -32,11 +32,8 @@ from cc_otel_sink.config import load_settings
 
 from ._progress import Progress
 from ._reservoir import CurationReservoir
-from ._window import SIGNALS, date_range, prefixes
-from .signals import SIGNALS as _SIGNAL_TABLE
-
-# raw table, event-time column, POST path — keyed by the blob's signal partition.
-_ROUTE = {s.route: (s.raw_table, s.time_col, s.ingest_path) for s in _SIGNAL_TABLE}
+from ._window import date_range, prefixes
+from .signals import BY_ROUTE, ROUTES
 
 
 def blob_hash(blob_bytes: bytes) -> str:
@@ -47,7 +44,7 @@ def blob_hash(blob_bytes: bytes) -> str:
 def endpoint_for(name: str) -> str:
     """Map a blob name (``signal=<sig>/…``) to its sink ingest path."""
     signal = name.split("=", 1)[1].split("/", 1)[0]
-    return _ROUTE[signal][2]
+    return BY_ROUTE[signal].ingest_path
 
 
 def _bounds(since: date, until: date) -> tuple[datetime, datetime]:
@@ -68,7 +65,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument(
         "--until", type=date.fromisoformat, required=True, help="window end (YYYY-MM-DD, inclusive)"
     )
-    p.add_argument("--signal", choices=SIGNALS, help="restrict to one blob signal; default both")
+    p.add_argument("--signal", choices=ROUTES, help="restrict to one blob signal; default both")
     p.add_argument("--sink-url", default="http://127.0.0.1:8080", help="sink base URL for re-POST")
     p.add_argument("--execute", action="store_true", help="delete + re-POST (default: dry-run)")
     return p.parse_args(argv)
@@ -80,7 +77,8 @@ def _count_rows(
     counts = {}
     with conn.cursor() as cur:
         for sig in signals:
-            table, ts_col, _ = _ROUTE[sig]
+            rec = BY_ROUTE[sig]
+            table, ts_col = rec.raw_table, rec.time_col
             cur.execute(
                 f'SELECT count(*) FROM raw."{table}" WHERE "{ts_col}" >= %s AND "{ts_col}" < %s',
                 (start, end),
@@ -98,7 +96,8 @@ def _delete_window(
 ) -> None:
     with conn.cursor() as cur:
         for sig in signals:
-            table, ts_col, _ = _ROUTE[sig]
+            rec = BY_ROUTE[sig]
+            table, ts_col = rec.raw_table, rec.time_col
             cur.execute(
                 f'DELETE FROM raw."{table}" WHERE "{ts_col}" >= %s AND "{ts_col}" < %s',
                 (start, end),
@@ -180,7 +179,7 @@ def apply(
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     days = date_range(args.since, args.until)
-    signals = (args.signal,) if args.signal else SIGNALS
+    signals = (args.signal,) if args.signal else ROUTES
     settings = load_settings()
 
     reservoir = CurationReservoir.from_settings(settings)

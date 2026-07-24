@@ -31,7 +31,8 @@ from ._keypaths import KeyPath, extract_key_paths
 from ._progress import Progress
 from ._registry import Diff, load_registry
 from ._reservoir import configure_duckdb
-from ._window import SIGNALS, globs, resolve_window
+from ._window import globs, resolve_window
+from .signals import ROUTES
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -47,7 +48,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument(
         "--until", type=date.fromisoformat, help="window end (YYYY-MM-DD); defaults to today (UTC)"
     )
-    p.add_argument("--signal", choices=SIGNALS, help="restrict to one blob signal; default both")
+    p.add_argument("--signal", choices=ROUTES, help="restrict to one blob signal; default both")
     return p.parse_args(argv)
 
 
@@ -108,7 +109,7 @@ def _format_report(
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     days = _window(args)
-    signals = (args.signal,) if args.signal else SIGNALS
+    signals = (args.signal,) if args.signal else ROUTES
     settings = load_settings()
 
     con = duckdb.connect()
