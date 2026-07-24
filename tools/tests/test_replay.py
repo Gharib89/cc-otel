@@ -73,6 +73,12 @@ class _FakeConn:
     def commit(self) -> None:
         self.committed = True
 
+    def __enter__(self) -> "_FakeConn":
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        return False
+
 
 class _RecordingClient:
     """Captures re-POST calls so a test can assert order vs. the delete."""
@@ -127,3 +133,24 @@ def test_apply_clears_ledger_before_reposting(fake_reservoir):
     apply(conn, res, _RecordingClient(order), the_plan)
 
     assert order == ["DELETE", "POST /v1/logs"]  # delete strictly before the re-POST
+
+
+def test_dry_run_never_calls_apply(monkeypatch, fake_reservoir):
+    """The ``--execute`` gate must keep ``main``'s dry-run off the destructive path."""
+    from types import SimpleNamespace
+
+    from tools import replay
+
+    res = fake_reservoir({_name("a"): gzip.compress(b'{"resourceLogs":[]}')})
+    monkeypatch.setattr(replay, "load_settings", lambda: SimpleNamespace(database_url="x"))
+    monkeypatch.setattr(replay.CurationReservoir, "from_settings", staticmethod(lambda _s: res))
+    # No --signal, so main resolves both signals -> two count queries.
+    monkeypatch.setattr(replay.psycopg, "connect", lambda _url: _FakeConn(counts=[0, 0]))
+
+    def _boom(*_args: object) -> None:
+        raise AssertionError("apply must not run on a dry-run")
+
+    monkeypatch.setattr(replay, "apply", _boom)
+
+    assert replay.main(["--since", "2026-07-20", "--until", "2026-07-20"]) == 0
+    assert res.closed  # reservoir still closed in the finally

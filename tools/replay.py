@@ -113,7 +113,7 @@ class ReplayPlan(NamedTuple):
 
     ``names`` / ``hashes`` are order-aligned (blob *i* decompresses to ``hashes[i]``);
     ``start`` / ``end`` are the half-open UTC bounds; ``row_counts`` maps each raw table
-    to its live row count in the window. An object tests can assert on.
+    to its live row count in the window.
     """
 
     signals: tuple[str, ...]
@@ -154,7 +154,7 @@ def apply(
     conn: psycopg.Connection,
     reservoir: CurationReservoir,
     client: httpx.Client,
-    plan: ReplayPlan,
+    replay_plan: ReplayPlan,
 ) -> None:
     """Execute the destructive replay: clear window rows + ledger hashes, then re-POST.
 
@@ -162,9 +162,11 @@ def apply(
     idempotency guard makes each re-POST a silent no-op (the module-docstring invariant).
     The ``httpx.Client`` is injected so tests drive an in-process sink via ``ASGITransport``.
     """
-    _delete_window(conn, plan.signals, plan.start, plan.end, plan.hashes)
-    post_progress = Progress("re-POST blobs", total=len(plan.names))
-    for name in plan.names:
+    _delete_window(
+        conn, replay_plan.signals, replay_plan.start, replay_plan.end, replay_plan.hashes
+    )
+    post_progress = Progress("re-POST blobs", total=len(replay_plan.names))
+    for name in replay_plan.names:
         resp = client.post(
             endpoint_for(name),
             content=reservoir.download(name),
