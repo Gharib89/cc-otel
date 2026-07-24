@@ -22,7 +22,7 @@ set -uo pipefail
 # SECRET_RE / IGNORE_RE live in _lib.sh so test_ship_lib.py can exercise them (#269).
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-cd "$(dirname "$0")/../.." || { echo '{"error":"cd to repo root failed","verdict":"tool-unavailable"}'; exit 2; }
+cd "$(dirname "${BASH_SOURCE[0]}")/../.." || { echo '{"error":"cd to repo root failed","verdict":"tool-unavailable"}'; exit 2; }
 
 BASE=origin/main ALL=0 NO_DOCKER=0 SMALL=""
 while [ $# -gt 0 ]; do
