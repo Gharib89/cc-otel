@@ -16,7 +16,8 @@ at import (i.e. in every unit-test run), so a malformed row fails fast.
 * ``attr``       — flat ``attr -> column`` map (``parser.*_ATTR_COLUMNS``).
 * ``structural`` — read from OTLP structure (timestamps, scope, metric value),
   never from the attribute map.
-* ``derived``    — hand coalesce logic (``user_account_id``, ``cc_version``).
+* ``derived``    — ordered coalesce over several attr paths (first truthy value
+  wins), driven by ``derived_coalesce`` (``user_account_id``, ``cc_version``).
 
 ``deny_mode`` records how a denied key is stripped by ``redaction``:
 
@@ -2123,11 +2124,32 @@ def attr_columns(signal: Signal) -> dict[str, str]:
     return out
 
 
-def table_columns(signal: Signal) -> tuple[str, ...]:
+def derived_coalesce(
+    signal: Signal, spec: tuple[ColumnSpec, ...] = COLUMN_SPEC
+) -> dict[str, list[str]]:
+    """Ordered coalesce sources per ``derived`` column for a signal.
+
+    Each derived column maps to the attr paths the parser tries in order,
+    first truthy value wins (``||`` semantics — a falsy/empty attr falls
+    through): own-signal derived rows in file order, then
+    resource-signal derived rows in file order. This mirrors the parser's
+    attr-merge semantics (datapoint attrs shadow resource attrs), so it
+    reproduces ``user_account_id`` and ``cc_version`` with no per-column code.
+    """
+    out: dict[str, list[str]] = {}
+    for sig in dict.fromkeys((signal, "resource")):
+        for r in spec:
+            if r.signal == sig and r.status == "promoted" and r.kind == "derived":
+                assert r.column_name is not None  # invariant 2
+                out.setdefault(r.column_name, []).append(r.attr_path)
+    return out
+
+
+def table_columns(signal: Signal, spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> tuple[str, ...]:
     """Distinct promoted column names for a signal's raw table, in spec order."""
     seen: set[str] = set()
     out: list[str] = []
-    for r in COLUMN_SPEC:
+    for r in spec:
         if r.signal == signal and r.status == "promoted" and r.column_name is not None:
             if r.column_name not in seen:
                 seen.add(r.column_name)
@@ -2243,10 +2265,11 @@ ENUM_VALUES: dict[str, frozenset[str]] = {
 # --- invariants (run once at import) ------------------------------------------
 
 
-def _check_invariants() -> None:
+def _check_invariants(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> None:
     seen: set[tuple[str, str, str]] = set()
     col_types: dict[tuple[str, str], str] = {}
-    for r in COLUMN_SPEC:
+    attr_to_col: dict[tuple[str, str], str] = {}
+    for r in spec:
         key = (r.signal, r.signal_name, r.attr_path)
         if key in seen:  # invariant 1: grain uniqueness
             raise ValueError(f"duplicate spec row: {key}")
@@ -2274,12 +2297,29 @@ def _check_invariants() -> None:
                 raise ValueError(f"column {r.column_name} has conflicting types in {r.signal}")
             col_types[grp] = r.data_type
 
+        # invariant 5: an attr path maps to exactly one column per signal (a
+        # duplicate is silent last-write-wins in the flat attr/coalesce maps).
+        if r.status == "promoted":
+            assert r.column_name is not None  # invariant 2 above
+            ak = (r.signal, r.attr_path)
+            prev_col = attr_to_col.get(ak)
+            if prev_col is not None and prev_col != r.column_name:
+                raise ValueError(f"attr {r.attr_path} maps to multiple columns in {r.signal}")
+            attr_to_col[ak] = r.column_name
+
+        # invariant 6: tool_param_sweep rows are shaped tool_parameters.<leaf>
+        # (else tool_param_keys() IndexErrors on the split at import).
+        if r.deny_mode == "tool_param_sweep":
+            parts = r.attr_path.split(".", 1)
+            if parts[0] != "tool_parameters" or len(parts) != 2 or not parts[1]:
+                raise ValueError(
+                    f"tool_param_sweep row must be shaped tool_parameters.<leaf>: {r.attr_path}"
+                )
+
     # invariant 4: every named metric grain is in the lint catalog (#168) — the
     # catalog carries metrics with no spec row too (commit/pr/cost), so this is
     # subset, not equality.
-    spec_metrics = {
-        r.signal_name for r in COLUMN_SPEC if r.signal == "metrics" and r.signal_name != "*"
-    }
+    spec_metrics = {r.signal_name for r in spec if r.signal == "metrics" and r.signal_name != "*"}
     if not spec_metrics <= METRIC_NAMES:
         raise ValueError(f"metric grains absent from METRIC_NAMES: {spec_metrics - METRIC_NAMES}")
 

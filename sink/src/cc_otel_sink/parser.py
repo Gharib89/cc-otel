@@ -15,11 +15,21 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .attrs import event_name, flatten
-from .column_spec import attr_columns, bool_columns, float_columns, int_columns
+from .column_spec import (
+    attr_columns,
+    bool_columns,
+    derived_coalesce,
+    float_columns,
+    int_columns,
+)
 
 # attr key → raw column (flat, per signal); derived from the promoted attr rows.
 METRIC_ATTR_COLUMNS: dict[str, str] = attr_columns("metrics")
 EVENT_ATTR_COLUMNS: dict[str, str] = attr_columns("events")
+
+# derived column → ordered coalesce source attr paths (first truthy value wins).
+METRIC_COALESCE: dict[str, list[str]] = derived_coalesce("metrics")
+EVENT_COALESCE: dict[str, list[str]] = derived_coalesce("events")
 
 _INT_COLUMNS = int_columns()
 _FLOAT_COLUMNS = float_columns()
@@ -63,21 +73,23 @@ def _apply_promoted(
     row: dict[str, Any],
     attrs: dict[str, Any],
     mapping: dict[str, str],
-    resource_version: str | None,
+    coalesce: dict[str, list[str]],
 ) -> None:
     for key, column in mapping.items():
         if key in attrs:
             row[column] = _coerce(column, attrs[key])
+    # Derived columns: first truthy source wins — the `||` fall-through the spec
+    # specifies (an empty attr falls through, matching the old `a or b` coalesce).
+    # Resource attrs are already merged into `attrs`, so the resource fallback is
+    # just a later source in the list.
+    for column, sources in coalesce.items():
+        for src in sources:
+            value = attrs.get(src)
+            if value:
+                row[column] = _coerce(column, value)
+                break
     if "user_email" in row:
         row["user_email"] = normalize_email(row["user_email"])
-    # Coalesce composite identities.
-    account = attrs.get("user.account_uuid") or attrs.get("user.account_id")
-    if account is not None:
-        row["user_account_id"] = account
-    # cc_version = app.version, falling back to resource service.version.
-    cc_version = attrs.get("app.version") or resource_version
-    if cc_version is not None:
-        row["cc_version"] = cc_version
 
 
 def _value_kind(metric_type: str, temporality: Any) -> str:
@@ -96,7 +108,6 @@ def parse_metrics(payload: dict[str, Any]) -> list[dict[str, Any]]:
     for rm in payload.get("resourceMetrics", []) or []:
         resource = rm.get("resource", {})
         res_attrs = flatten(resource.get("attributes"))
-        resource_version = res_attrs.get("service.version")
         for sm in rm.get("scopeMetrics", []) or []:
             scope = sm.get("scope", {})
             scope_name = scope.get("name")
@@ -116,7 +127,6 @@ def parse_metrics(payload: dict[str, Any]) -> list[dict[str, Any]]:
                                 temporality,
                                 dp,
                                 res_attrs,
-                                resource_version,
                                 scope_name,
                                 scope_version,
                             )
@@ -130,7 +140,6 @@ def _metric_row(
     temporality: Any,
     dp: dict[str, Any],
     res_attrs: dict[str, Any],
-    resource_version: str | None,
     scope_name: str | None,
     scope_version: str | None,
 ) -> dict[str, Any]:
@@ -151,7 +160,7 @@ def _metric_row(
         if raw_value is None:
             raw_value = dp.get("asInt")
         row["value"] = _coerce("value", raw_value)
-    _apply_promoted(row, attrs, METRIC_ATTR_COLUMNS, resource_version)
+    _apply_promoted(row, attrs, METRIC_ATTR_COLUMNS, METRIC_COALESCE)
     return row
 
 
@@ -160,20 +169,18 @@ def parse_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
     for rl in payload.get("resourceLogs", []) or []:
         resource = rl.get("resource", {})
         res_attrs = flatten(resource.get("attributes"))
-        resource_version = res_attrs.get("service.version")
         for sl in rl.get("scopeLogs", []) or []:
             scope = sl.get("scope", {})
             scope_name = scope.get("name")
             scope_version = scope.get("version")
             for rec in sl.get("logRecords", []) or []:
-                rows.append(_event_row(rec, res_attrs, resource_version, scope_name, scope_version))
+                rows.append(_event_row(rec, res_attrs, scope_name, scope_version))
     return rows
 
 
 def _event_row(
     rec: dict[str, Any],
     res_attrs: dict[str, Any],
-    resource_version: str | None,
     scope_name: str | None,
     scope_version: str | None,
 ) -> dict[str, Any]:
@@ -194,5 +201,5 @@ def _event_row(
         "scope_name": scope_name,
         "scope_version": scope_version,
     }
-    _apply_promoted(row, attrs, EVENT_ATTR_COLUMNS, resource_version)
+    _apply_promoted(row, attrs, EVENT_ATTR_COLUMNS, EVENT_COALESCE)
     return row
