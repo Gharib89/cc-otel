@@ -78,12 +78,14 @@ def _apply_promoted(
     for key, column in mapping.items():
         if key in attrs:
             row[column] = _coerce(column, attrs[key])
-    # Derived columns: first non-null source wins (resource attrs already merged
-    # into `attrs`, so the resource fallback is just a later source in the list).
+    # Derived columns: first truthy source wins — the `||` fall-through the spec
+    # specifies (an empty attr falls through, matching the old `a or b` coalesce).
+    # Resource attrs are already merged into `attrs`, so the resource fallback is
+    # just a later source in the list.
     for column, sources in coalesce.items():
         for src in sources:
             value = attrs.get(src)
-            if value is not None:
+            if value:
                 row[column] = _coerce(column, value)
                 break
     if "user_email" in row:

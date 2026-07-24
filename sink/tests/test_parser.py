@@ -114,6 +114,31 @@ def test_account_id_and_cc_version_coalesce():
     assert row["cc_version"] == "2.1.0"
 
 
+def test_empty_account_uuid_falls_through_to_account_id():
+    # `||` semantics: an empty-string uuid is falsy and falls through, it does not
+    # win the coalesce (regression guard for the generic derived loop).
+    payload = _metric_payload(
+        {
+            "name": "claude_code.session.count",
+            "sum": {
+                "aggregationTemporality": 1,
+                "dataPoints": [
+                    {
+                        "timeUnixNano": "1700000000000000000",
+                        "asInt": "1",
+                        "attributes": [
+                            _attr("user.account_uuid", _s("")),
+                            _attr("user.account_id", _s("acct-legacy")),
+                        ],
+                    }
+                ],
+            },
+        }
+    )
+    (row,) = parse_metrics(payload)
+    assert row["user_account_id"] == "acct-legacy"
+
+
 def test_app_version_beats_resource_version():
     payload = _metric_payload(
         {
