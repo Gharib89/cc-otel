@@ -40,3 +40,54 @@ Describe 'Azure CLI firewall-rule shims' {
         )
     }
 }
+
+Describe 'Invoke-OpenMyIp (orchestration)' {
+    # Mock the config source and the effectful shims (IP echo + az) so the
+    # detect-then-write decision runs with no .env / az / network dependency.
+    BeforeEach {
+        Mock Get-BootstrapConfig {
+            [pscustomobject]@{ ResourceGroup = 'rg'; ServerName = 'server'; RuleName = 'operator-ag' }
+        }
+        Mock Write-BootstrapLog {}
+    }
+
+    It 'detects the public IP and opens the rule when it differs, rc 0' {
+        Mock Get-MyPublicIp { '203.0.113.10' }
+        Mock Get-FirewallRuleStartIp { $null }
+        Mock Set-FirewallRule {}
+
+        Invoke-OpenMyIp -Environment 'interim' | Should -Be 0
+
+        Should -Invoke Get-MyPublicIp -Times 1 -Exactly
+        Should -Invoke Set-FirewallRule -Times 1 -Exactly -ParameterFilter {
+            $IpAddress -eq '203.0.113.10' -and $RuleName -eq 'operator-ag'
+        }
+    }
+
+    It 'short-circuits without a write when the rule already allows the IP, rc 0' {
+        Mock Get-MyPublicIp {}
+        Mock Get-FirewallRuleStartIp { '203.0.113.10' }
+        Mock Set-FirewallRule {}
+
+        Invoke-OpenMyIp -Environment 'interim' -IpAddress '203.0.113.10' | Should -Be 0
+        Should -Invoke Set-FirewallRule -Times 0 -Exactly
+        Should -Invoke Get-MyPublicIp -Times 0 -Exactly
+    }
+
+    It 'uses an explicit IP without auto-detecting' {
+        Mock Get-MyPublicIp { throw 'auto-detect must not run when -IpAddress is supplied' }
+        Mock Get-FirewallRuleStartIp { $null }
+        Mock Set-FirewallRule {}
+
+        Invoke-OpenMyIp -Environment 'interim' -IpAddress '198.51.100.5' | Should -Be 0
+        Should -Invoke Get-MyPublicIp -Times 0 -Exactly
+        Should -Invoke Set-FirewallRule -Times 1 -Exactly -ParameterFilter { $IpAddress -eq '198.51.100.5' }
+    }
+
+    It 'surfaces a throw when the firewall write fails' {
+        Mock Get-FirewallRuleStartIp { $null }
+        Mock Set-FirewallRule { throw 'Firewall rule create failed (az exit 1).' }
+
+        { Invoke-OpenMyIp -Environment 'interim' -IpAddress '198.51.100.5' } | Should -Throw
+    }
+}

@@ -61,3 +61,57 @@ Describe 'Get-RoleAssignmentBody' {
         $o.properties.roleDefinitionId | Should -Be $fullId
     }
 }
+
+Describe 'Invoke-AssignRbac (orchestration)' {
+    # Mock the config source and the effectful az shims so the orchestration is
+    # exercised with no .env / az / network dependency - the pure Get-RoleAssignment*
+    # builders stay real. Same shim-mocking pattern bootstrap.Tests.ps1 uses.
+    BeforeEach {
+        $script:calls = [System.Collections.Generic.List[string]]::new()
+        Mock Get-BootstrapConfig { [pscustomobject]@{ SpObjectId = 'sp-1'; Scope = '/subscriptions/s1' } }
+        Mock Get-RoleDefinition {
+            $script:calls.Add('def')
+            [pscustomobject]@{
+                name = 'rd-guid'
+                id   = '/subscriptions/s1/providers/Microsoft.Authorization/roleDefinitions/rd1'
+            }
+        }
+        Mock Write-BootstrapLog {}
+    }
+
+    It 'looks up, checks, then PUTs the assignment (in order) when absent, rc 0' {
+        Mock Test-RoleAssignment { $script:calls.Add('test'); $false }
+        Mock New-RoleAssignment { $script:calls.Add('put') }
+
+        Invoke-AssignRbac -Environment 'interim' | Should -Be 0
+
+        $script:calls.ToArray() | Should -Be @('def', 'test', 'put')
+        Should -Invoke New-RoleAssignment -Times 1 -Exactly -ParameterFilter {
+            $Uri -like '*subscriptions/s1*roleAssignments/*' -and $Body -like '*sp-1*'
+        }
+    }
+
+    It 'short-circuits without a PUT when the assignment already exists, rc 0' {
+        Mock Test-RoleAssignment { $true }
+        Mock New-RoleAssignment {}
+
+        Invoke-AssignRbac -Environment 'interim' | Should -Be 0
+        Should -Invoke New-RoleAssignment -Times 0 -Exactly
+    }
+
+    It 'surfaces a throw when the PUT shim fails' {
+        Mock Test-RoleAssignment { $false }
+        Mock New-RoleAssignment { throw 'Role assignment PUT failed (az exit 1).' }
+
+        { Invoke-AssignRbac -Environment 'interim' } | Should -Throw
+    }
+
+    It 'throws before any PUT when the role definition cannot be resolved' {
+        Mock Get-RoleDefinition { throw "Could not resolve role definition 'Contributor'." }
+        Mock Test-RoleAssignment { $false }
+        Mock New-RoleAssignment {}
+
+        { Invoke-AssignRbac -Environment 'interim' } | Should -Throw
+        Should -Invoke New-RoleAssignment -Times 0 -Exactly
+    }
+}
