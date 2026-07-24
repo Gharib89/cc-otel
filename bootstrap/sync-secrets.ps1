@@ -111,7 +111,8 @@ function Invoke-SecretSync {
         Set-GitHubSecret -Name $p.Secret -Value $p.Value -Repository $Repository -Confirm:$false
         Write-BootstrapLog "Synced secret $($p.Secret)."
     }
-    Write-BootstrapLog "Synced $($plan.Count) secrets to $Repository from .env.$Environment."
+    $source = if ([string]::IsNullOrWhiteSpace($EnvFile)) { ".env.$Environment" } else { $EnvFile }
+    Write-BootstrapLog "Synced $($plan.Count) secrets to $Repository from $source."
     return 0
 }
 
