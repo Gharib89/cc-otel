@@ -16,7 +16,7 @@ at import (i.e. in every unit-test run), so a malformed row fails fast.
 * ``attr``       — flat ``attr -> column`` map (``parser.*_ATTR_COLUMNS``).
 * ``structural`` — read from OTLP structure (timestamps, scope, metric value),
   never from the attribute map.
-* ``derived``    — ordered coalesce over several attr paths (first non-null
+* ``derived``    — ordered coalesce over several attr paths (first truthy value
   wins), driven by ``derived_coalesce`` (``user_account_id``, ``cc_version``).
 
 ``deny_mode`` records how a denied key is stripped by ``redaction``:
@@ -2130,7 +2130,8 @@ def derived_coalesce(
     """Ordered coalesce sources per ``derived`` column for a signal.
 
     Each derived column maps to the attr paths the parser tries in order,
-    first-non-null wins: own-signal derived rows in file order, then
+    first truthy value wins (``||`` semantics — a falsy/empty attr falls
+    through): own-signal derived rows in file order, then
     resource-signal derived rows in file order. This mirrors the parser's
     attr-merge semantics (datapoint attrs shadow resource attrs), so it
     reproduces ``user_account_id`` and ``cc_version`` with no per-column code.

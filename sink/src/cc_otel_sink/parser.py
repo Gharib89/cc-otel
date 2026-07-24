@@ -27,7 +27,7 @@ from .column_spec import (
 METRIC_ATTR_COLUMNS: dict[str, str] = attr_columns("metrics")
 EVENT_ATTR_COLUMNS: dict[str, str] = attr_columns("events")
 
-# derived column → ordered coalesce source attr paths (first non-null wins).
+# derived column → ordered coalesce source attr paths (first truthy value wins).
 METRIC_COALESCE: dict[str, list[str]] = derived_coalesce("metrics")
 EVENT_COALESCE: dict[str, list[str]] = derived_coalesce("events")
 
