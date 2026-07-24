@@ -21,6 +21,7 @@ import gzip
 import json
 import sys
 from datetime import UTC, date, datetime
+from typing import NamedTuple
 
 from cc_otel_sink.canonical import canonical_bytes
 from cc_otel_sink.config import load_settings
@@ -39,6 +40,41 @@ def rescrub(blob_bytes: bytes) -> tuple[bytes, int]:
     """
     result = redact(json.loads(gzip.decompress(blob_bytes)))
     return gzip.compress(canonical_bytes(result.payload)), result.gate_leaks
+
+
+class Counts(NamedTuple):
+    """Blobs seen, blobs rewritten (or would-be, on a dry run), defense-in-depth leaks."""
+
+    scanned: int
+    rewritten: int
+    leaks: int
+
+
+def run(
+    reservoir: CurationReservoir, signals: tuple[str, ...], days: list[date], execute: bool
+) -> Counts:
+    """Stream the window one blob at a time, rewriting dirty blobs when ``execute``.
+
+    Accepts the reservoir rather than creating it, so the destructive sequence
+    (download -> rescrub -> compare -> overwrite-if-dirty) is unit-testable against a
+    fake. The caller owns the reservoir's lifecycle (open/close).
+    """
+    scanned = rewritten = leaks = 0
+    progress = Progress("scrub blobs")
+    for prefix in prefixes(signals, days):
+        for name in reservoir.list_names(prefix):
+            scanned += 1
+            progress.tick()
+            original = reservoir.download(name)
+            scrubbed, blob_leaks = rescrub(original)
+            leaks += blob_leaks
+            if gzip.decompress(scrubbed) == gzip.decompress(original):
+                continue  # already clean — skip the write
+            if execute:
+                reservoir.overwrite(name, scrubbed)
+            rewritten += 1
+    progress.done()
+    return Counts(scanned, rewritten, leaks)
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -65,29 +101,16 @@ def main(argv: list[str] | None = None) -> int:
     signals = (args.signal,) if args.signal else SIGNALS
 
     reservoir = CurationReservoir.from_settings(load_settings())
-    scanned = rewritten = leaks = 0
-    progress = Progress("scrub blobs")
     try:
-        for prefix in prefixes(signals, days):
-            for name in reservoir.list_names(prefix):
-                scanned += 1
-                progress.tick()
-                original = reservoir.download(name)
-                scrubbed, blob_leaks = rescrub(original)
-                leaks += blob_leaks
-                if gzip.decompress(scrubbed) == gzip.decompress(original):
-                    continue  # already clean — skip the write
-                if args.execute:
-                    reservoir.overwrite(name, scrubbed)
-                rewritten += 1
-        progress.done()
+        counts = run(reservoir, signals, days, args.execute)
     finally:
         reservoir.close()
 
     verb = "rewrote" if args.execute else "would rewrite"
     print(
         f"Scrub {days[0]:%Y-%m-%d}..{days[-1]:%Y-%m-%d} signals={','.join(signals)}: "
-        f"scanned {scanned} blobs, {verb} {rewritten} ({leaks} defense-in-depth leaks seen)"
+        f"scanned {counts.scanned} blobs, {verb} {counts.rewritten} "
+        f"({counts.leaks} defense-in-depth leaks seen)"
         + ("" if args.execute else " — dry-run, pass --execute to write")
     )
     return 0
