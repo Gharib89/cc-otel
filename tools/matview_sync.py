@@ -306,19 +306,31 @@ def _run_author(slug: str) -> int:
     if previous is not None and previous == current:
         print(f"matview_sync: {slug} unchanged since HEAD — nothing to do.")
         return 0
-    sql = render_migration(slug, current, previous)
     stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     dest = _MIGRATIONS_DIR / f"{stamp}_{slug}.sql"
-    dest.write_text(sql, encoding="utf-8")
+    dest.write_text(render_migration(slug, current, previous), encoding="utf-8")
     print(f"matview_sync: wrote {dest.relative_to(_REPO_ROOT)}")
-    # Re-apply from zero (incl. the new file) and regenerate schema.sql.
-    subprocess.run([str(_REPO_ROOT / "scripts" / "dev-migrate.sh")], check=True)
+    # Apply every migration (incl. the new one) on a throwaway DB, then normalize
+    # the canonical file — and the migration's up-body — to pg_matviews' own
+    # deparsed form, so a hand-edit in any style still converges under --check.
+    # Pure Docker + psycopg (no shell-out) so this runs identically on Windows and
+    # CI. schema.sql regeneration stays with its owner, scripts/dev-migrate.sh.
     with _ephemeral_db() as conn:
+        live = {m.name: m for m in read_live_marts(conn)}
+        if slug not in live:
+            print(f"matview_sync: migration did not create marts.{slug}.", file=sys.stderr)
+            return 1
+        normalized = render_canonical(live[slug])
+        if normalized != current:
+            src.write_text(normalized, encoding="utf-8")
+            dest.write_text(render_migration(slug, normalized, previous), encoding="utf-8")
+            print(f"matview_sync: normalized {src.relative_to(_REPO_ROOT)} to pg_matviews form")
         div = divergence(conn)
     if not div.empty():
         print("matview_sync: generated migration did not converge:\n" + div.report(), file=sys.stderr)
         return 1
-    print("matview_sync: migration applied; canonical file converges.")
+    print("matview_sync: migration written; canonical file converges. "
+          "Run scripts/dev-migrate.sh to regenerate db/schema.sql.")
     return 0
 
 

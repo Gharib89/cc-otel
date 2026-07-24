@@ -8,7 +8,6 @@ tests/integration/test_matview_sync.py.
 from __future__ import annotations
 
 from tools.matview_sync import (
-    Divergence,
     Mart,
     compute_divergence,
     render_canonical,
@@ -27,7 +26,9 @@ _DIM_MODEL = Mart(
 
 def test_render_canonical_wraps_definition_index_and_grant() -> None:
     text = render_canonical(_DIM_MODEL)
-    assert "CREATE MATERIALIZED VIEW marts.dim_model AS\n SELECT model AS model_id\n   FROM ids;" in text
+    assert (
+        "CREATE MATERIALIZED VIEW marts.dim_model AS\n SELECT model AS model_id\n   FROM ids;"
+    ) in text
     assert (
         "CREATE UNIQUE INDEX dim_model_pk ON marts.dim_model USING btree (model_id);" in text
     )
@@ -70,8 +71,9 @@ def test_compute_divergence_report_names_each_bucket() -> None:
 
 # --- render_migration ---------------------------------------------------------
 
-_CURRENT = "-- Canonical definition for marts.dim_model.\nCREATE MATERIALIZED VIEW marts.dim_model AS\n SELECT 2;\n"
-_PREVIOUS = "-- Canonical definition for marts.dim_model.\nCREATE MATERIALIZED VIEW marts.dim_model AS\n SELECT 1;\n"
+_HEAD = "-- Canonical definition for marts.dim_model.\n"
+_CURRENT = _HEAD + "CREATE MATERIALIZED VIEW marts.dim_model AS\n SELECT 2;\n"
+_PREVIOUS = _HEAD + "CREATE MATERIALIZED VIEW marts.dim_model AS\n SELECT 1;\n"
 
 
 def test_render_migration_redefinition_drops_then_creates_both_ways() -> None:
