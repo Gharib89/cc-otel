@@ -1,10 +1,10 @@
 """Throwaway-Postgres provisioning shared by ``spec_sync`` and ``matview_sync`` (#275).
 
 Both ``--check`` gates self-provision a fully-migrated ``postgres:16`` when no
-``DATABASE_URL`` is supplied. This module owns that logic once; each tool passes
-its own container name (so parallel runs don't collide) and its migrations dir
-(passed at call time so the tools' monkeypatchable ``_MIGRATIONS_DIR`` still
-drives the ephemeral path).
+``DATABASE_URL`` is supplied. This module holds that logic for both tools in one
+place; each tool passes its own container name (so parallel runs don't collide)
+and its migrations dir (passed at call time so the tools' monkeypatchable
+``_MIGRATIONS_DIR`` still drives the ephemeral path).
 """
 
 from __future__ import annotations
@@ -18,14 +18,14 @@ from pathlib import Path
 import psycopg
 
 
-def up_section(sql: str) -> str:
+def _up_section(sql: str) -> str:
     return sql.split("-- migrate:up", 1)[1].split("-- migrate:down", 1)[0]
 
 
-def apply_migrations(conn: psycopg.Connection, migrations_dir: Path) -> None:
+def _apply_migrations(conn: psycopg.Connection, migrations_dir: Path) -> None:
     conn.autocommit = True
     for path in sorted(migrations_dir.glob("*.sql")):
-        up = up_section(path.read_text(encoding="utf-8")).strip()
+        up = _up_section(path.read_text(encoding="utf-8")).strip()
         if up:
             conn.execute(up)  # type: ignore[arg-type]
 
@@ -76,7 +76,7 @@ def ephemeral_db(container_name: str, migrations_dir: Path) -> Iterator[psycopg.
         if conn is None:
             raise RuntimeError("ephemeral Postgres did not become ready within 30s")
         with conn:
-            apply_migrations(conn, migrations_dir)
+            _apply_migrations(conn, migrations_dir)
             yield conn
     finally:
         subprocess.run(["docker", "rm", "-f", container_name], capture_output=True, check=False)
