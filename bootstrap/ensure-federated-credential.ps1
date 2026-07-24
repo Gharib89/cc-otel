@@ -81,8 +81,10 @@ function Get-ExistingCredential {
     param([Parameter(Mandatory)][string]$AppObjectId)
     $json = az ad app federated-credential list --id $AppObjectId --output json
     if ($LASTEXITCODE -ne 0) { throw "Could not list federated credentials for app $AppObjectId." }
-    if ([string]::IsNullOrWhiteSpace($json)) { return @() }
-    return @($json | ConvertFrom-Json)
+    # Unary comma: a bare `@()`/empty parse unrolls to $null on return, failing the
+    # caller's mandatory [object[]] bind (empty-array-unroll trap, CLAUDE.md; #285).
+    if ([string]::IsNullOrWhiteSpace($json)) { return , @() }
+    return , @($json | ConvertFrom-Json)
 }
 
 function New-FederatedCredential {

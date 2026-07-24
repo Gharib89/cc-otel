@@ -27,6 +27,24 @@ Describe 'Get-FederatedCredentialBody' {
     }
 }
 
+Describe 'Get-ExistingCredential' {
+    # The one effectful shim unit-tested here: #285 was an empty-array unroll in
+    # its return, and only exercising the real shim (with `az` mocked) catches it.
+    It 'returns an empty array, not $null, when the app has zero credentials (#285)' {
+        # az emits `[]` (not an empty string) for an app with no credentials, so
+        # the general parse path is what must survive as an empty array.
+        Mock az { $global:LASTEXITCODE = 0; '[]' }
+
+        $existing = Get-ExistingCredential -AppObjectId 'app-1'
+
+        # Assert the return WITHOUT piping through Should: piping an empty array
+        # member-enumerates to nothing and masks a $null return (CLAUDE.md trap).
+        Should -ActualValue ($null -ne $existing) -Be $true
+        Should -ActualValue ($existing -is [array]) -Be $true
+        Should -ActualValue (@($existing).Count) -Be 0
+    }
+}
+
 Describe 'Test-SubjectPresent' {
     BeforeAll { $script:sub = 'repo:Gharib89/cc-otel:ref:refs/heads/main' }
     It 'is true when the subject exists under any name (e.g. gha-main)' {
