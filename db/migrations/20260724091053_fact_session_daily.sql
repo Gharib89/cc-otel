@@ -1,5 +1,6 @@
 -- migrate:up
 -- matview_sync: fact_session_daily
+-- noqa: disable=all
 
 DROP MATERIALIZED VIEW marts.fact_session_daily;
 

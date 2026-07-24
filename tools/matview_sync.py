@@ -99,7 +99,14 @@ def render_migration(slug: str, current: str, previous: str | None) -> str:
     ``current`` is the on-disk file (desired state); ``previous`` is the same file
     at git HEAD (``None`` for a brand-new mart). The up/down bodies embed each file
     body (trailing whitespace trimmed so the section separators stay clean) — git
-    history is the lineage."""
+    history is the lineage.
+
+    The embedded bodies are verbatim pg_matviews deparse (byte-exact for --check),
+    which is not sqlfluff-clean — the same reason the canonical files under
+    db/views/marts/ are excluded from the sqlfluff hook. A generated migration
+    embeds those same dumps, so it opts the whole file out of linting with a
+    file-level ``-- noqa: disable=all`` (filename-independent, unlike a
+    pre-commit exclude pattern)."""
     if previous is not None:
         up_body = f"DROP MATERIALIZED VIEW marts.{slug};\n\n{current.rstrip()}"
         down_body = f"DROP MATERIALIZED VIEW marts.{slug};\n\n{previous.rstrip()}"
@@ -107,7 +114,8 @@ def render_migration(slug: str, current: str, previous: str | None) -> str:
         up_body = current.rstrip()
         down_body = f"DROP MATERIALIZED VIEW IF EXISTS marts.{slug};"
     return (
-        f"-- migrate:up\n-- matview_sync: {slug}\n\n{up_body}\n\n-- migrate:down\n\n{down_body}\n"
+        f"-- migrate:up\n-- matview_sync: {slug}\n-- noqa: disable=all\n\n"
+        f"{up_body}\n\n-- migrate:down\n\n{down_body}\n"
     )
 
 

@@ -1,5 +1,6 @@
 -- migrate:up
 -- matview_sync: fact_utilization_hourly
+-- noqa: disable=all
 
 DROP MATERIALIZED VIEW marts.fact_utilization_hourly;
 

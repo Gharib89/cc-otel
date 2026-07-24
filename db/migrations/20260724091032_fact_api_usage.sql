@@ -1,5 +1,6 @@
 -- migrate:up
 -- matview_sync: fact_api_usage
+-- noqa: disable=all
 
 DROP MATERIALIZED VIEW marts.fact_api_usage;
 

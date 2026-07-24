@@ -1,5 +1,6 @@
 -- migrate:up
 -- matview_sync: dim_user
+-- noqa: disable=all
 
 DROP MATERIALIZED VIEW marts.dim_user;
 
