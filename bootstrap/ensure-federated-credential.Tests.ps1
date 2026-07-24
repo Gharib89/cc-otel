@@ -72,6 +72,20 @@ Describe 'Invoke-EnsureFederatedCredential (orchestration)' {
         }
     }
 
+    It 'reaches the create path when the app has zero existing credentials (#285)' {
+        # The real shim emits nothing for an app with no credentials, which
+        # collapses to $null at the call site; without the orchestrator's @()
+        # coerce this fails Test-SubjectPresent's mandatory [object[]] bind
+        # before the create is reached. An empty mock reproduces that return.
+        Mock Get-ExistingCredential { $script:calls.Add('list') }
+        Mock New-FederatedCredential { $script:calls.Add('create') }
+
+        Invoke-EnsureFederatedCredential -Environment 'interim' | Should -Be 0
+
+        $script:calls.ToArray() | Should -Be @('list', 'create')
+        Should -Invoke New-FederatedCredential -Times 1 -Exactly
+    }
+
     It 'short-circuits without a create when the subject is already present, rc 0' {
         Mock Get-ExistingCredential {
             @([pscustomobject]@{ name = 'gha-main'; subject = 'repo:Gharib89/cc-otel:ref:refs/heads/main' })
