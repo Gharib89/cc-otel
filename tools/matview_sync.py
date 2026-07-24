@@ -97,8 +97,9 @@ def render_migration(slug: str, current: str, previous: str | None) -> str:
     """Render a dbmate migration recreating ``marts.<slug>`` from its canonical file.
 
     ``current`` is the on-disk file (desired state); ``previous`` is the same file
-    at git HEAD (``None`` for a brand-new mart). The up/down bodies embed the file
-    contents verbatim — git history is the lineage."""
+    at git HEAD (``None`` for a brand-new mart). The up/down bodies embed each file
+    body (trailing whitespace trimmed so the section separators stay clean) — git
+    history is the lineage."""
     if previous is not None:
         up_body = f"DROP MATERIALIZED VIEW marts.{slug};\n\n{current.rstrip()}"
         down_body = f"DROP MATERIALIZED VIEW marts.{slug};\n\n{previous.rstrip()}"
