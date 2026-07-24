@@ -48,6 +48,8 @@ scripts/dev-migrate.sh       # apply migrations + regenerate schema.sql on throw
 scripts/dev-migrate.sh --check  # schema-drift verdict: normalized diff vs HEAD, exit 1 on drift (CI + local gate run this)
 uv run python -m tools.spec_sync --check       # gate: column_spec.py <-> migrations converge + mart-literal lint (needs Docker)
 uv run python -m tools.spec_sync --name <slug> # author: spec delta -> new migration + schema.sql regen
+uv run python -m tools.matview_sync --check    # gate: canonical db/views/marts/ files <-> pg_matviews converge, both ways (needs Docker)
+uv run python -m tools.matview_sync --name <slug>  # author: edited mart file -> DROP+CREATE+index+GRANT migration (git-HEAD down body); then dev-migrate.sh regenerates schema.sql
 scripts/ship/local-gate.sh   # path-aware local mirror of CI (JSON verdict; the ship skill's phase-5 gate)
 psql "$DATABASE_URL"         # ad-hoc DB access (Azure otel real data / cc_otel)
 ```
@@ -86,7 +88,7 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 | `iac/` | Bicep only |
 | `sink/` | FastAPI OTLP sink (uv workspace member) |
 | `collector/` | OTel Collector config |
-| `db/` | dbmate migrations + `schema.sql` |
+| `db/` | dbmate migrations + `schema.sql` + `views/marts/` canonical mart definitions |
 | `installer/` | `install.ps1` fleet setup |
 | `bootstrap/` | env bring-up runbook + PowerShell scripts (operator-run) |
 | `powerbi/` | `.pbip` semantic model + report + branding |
@@ -97,7 +99,7 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 | `.claude/skills/` | tracked agent skills (vendored + project-native) |
 
 - **Standards are enforced by config, not prose** — ruff (`pyproject.toml`, line 100), mypy (`--strict`, `sink/src` only), sqlfluff (`db/`), PSScriptAnalyzer (`bootstrap/`, ASCII + zero findings), Bicep/PSRule (`iac/`); Python 3.13. The config *is* the spec; this file never restates a rule the linter already owns. Rule changes land in the config first.
-- **Everything is a migration** — views, grants, matviews, column-registry rows all land via dbmate; CI checks schema drift; never edit the schema out-of-band.
+- **Everything is a migration** — views, grants, matviews, column-registry rows all land via dbmate; CI checks schema drift; never edit the schema out-of-band. Mart (matview) bodies are the exception to hand-authoring: edit the canonical `db/views/marts/<slug>.sql` and let `matview_sync --name` generate the migration — never hand-paste a mart DROP+CREATE into a new `dbmate new` migration (#263).
 - CI is path-filtered per concern — a new top-level concern needs a workflow filter.
 - `.pbip` is the Power BI source of truth; publishing is manual via Desktop.
 
