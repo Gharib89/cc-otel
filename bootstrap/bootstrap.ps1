@@ -33,6 +33,7 @@ param(
 )
 
 . (Join-Path (Join-Path $PSScriptRoot 'lib') 'Get-BootstrapConfig.ps1') -Environment $Environment
+. (Join-Path (Join-Path $PSScriptRoot 'lib') 'Common.ps1')
 
 # =============================================================================
 # Pure functions (no side effects) - the tested seam.
@@ -206,11 +207,6 @@ function Get-SeedImagesDecision {
 # =============================================================================
 # Effectful shims - thin wrappers over PATH probes, az, dbmate, psql, gh, docker.
 # =============================================================================
-
-function Write-BootstrapLog {
-    param([Parameter(Mandatory)][string]$Message, [string]$Level = 'INFO')
-    Write-Information "[$Level] $Message" -InformationAction Continue
-}
 
 function Test-CommandPresent {
     <# .SYNOPSIS True when a command is resolvable on PATH. #>

@@ -26,6 +26,7 @@ param(
 )
 
 . (Join-Path (Join-Path $PSScriptRoot 'lib') 'Get-BootstrapConfig.ps1') -Environment $Environment
+. (Join-Path (Join-Path $PSScriptRoot 'lib') 'Common.ps1')
 
 # =============================================================================
 # Pure functions (no side effects) - the tested seam.
@@ -74,11 +75,6 @@ function Test-SubjectPresent {
 # Effectful shims - thin wrappers over `az`, kept small on purpose.
 # =============================================================================
 
-function Write-BootstrapLog {
-    param([Parameter(Mandatory)][string]$Message, [string]$Level = 'INFO')
-    Write-Information "[$Level] $Message" -InformationAction Continue
-}
-
 function Get-ExistingCredential {
     <# .SYNOPSIS Federated credentials currently on the app, as objects. #>
     [OutputType([object[]])]
@@ -94,16 +90,10 @@ function New-FederatedCredential {
     [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory)][string]$AppObjectId, [Parameter(Mandatory)][string]$Body)
     if (-not $PSCmdlet.ShouldProcess($AppObjectId, 'Create federated credential')) { return }
-    # Via a temp file: az's inline --parameters JSON is mangled by PowerShell/az
-    # quote-stripping on Windows; a file path sidesteps it.
-    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("fic-" + [guid]::NewGuid().ToString() + ".json")
-    try {
-        [System.IO.File]::WriteAllText($tmp, $Body)
+    Invoke-WithBodyFile -Body $Body -Action {
+        param($tmp)
         az ad app federated-credential create --id $AppObjectId --parameters $tmp --output none
         if ($LASTEXITCODE -ne 0) { throw "Federated credential create failed (az exit $LASTEXITCODE)." }
-    }
-    finally {
-        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
     }
 }
 

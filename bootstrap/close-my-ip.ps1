@@ -16,15 +16,11 @@ param(
 )
 
 . (Join-Path (Join-Path $PSScriptRoot 'lib') 'Get-BootstrapConfig.ps1') -Environment $Environment
+. (Join-Path (Join-Path $PSScriptRoot 'lib') 'Common.ps1')
 
 # =============================================================================
 # Effectful shims - thin wrappers over `az`, kept small on purpose.
 # =============================================================================
-
-function Write-BootstrapLog {
-    param([Parameter(Mandatory)][string]$Message, [string]$Level = 'INFO')
-    Write-Information "[$Level] $Message" -InformationAction Continue
-}
 
 function Test-FirewallRule {
     <# .SYNOPSIS $true when the named rule exists on the server. #>

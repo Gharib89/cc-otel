@@ -21,15 +21,11 @@ param(
 )
 
 . (Join-Path (Join-Path $PSScriptRoot 'lib') 'Get-BootstrapConfig.ps1') -Environment $Environment
+. (Join-Path (Join-Path $PSScriptRoot 'lib') 'Common.ps1')
 
 # =============================================================================
 # Effectful shims - thin wrappers over `az` and the IP-echo service.
 # =============================================================================
-
-function Write-BootstrapLog {
-    param([Parameter(Mandatory)][string]$Message, [string]$Level = 'INFO')
-    Write-Information "[$Level] $Message" -InformationAction Continue
-}
 
 function Get-MyPublicIp {
     <# .SYNOPSIS Current public IPv4 via api.ipify.org. #>
