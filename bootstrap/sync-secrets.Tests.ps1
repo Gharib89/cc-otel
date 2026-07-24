@@ -46,3 +46,40 @@ Describe 'Get-SecretPushPlan' {
         ($plan | Where-Object Secret -eq 'AZURE_TENANT_ID').Value | Should -Be 'tenant-1'
     }
 }
+
+Describe 'Invoke-SecretSync (orchestration)' {
+    # Mock the config source and the gh shim so the fan-out runs with no .env / gh
+    # dependency; the pure Get-SecretPushPlan builder stays real.
+    BeforeEach {
+        Mock Get-BootstrapConfig {
+            [pscustomobject]@{
+                SecretPrefix   = 'INTERIM'
+                DatabaseUrl    = 'postgres://x'
+                SubscriptionId = 'sub-1'
+                ResourceGroup  = 'rg-cc-otel-interim'
+                ClientId       = 'client-1'
+                TenantId       = 'tenant-1'
+            }
+        }
+        Mock Write-BootstrapLog {}
+    }
+
+    It 'upserts every planned secret with its value and returns 0' {
+        Mock Set-GitHubSecret {}
+
+        Invoke-SecretSync -Environment 'interim' | Should -Be 0
+
+        Should -Invoke Set-GitHubSecret -Times 5 -Exactly
+        Should -Invoke Set-GitHubSecret -Times 1 -Exactly -ParameterFilter {
+            $Name -eq 'INTERIM_DATABASE_URL' -and $Value -eq 'postgres://x'
+        }
+        Should -Invoke Set-GitHubSecret -Times 1 -Exactly -ParameterFilter { $Name -eq 'AZURE_CLIENT_ID' }
+    }
+
+    It 'fails fast (throws after the first upsert) when a secret set fails' {
+        Mock Set-GitHubSecret { throw "gh secret set failed (exit 1)." }
+
+        { Invoke-SecretSync -Environment 'interim' } | Should -Throw
+        Should -Invoke Set-GitHubSecret -Times 1 -Exactly
+    }
+}

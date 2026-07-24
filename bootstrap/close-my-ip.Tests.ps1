@@ -38,3 +38,37 @@ Describe 'Azure CLI firewall-rule shims' {
         )
     }
 }
+
+Describe 'Invoke-CloseMyIp (orchestration)' {
+    # Mock the config source and the effectful az shims so the detect-then-delete
+    # decision runs with no .env / az dependency.
+    BeforeEach {
+        Mock Get-BootstrapConfig {
+            [pscustomobject]@{ ResourceGroup = 'rg'; ServerName = 'server'; RuleName = 'operator-ag' }
+        }
+        Mock Write-BootstrapLog {}
+    }
+
+    It 'deletes the rule when it is present, rc 0' {
+        Mock Test-FirewallRule { $true }
+        Mock Remove-FirewallRule {}
+
+        Invoke-CloseMyIp -Environment 'interim' | Should -Be 0
+        Should -Invoke Remove-FirewallRule -Times 1 -Exactly -ParameterFilter { $RuleName -eq 'operator-ag' }
+    }
+
+    It 'short-circuits without a delete when the rule is already absent, rc 0' {
+        Mock Test-FirewallRule { $false }
+        Mock Remove-FirewallRule {}
+
+        Invoke-CloseMyIp -Environment 'interim' | Should -Be 0
+        Should -Invoke Remove-FirewallRule -Times 0 -Exactly
+    }
+
+    It 'surfaces a throw when the delete shim fails' {
+        Mock Test-FirewallRule { $true }
+        Mock Remove-FirewallRule { throw 'Firewall rule delete failed (az exit 1).' }
+
+        { Invoke-CloseMyIp -Environment 'interim' } | Should -Throw
+    }
+}
