@@ -29,7 +29,8 @@ from cc_otel_sink.redaction import redact
 
 from ._progress import Progress
 from ._reservoir import CurationReservoir
-from ._window import SIGNALS, prefixes, resolve_window
+from ._window import prefixes, resolve_window
+from .signals import ROUTES
 
 
 def rescrub(blob_bytes: bytes) -> tuple[bytes, int]:
@@ -90,7 +91,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument(
         "--until", type=date.fromisoformat, help="window end (YYYY-MM-DD); defaults to today (UTC)"
     )
-    p.add_argument("--signal", choices=SIGNALS, help="restrict to one blob signal; default both")
+    p.add_argument("--signal", choices=ROUTES, help="restrict to one blob signal; default both")
     p.add_argument("--execute", action="store_true", help="overwrite blobs (default: dry-run)")
     return p.parse_args(argv)
 
@@ -98,7 +99,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     days = resolve_window(args.days, args.since, args.until, datetime.now(UTC).date())
-    signals = (args.signal,) if args.signal else SIGNALS
+    signals = (args.signal,) if args.signal else ROUTES
 
     reservoir = CurationReservoir.from_settings(load_settings())
     try:

@@ -24,10 +24,7 @@ from pathlib import Path
 import psycopg
 from cc_otel_sink.config import load_settings
 
-from .signals import SIGNALS as _SIGNALS
-
-# (raw table, signal-name column, event-time column, registry signal)
-_TABLES = [(s.raw_table, s.name_col, s.time_col, s.registry_name) for s in _SIGNALS]
+from .signals import SIGNALS
 
 
 @dataclass(frozen=True)
@@ -217,7 +214,9 @@ def render(
 
 
 def build(conn: psycopg.Connection) -> str:
-    profiles = [_profile_table(conn, t, n, ts, s) for t, n, ts, s in _TABLES]
+    profiles = [
+        _profile_table(conn, s.raw_table, s.name_col, s.time_col, s.registry_name) for s in SIGNALS
+    ]
     with conn.cursor() as cur:
         cur.execute("SELECT current_database()")
         database = cur.fetchone()[0]
