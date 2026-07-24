@@ -81,10 +81,8 @@ function Get-ExistingCredential {
     param([Parameter(Mandatory)][string]$AppObjectId)
     $json = az ad app federated-credential list --id $AppObjectId --output json
     if ($LASTEXITCODE -ne 0) { throw "Could not list federated credentials for app $AppObjectId." }
-    # Unary comma: a bare `@()`/empty parse unrolls to $null on return, failing the
-    # caller's mandatory [object[]] bind (empty-array-unroll trap, CLAUDE.md; #285).
-    if ([string]::IsNullOrWhiteSpace($json)) { return , @() }
-    return , @($json | ConvertFrom-Json)
+    if ([string]::IsNullOrWhiteSpace($json)) { return @() }
+    return @($json | ConvertFrom-Json)
 }
 
 function New-FederatedCredential {
@@ -117,7 +115,11 @@ function Invoke-EnsureFederatedCredential {
     $appObjectId = $cfg.AppObjectId
 
     $subject = Get-FederatedSubject -Repository $Repository -Ref $Ref
-    $existing = Get-ExistingCredential -AppObjectId $appObjectId
+    # @(): on an app with zero credentials the shim emits nothing, which collapses
+    # to $null at the call site and fails Test-SubjectPresent's mandatory
+    # [object[]] bind before the create path is reached (#285). The unary-comma
+    # alternative is unreliable across PowerShell 5.1/7, so normalize here.
+    $existing = @(Get-ExistingCredential -AppObjectId $appObjectId)
     if (Test-SubjectPresent -Existing $existing -Subject $subject) {
         Write-BootstrapLog "Federated credential for subject '$subject' already present on app $appObjectId (no-op)."
         return 0

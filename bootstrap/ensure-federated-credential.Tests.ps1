@@ -27,24 +27,6 @@ Describe 'Get-FederatedCredentialBody' {
     }
 }
 
-Describe 'Get-ExistingCredential' {
-    # The one effectful shim unit-tested here: #285 was an empty-array unroll in
-    # its return, and only exercising the real shim (with `az` mocked) catches it.
-    It 'returns an empty array, not $null, when the app has zero credentials (#285)' {
-        # az emits `[]` (not an empty string) for an app with no credentials, so
-        # the general parse path is what must survive as an empty array.
-        Mock az { $global:LASTEXITCODE = 0; '[]' }
-
-        $existing = Get-ExistingCredential -AppObjectId 'app-1'
-
-        # Assert the return WITHOUT piping through Should: piping an empty array
-        # member-enumerates to nothing and masks a $null return (CLAUDE.md trap).
-        Should -ActualValue ($null -ne $existing) -Be $true
-        Should -ActualValue ($existing -is [array]) -Be $true
-        Should -ActualValue (@($existing).Count) -Be 0
-    }
-}
-
 Describe 'Test-SubjectPresent' {
     BeforeAll { $script:sub = 'repo:Gharib89/cc-otel:ref:refs/heads/main' }
     It 'is true when the subject exists under any name (e.g. gha-main)' {
@@ -88,6 +70,20 @@ Describe 'Invoke-EnsureFederatedCredential (orchestration)' {
         Should -Invoke New-FederatedCredential -Times 1 -Exactly -ParameterFilter {
             $AppObjectId -eq 'app-1' -and $Body -like '*refs/heads/main*'
         }
+    }
+
+    It 'reaches the create path when the app has zero existing credentials (#285)' {
+        # The real shim emits nothing for an app with no credentials, which
+        # collapses to $null at the call site; without the orchestrator's @()
+        # coerce this fails Test-SubjectPresent's mandatory [object[]] bind
+        # before the create is reached. An empty mock reproduces that return.
+        Mock Get-ExistingCredential { $script:calls.Add('list') }
+        Mock New-FederatedCredential { $script:calls.Add('create') }
+
+        Invoke-EnsureFederatedCredential -Environment 'interim' | Should -Be 0
+
+        $script:calls.ToArray() | Should -Be @('list', 'create')
+        Should -Invoke New-FederatedCredential -Times 1 -Exactly
     }
 
     It 'short-circuits without a create when the subject is already present, rc 0' {
