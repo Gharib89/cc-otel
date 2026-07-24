@@ -83,10 +83,15 @@ Describe 'Invoke-EnsureFederatedCredential (orchestration)' {
     }
 
     It 'surfaces a throw when the create shim fails' {
-        Mock Get-ExistingCredential { @() }
+        # Non-empty existing set (subject absent) so the flow reaches the create
+        # shim and the throw is that shim's, not the empty-array bind (see #285).
+        Mock Get-ExistingCredential {
+            @([pscustomobject]@{ name = 'other'; subject = 'repo:Gharib89/cc-otel:ref:refs/heads/dev' })
+        }
         Mock New-FederatedCredential { throw 'Federated credential create failed (az exit 1).' }
 
         { Invoke-EnsureFederatedCredential -Environment 'interim' } | Should -Throw
+        Should -Invoke New-FederatedCredential -Times 1 -Exactly
     }
 
     It 'throws before any create when listing credentials fails' {
