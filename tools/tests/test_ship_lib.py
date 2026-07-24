@@ -67,9 +67,31 @@ def test_env_inventory_lists_the_three_gitignored_files():
     ]
 
 
-def test_emit_builds_a_json_object_with_raw_and_quoted_values():
-    out = _run('ship_emit actionable true reason "$(ship_qstr "open, no PR")" assignees "[]"')
+def test_emit_quotes_string_values_by_default():
+    # New contract (#269): a bare value is quoted/escaped as a JSON string —
+    # callers no longer wrap it in ship_qstr.
+    assert _run('ship_emit reason "open, no PR"').strip() == '{"reason":"open, no PR"}'
+
+
+def test_emit_at_sigil_marks_raw_json():
+    # An @-prefixed value is emitted verbatim (sigil stripped): bools, arrays, numbers.
+    assert _run("ship_emit actionable @true").strip() == '{"actionable":true}'
+    assert _run('ship_emit assignees @"[]"').strip() == '{"assignees":[]}'
+
+
+def test_emit_mixes_quoted_and_raw():
+    out = _run('ship_emit actionable @true reason "open, no PR" assignees @"[]"')
     assert out.strip() == '{"actionable":true,"reason":"open, no PR","assignees":[]}'
+
+
+def test_emit_forgotten_sigil_yields_valid_json_stringified_bool():
+    # The whole point of inverting the default: a forgotten sigil now emits a
+    # stringified bool — valid JSON, benign to the LLM consumer — not invalid JSON.
+    assert _run("ship_emit actionable true").strip() == '{"actionable":"true"}'
+
+
+def test_emit_escapes_special_chars_in_string_values():
+    assert _run('ship_emit reason "a\\"b"').strip() == r'{"reason":"a\"b"}'
 
 
 def test_qstr_escapes_quotes_and_backslashes():
@@ -79,3 +101,54 @@ def test_qstr_escapes_quotes_and_backslashes():
 def test_qstr_escapes_control_characters():
     # newline / tab / carriage return must become \n \t \r so the JSON stays valid
     assert _run("ship_qstr $'a\\tb\\nc\\rd'").strip() == r'"a\tb\nc\rd"'
+
+
+# --- secrets regex (SECRET_RE / IGNORE_RE, moved into _lib.sh by #269) --------
+# Exercised through grep exactly as local-gate.sh's scanner uses them. The sample
+# credentials are assembled from fragments at runtime so no *source* line in this
+# file is itself a contiguous secret — local-gate.sh's own scanner reads this file
+# during the gate, and a real match here would be a false positive.
+
+
+def _secret_scan(line: str) -> str:
+    # Mirror local-gate.sh's pipe: drop IGNORE_RE lines, then match SECRET_RE (-i).
+    # The line rides in as bash's $1 (git-bash on Windows drops inherited env vars),
+    # sidestepping any shell-quoting of its embedded quotes.
+    snippet = (
+        'printf "%s\\n" "$1" '
+        '| { grep -vE "$IGNORE_RE" || true; } '
+        '| { grep -Ei "$SECRET_RE" || true; }'
+    )
+    result = subprocess.run(
+        ["bash", "-s", "--", line],  # -- so a line starting with `-` isn't read as a flag
+        input=f"{_LIB_SRC}\n{snippet}\n".encode(),
+        capture_output=True,
+        check=True,
+    )
+    return result.stdout.decode().strip()
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "postgres://admin:" + "s3cr3tpw@db.example.com:5432/prod",
+        "bearer " + "a" * 30,
+        "AKIA" + "ABCDEFGHIJKLMNOP",
+        "-----BEGIN RSA " + "PRIVATE KEY-----",
+        "client_" + "secret=abc123",
+        "sig=" + "a" * 35,
+    ],
+)
+def test_secret_re_flags_real_credentials(line):
+    assert _secret_scan(line) == line
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "just a normal log line with no secrets",
+        "postgres://postgres:" + "postgres@localhost:5432/test",  # sanctioned via IGNORE_RE
+    ],
+)
+def test_secret_re_ignores_benign_and_sanctioned(line):
+    assert _secret_scan(line) == ""

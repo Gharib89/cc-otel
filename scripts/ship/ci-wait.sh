@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ship phase-8 CI wait: conflict check first (a conflicted PR has no merge ref,
+# ship CI wait: conflict check first (a conflicted PR has no merge ref,
 # so its checks sit pending forever — never wait on it), then block until every
 # check completes.
 #
@@ -18,7 +18,7 @@ pr=${1:?usage: scripts/ship/ci-wait.sh <pr-number> [--timeout <seconds>]}
 limit=1800
 [ "${2:-}" = "--timeout" ] && limit=${3:?--timeout needs seconds}
 
-emit() { ship_emit status "$(ship_qstr "$1")" failing "${2:-[]}"; }
+emit() { ship_emit status "$1" failing @"${2:-[]}"; }
 
 m=$(gh pr view "$pr" --json mergeable,mergeStateStatus \
   --jq '"\(.mergeable) \(.mergeStateStatus)"') || { emit tooling; exit 2; }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ship phase-5 local gate: path-aware mirror of CI.
+# ship local gate: path-aware mirror of CI.
 #
 # Derives selection from the workflows' own paths: filters (via
 # tools/gate_paths.py, #226) rather than a hand-maintained regex per workflow,
@@ -19,6 +19,8 @@
 # Gate statuses: pass | fail | deferred-to-ci | unavailable (required tool missing)
 # Exit: 0 all selected gates pass · 1 a gate failed · 2 a tool was unavailable
 set -uo pipefail
+# SECRET_RE / IGNORE_RE live in _lib.sh so test_ship_lib.py can exercise them (#269).
+source "$(dirname "$0")/_lib.sh"
 
 cd "$(dirname "$0")/../.." || { echo '{"error":"cd to repo root failed","verdict":"tool-unavailable"}'; exit 2; }
 
@@ -75,18 +77,19 @@ docker_gate() { # docker_gate <name> <cmd...>  (deferred if no docker)
 # (postgres:postgres) are the one sanctioned literal (dev-migrate.sh,
 # testcontainers) — IGNORE_RE; the scanner also excludes itself (its own
 # pattern line is a guaranteed hit).
-SECRET_RE='postgres(ql)?://[^ "'"'"']+:[^ "'"'"'@]+@|bearer +[a-z0-9._~+/=-]{25,}|AKIA[A-Z0-9]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|client_secret[^a-z_]|sig=[a-z0-9%]{30,}'
-IGNORE_RE='postgres://postgres:postgres@'
+# SECRET_RE / IGNORE_RE are sourced from _lib.sh (#269) so test_ship_lib.py can
+# exercise them; _lib.sh carries the pattern text and is excluded below alongside
+# this file, since each is a guaranteed self-hit.
 secrets_hits() {
   # Diff scan: added lines, tagged "diff:<n>" (real file lines aren't recoverable
   # from a combined diff, so label the source instead of emitting a bogus number).
-  git diff "$MB" -- . ':(exclude)uv.lock' ':(exclude)scripts/ship/local-gate.sh' \
+  git diff "$MB" -- . ':(exclude)uv.lock' ':(exclude)scripts/ship/local-gate.sh' ':(exclude)scripts/ship/_lib.sh' \
     | grep '^+' | grep -vE '^\+\+\+' | grep -vE "$IGNORE_RE" | grep -nEi "$SECRET_RE" \
     | sed 's/^/diff:/'
   # Untracked scan: grep files by name so hits carry real path:line (-I skips
   # binaries; -H forces the filename even for a single file).
   git ls-files --others --exclude-standard -z \
-    | grep -zvF 'scripts/ship/local-gate.sh' \
+    | grep -zvE 'scripts/ship/(local-gate|_lib)\.sh' \
     | xargs -0 -r grep -IHnEi "$SECRET_RE" 2>/dev/null | grep -vE "$IGNORE_RE" || true
 }
 if hits=$(secrets_hits) && [ -n "$hits" ]; then
