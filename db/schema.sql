@@ -54,16 +54,16 @@ DECLARE
     mv TEXT;
     log_id BIGINT;
     n BIGINT;
-    matviews TEXT[] := ARRAY[
-        'dim_user', 'dim_date', 'dim_model',
-        'fact_session', 'fact_session_daily', 'fact_api_usage', 'fact_edit_decision',
-        'fact_usage_window', 'fact_utilization_hourly',
-        'fact_tool_outcome', 'fact_api_error_rate',
-        'bridge_session_skill', 'bridge_session_mcp', 'bridge_session_plugin',
-        'bridge_session_agent', 'bridge_session_hook'
-    ];
 BEGIN
-    FOREACH mv IN ARRAY matviews LOOP
+    -- Catalog-driven (#262): every matview in marts refreshes, alphabetically.
+    -- No mart reads another mart today, so order is irrelevant; if mart-on-mart
+    -- stacking ever appears, switch to pg_depend dependency ordering (see
+    -- docs/research/mart-definition-management.md §3).
+    FOR mv IN
+        SELECT matviewname FROM pg_matviews
+        WHERE schemaname = 'marts'
+        ORDER BY matviewname
+    LOOP
         INSERT INTO marts.mart_refresh_log (mart, started)
         VALUES (mv, clock_timestamp())
         RETURNING id INTO log_id;
@@ -1070,4 +1070,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260722120000'),
     ('20260722140000'),
     ('20260723070059'),
-    ('20260723074556');
+    ('20260723074556'),
+    ('20260724071943');
