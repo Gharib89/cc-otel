@@ -24,6 +24,7 @@ import gzip
 import hashlib
 import sys
 from datetime import UTC, date, datetime, time, timedelta
+from typing import NamedTuple
 
 import httpx
 import psycopg
@@ -107,52 +108,97 @@ def _delete_window(
     conn.commit()
 
 
+class ReplayPlan(NamedTuple):
+    """The window resolved to concrete artifacts, computed before any mutation.
+
+    ``names`` / ``hashes`` are order-aligned (blob *i* decompresses to ``hashes[i]``);
+    ``start`` / ``end`` are the half-open UTC bounds; ``row_counts`` maps each raw table
+    to its live row count in the window.
+    """
+
+    signals: tuple[str, ...]
+    start: datetime
+    end: datetime
+    names: list[str]
+    hashes: list[str]
+    row_counts: dict[str, int]
+
+
+def plan(
+    conn: psycopg.Connection,
+    reservoir: CurationReservoir,
+    signals: tuple[str, ...],
+    days: list[date],
+) -> ReplayPlan:
+    """Resolve the window to a :class:`ReplayPlan` without mutating anything.
+
+    Blob names + batch hashes come from the reservoir, live row counts from the raw
+    tables. Accepts the connection and reservoir rather than building them, so the plan
+    is testable against a fake reservoir + seeded connection. Names stay in memory but
+    each blob is downloaded to hash then discarded — a large window must not hold every
+    blob in RAM (each is re-downloaded per POST in :func:`apply`).
+    """
+    start, end = _bounds(days[0], days[-1])
+    names = [name for prefix in prefixes(signals, days) for name in reservoir.list_names(prefix)]
+    hash_progress = Progress("hash blobs", total=len(names))
+    hashes = []
+    for name in names:
+        hashes.append(blob_hash(reservoir.download(name)))
+        hash_progress.tick()
+    hash_progress.done()
+    row_counts = _count_rows(conn, signals, start, end)
+    return ReplayPlan(signals, start, end, names, hashes, row_counts)
+
+
+def apply(
+    conn: psycopg.Connection,
+    reservoir: CurationReservoir,
+    client: httpx.Client,
+    replay_plan: ReplayPlan,
+) -> None:
+    """Execute the destructive replay: clear window rows + ledger hashes, then re-POST.
+
+    Ordering is load-bearing — the ledger clear must precede the re-POST or the sink's
+    idempotency guard makes each re-POST a silent no-op (the module-docstring invariant).
+    The ``httpx.Client`` is injected so tests drive an in-process sink via ``ASGITransport``.
+    """
+    _delete_window(
+        conn, replay_plan.signals, replay_plan.start, replay_plan.end, replay_plan.hashes
+    )
+    post_progress = Progress("re-POST blobs", total=len(replay_plan.names))
+    for name in replay_plan.names:
+        resp = client.post(
+            endpoint_for(name),
+            content=reservoir.download(name),
+            headers={"content-type": "application/json", "content-encoding": "gzip"},
+        )
+        resp.raise_for_status()
+        post_progress.tick()
+    post_progress.done()
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     days = date_range(args.since, args.until)
     signals = (args.signal,) if args.signal else SIGNALS
-    start, end = _bounds(args.since, args.until)
     settings = load_settings()
 
     reservoir = CurationReservoir.from_settings(settings)
     try:
-        # Names only in memory; hash by downloading each blob then discarding the bytes,
-        # and re-download per POST — a large window must not hold every blob in RAM.
-        names = [
-            name for prefix in prefixes(signals, days) for name in reservoir.list_names(prefix)
-        ]
-        hash_progress = Progress("hash blobs", total=len(names))
-        hashes = []
-        for name in names:
-            hashes.append(blob_hash(reservoir.download(name)))
-            hash_progress.tick()
-        hash_progress.done()
-
         with psycopg.connect(settings.database_url) as conn:
-            row_counts = _count_rows(conn, signals, start, end)
+            replay_plan = plan(conn, reservoir, signals, days)
             print(
                 f"Replay {args.since:%Y-%m-%d}..{args.until:%Y-%m-%d} signals={','.join(signals)}: "
-                f"{len(names)} blobs / {len(set(hashes))} hashes; "
-                f"raw rows in window: {row_counts}"
+                f"{len(replay_plan.names)} blobs / {len(set(replay_plan.hashes))} hashes; "
+                f"raw rows in window: {replay_plan.row_counts}"
             )
             if not args.execute:
                 print("dry-run — pass --execute to delete window rows + hashes and re-POST")
                 return 0
 
-            _delete_window(conn, signals, start, end, hashes)
-
-        post_progress = Progress("re-POST blobs", total=len(names))
-        with httpx.Client(base_url=args.sink_url, timeout=30) as client:
-            for name in names:
-                resp = client.post(
-                    endpoint_for(name),
-                    content=reservoir.download(name),
-                    headers={"content-type": "application/json", "content-encoding": "gzip"},
-                )
-                resp.raise_for_status()
-                post_progress.tick()
-        post_progress.done()
-        print(f"re-POSTed {len(names)} blobs to {args.sink_url}")
+            with httpx.Client(base_url=args.sink_url, timeout=30) as client:
+                apply(conn, reservoir, client, replay_plan)
+            print(f"re-POSTed {len(replay_plan.names)} blobs to {args.sink_url}")
     finally:
         reservoir.close()
     return 0
