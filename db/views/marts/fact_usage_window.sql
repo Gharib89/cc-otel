@@ -17,7 +17,7 @@ CREATE MATERIALIZED VIEW marts.fact_usage_window AS
            FROM staging.stg_utilization_segments
           GROUP BY stg_utilization_segments.user_email, stg_utilization_segments.window_type, stg_utilization_segments.window_end, stg_utilization_segments.segment_no
         )
- SELECT COALESCE(user_email, '(unknown)'::text) AS user_email,
+ SELECT marts.email_bucket(user_email) AS user_email,
     window_type,
     window_end,
     segment_no,

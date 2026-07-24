@@ -9,7 +9,7 @@ CREATE MATERIALIZED VIEW marts.fact_edit_decision AS
     language,
     decision,
     source,
-    COALESCE((array_agg(user_email) FILTER (WHERE (user_email IS NOT NULL)))[1], '(unknown)'::text) AS user_email,
+    marts.email_bucket((array_agg(user_email) FILTER (WHERE (user_email IS NOT NULL)))[1]) AS user_email,
     sum(value) AS decision_count
    FROM staging.stg_counter_delta
   WHERE ((metric_name = 'claude_code.code_edit_tool.decision'::text) AND (session_id IS NOT NULL))

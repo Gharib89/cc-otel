@@ -18,7 +18,7 @@ CREATE MATERIALIZED VIEW marts.dim_user AS
             events.event_time
            FROM raw.events
         )
- SELECT COALESCE(user_email, '(unknown)'::text) AS user_email,
+ SELECT marts.email_bucket(user_email) AS user_email,
     (user_email IS NULL) AS is_unknown,
     min(seen_at) AS first_seen,
     max(seen_at) AS last_seen,
@@ -26,7 +26,7 @@ CREATE MATERIALIZED VIEW marts.dim_user AS
     (array_agg(organization_id) FILTER (WHERE (organization_id IS NOT NULL)))[1] AS organization_id,
     (array_agg(cc_version ORDER BY seen_at DESC) FILTER (WHERE (cc_version IS NOT NULL)))[1] AS last_cc_version
    FROM seen
-  GROUP BY COALESCE(user_email, '(unknown)'::text), (user_email IS NULL);
+  GROUP BY (marts.email_bucket(user_email)), (user_email IS NULL);
 
 CREATE UNIQUE INDEX dim_user_pk ON marts.dim_user USING btree (user_email);
 

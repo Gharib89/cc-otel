@@ -26,7 +26,7 @@ CREATE MATERIALIZED VIEW marts.fact_session AS
         )
  SELECT sig.session_id,
     st.start_type,
-    COALESCE((array_agg(sig.user_email ORDER BY sig.t) FILTER (WHERE (sig.user_email IS NOT NULL)))[1], '(unknown)'::text) AS user_email,
+    marts.email_bucket((array_agg(sig.user_email ORDER BY sig.t) FILTER (WHERE (sig.user_email IS NOT NULL)))[1]) AS user_email,
     min(sig.t) AS started_at,
     (array_agg(sig.cc_version ORDER BY sig.t DESC) FILTER (WHERE (sig.cc_version IS NOT NULL)))[1] AS cc_version,
     (EXTRACT(epoch FROM (max(sig.t) - min(sig.t))))::bigint AS duration_s
