@@ -279,7 +279,10 @@ def _run_check(database_url: str | None) -> int:
     with _connection(database_url) as conn:
         div = divergence(conn)
     if not div.empty():
-        print("matview_sync: canonical files <-> marts divergence:\n" + div.report(), file=sys.stderr)
+        print(
+            "matview_sync: canonical files <-> marts divergence:\n" + div.report(),
+            file=sys.stderr,
+        )
         return 1
     print("matview_sync: every mart body converges with its canonical file.")
     return 0
@@ -292,7 +295,8 @@ def _run_bootstrap(database_url: str | None) -> int:
     for mart in marts:
         dest = _VIEWS_DIR / f"{mart.name}.sql"
         dest.write_text(render_canonical(mart), encoding="utf-8")
-    print(f"matview_sync: wrote {len(marts)} canonical files to {_VIEWS_DIR.relative_to(_REPO_ROOT)}")
+    rel = _VIEWS_DIR.relative_to(_REPO_ROOT)
+    print(f"matview_sync: wrote {len(marts)} canonical files to {rel}")
     return 0
 
 
@@ -327,7 +331,10 @@ def _run_author(slug: str) -> int:
             print(f"matview_sync: normalized {src.relative_to(_REPO_ROOT)} to pg_matviews form")
         div = divergence(conn)
     if not div.empty():
-        print("matview_sync: generated migration did not converge:\n" + div.report(), file=sys.stderr)
+        print(
+            "matview_sync: generated migration did not converge:\n" + div.report(),
+            file=sys.stderr,
+        )
         return 1
     print("matview_sync: migration written; canonical file converges. "
           "Run scripts/dev-migrate.sh to regenerate db/schema.sql.")
@@ -338,7 +345,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="matview_sync", description=__doc__)
     parser.add_argument("--check", action="store_true", help="gate mode (default)")
     parser.add_argument("--name", help="author mode: mart slug to generate a migration for")
-    parser.add_argument("--bootstrap", action="store_true", help="one-time: extract all mart bodies")
+    parser.add_argument("--bootstrap", action="store_true", help="one-time: extract mart bodies")
     parser.add_argument("--database-url", help="already-migrated DB for --check / --bootstrap")
     args = parser.parse_args(argv)
 
