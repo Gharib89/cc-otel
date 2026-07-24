@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import time
@@ -299,6 +300,15 @@ def _run_bootstrap(database_url: str | None) -> int:
 
 
 def _run_author(slug: str) -> int:
+    # The slug is interpolated into file paths and unquoted SQL identifiers; keep
+    # it to the shape every real mart already has so a typo can't escape the dir
+    # or malform the migration.
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", slug):
+        print(
+            f"matview_sync: invalid slug {slug!r} — expected lowercase [a-z][a-z0-9_]*",
+            file=sys.stderr,
+        )
+        return 1
     src = _VIEWS_DIR / f"{slug}.sql"
     if not src.exists():
         print(f"matview_sync: no canonical file at {src.relative_to(_REPO_ROOT)}", file=sys.stderr)

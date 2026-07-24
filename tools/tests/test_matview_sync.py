@@ -7,8 +7,11 @@ tests/integration/test_matview_sync.py.
 
 from __future__ import annotations
 
+import pytest
+
 from tools.matview_sync import (
     Mart,
+    _run_author,
     compute_divergence,
     render_canonical,
     render_migration,
@@ -98,3 +101,12 @@ def test_render_migration_new_mart_has_no_leading_drop_and_down_drops_if_exists(
     up, down = sql.split("-- migrate:down", 1)
     assert "DROP MATERIALIZED VIEW marts.brand_new;" not in up
     assert "DROP MATERIALIZED VIEW IF EXISTS marts.brand_new;" in down
+
+
+# --- slug validation ----------------------------------------------------------
+
+
+@pytest.mark.parametrize("slug", ["../evil", "a/b", "Bad", "9x", "with space", "drop;--"])
+def test_run_author_rejects_unsafe_slug(slug: str) -> None:
+    # Validation fails fast before any file/DB access, so no Docker is needed.
+    assert _run_author(slug) == 1

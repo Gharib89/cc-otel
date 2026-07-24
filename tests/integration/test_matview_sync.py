@@ -93,21 +93,21 @@ def test_author_new_mart_writes_migration_normalizes_and_converges(
     monkeypatch.setattr(ms, "_MIGRATIONS_DIR", migrations)
     monkeypatch.setattr(ms, "_VIEWS_DIR", views)
 
-    src = views / "_rt_author.sql"
+    src = views / "rt_author.sql"
     src.write_text(
         render_canonical(
             Mart(
-                name="_rt_author",
+                name="rt_author",
                 definition=" SELECT 1 as k,2 as v;",  # hand-written, non-deparsed style
-                index_def="CREATE UNIQUE INDEX _rt_author_pk ON marts._rt_author USING btree (k)",
+                index_def="CREATE UNIQUE INDEX rt_author_pk ON marts.rt_author USING btree (k)",
             )
         ),
         encoding="utf-8",
     )
     before = src.read_text(encoding="utf-8")
 
-    assert ms._run_author("_rt_author") == 0  # returns 0 only when it converges
+    assert ms._run_author("rt_author") == 0  # returns 0 only when it converges
     after = src.read_text(encoding="utf-8")
     assert after != before  # file normalized to the deparser's own form
-    assert "CREATE MATERIALIZED VIEW marts._rt_author AS" in after
-    assert list(migrations.glob("*_rt_author.sql"))  # a migration was authored
+    assert "CREATE MATERIALIZED VIEW marts.rt_author AS" in after
+    assert list(migrations.glob("*rt_author.sql"))  # a migration was authored
