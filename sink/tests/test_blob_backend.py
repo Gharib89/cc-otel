@@ -88,5 +88,6 @@ def test_build_container_client_account_url_path(fake_azure):
     assert client.credential is credential
 
 
-def test_build_container_client_unconfigured_is_none(fake_azure):
+def test_build_container_client_unconfigured_is_none():
+    # No fixture: the unconfigured branch returns before importing the Azure SDK.
     assert build_container_client(_settings()) is None
