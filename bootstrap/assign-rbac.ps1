@@ -32,6 +32,7 @@ param(
 )
 
 . (Join-Path (Join-Path $PSScriptRoot 'lib') 'Get-BootstrapConfig.ps1') -Environment $Environment
+. (Join-Path (Join-Path $PSScriptRoot 'lib') 'Common.ps1')
 
 # =============================================================================
 # Pure functions (no side effects) - the tested seam.
@@ -122,11 +123,6 @@ function Get-RoleAssignmentBody {
 # Effectful shims - thin wrappers over `az`, kept small on purpose.
 # =============================================================================
 
-function Write-BootstrapLog {
-    param([Parameter(Mandatory)][string]$Message, [string]$Level = 'INFO')
-    Write-Information "[$Level] $Message" -InformationAction Continue
-}
-
 function Get-RoleDefinition {
     <#
     .SYNOPSIS Look up a built-in role definition for this scope (never hardcoded).
@@ -157,17 +153,10 @@ function New-RoleAssignment {
     [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory)][string]$Uri, [Parameter(Mandatory)][string]$Body)
     if (-not $PSCmdlet.ShouldProcess($Uri, 'PUT role assignment')) { return }
-    # Via a temp file (az --body @file): inline JSON is mangled by PowerShell/az
-    # quote-stripping on Windows, which drops the value quotes so the server reads
-    # the roleDefinitionId's leading "/s" as a comment and rejects the request.
-    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("ra-" + [guid]::NewGuid().ToString() + ".json")
-    try {
-        [System.IO.File]::WriteAllText($tmp, $Body)
+    Invoke-WithBodyFile -Body $Body -Action {
+        param($tmp)
         az rest --method PUT --uri $Uri --body "@$tmp" --headers 'Content-Type=application/json' --output none
         if ($LASTEXITCODE -ne 0) { throw "Role assignment PUT failed (az exit $LASTEXITCODE)." }
-    }
-    finally {
-        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
     }
 }
 

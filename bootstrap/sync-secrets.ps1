@@ -27,6 +27,7 @@ param(
 )
 
 . (Join-Path (Join-Path $PSScriptRoot 'lib') 'Get-BootstrapConfig.ps1') -Environment $Environment
+. (Join-Path (Join-Path $PSScriptRoot 'lib') 'Common.ps1')
 
 # =============================================================================
 # Pure functions (no side effects) - the tested seam.
@@ -37,27 +38,24 @@ function Get-SecretPushPlan {
     .SYNOPSIS Resolve which GitHub secret names + values to push for an environment.
     .DESCRIPTION The mapping mirrors deploy.yml's required secrets: DATABASE_URL,
     AZURE_SUBSCRIPTION_ID and RESOURCE_GROUP are environment-prefixed
-    (INTERIM_/PROD_); AZURE_CLIENT_ID and AZURE_TENANT_ID are shared and unprefixed.
-    Throws when a required key is absent from the parsed values.
+    (INTERIM_/PROD_, from the config's SecretPrefix); AZURE_CLIENT_ID and
+    AZURE_TENANT_ID are shared and unprefixed. The config is already validated by
+    Get-BootstrapConfig (the one .env gate), so no per-key check is repeated here.
     .OUTPUTS Array of [pscustomobject]@{ Secret; Value }.
     #>
     param(
-        [Parameter(Mandatory)][ValidateSet('interim', 'prod')][string]$Environment,
-        [Parameter(Mandatory)][System.Collections.IDictionary]$Values
+        [Parameter(Mandatory)][pscustomobject]$Config
     )
-    $prefix = $Environment.ToUpperInvariant()
+    $prefix = $Config.SecretPrefix
     $mapping = @(
-        [pscustomobject]@{ EnvKey = 'DATABASE_URL';          Secret = "${prefix}_DATABASE_URL" }
-        [pscustomobject]@{ EnvKey = 'AZURE_SUBSCRIPTION_ID'; Secret = "${prefix}_AZURE_SUBSCRIPTION_ID" }
-        [pscustomobject]@{ EnvKey = 'RESOURCE_GROUP';        Secret = "${prefix}_RESOURCE_GROUP" }
-        [pscustomobject]@{ EnvKey = 'AZURE_CLIENT_ID';       Secret = 'AZURE_CLIENT_ID' }
-        [pscustomobject]@{ EnvKey = 'AZURE_TENANT_ID';       Secret = 'AZURE_TENANT_ID' }
+        [pscustomobject]@{ Value = $Config.DatabaseUrl;    Secret = "${prefix}_DATABASE_URL" }
+        [pscustomobject]@{ Value = $Config.SubscriptionId; Secret = "${prefix}_AZURE_SUBSCRIPTION_ID" }
+        [pscustomobject]@{ Value = $Config.ResourceGroup;  Secret = "${prefix}_RESOURCE_GROUP" }
+        [pscustomobject]@{ Value = $Config.ClientId;       Secret = 'AZURE_CLIENT_ID' }
+        [pscustomobject]@{ Value = $Config.TenantId;       Secret = 'AZURE_TENANT_ID' }
     )
     $plan = foreach ($m in $mapping) {
-        if (-not $Values.Contains($m.EnvKey) -or [string]::IsNullOrWhiteSpace($Values[$m.EnvKey])) {
-            throw "Required key '$($m.EnvKey)' is missing or empty in the env file."
-        }
-        [pscustomobject]@{ Secret = $m.Secret; Value = [string]$Values[$m.EnvKey] }
+        [pscustomobject]@{ Secret = $m.Secret; Value = [string]$m.Value }
     }
     return @($plan)
 }
@@ -65,11 +63,6 @@ function Get-SecretPushPlan {
 # =============================================================================
 # Effectful shims - thin wrappers over the filesystem and `gh`.
 # =============================================================================
-
-function Write-BootstrapLog {
-    param([Parameter(Mandatory)][string]$Message, [string]$Level = 'INFO')
-    Write-Information "[$Level] $Message" -InformationAction Continue
-}
 
 function Set-GitHubSecret {
     <# .SYNOPSIS Upsert one repo secret via `gh secret set` (value on stdin). #>
@@ -111,21 +104,14 @@ function Invoke-SecretSync {
     Set-StrictMode -Version Latest
     $ErrorActionPreference = 'Stop'
 
-    if ([string]::IsNullOrWhiteSpace($EnvFile)) {
-        $EnvFile = Join-Path (Split-Path -Parent $PSScriptRoot) ".env.$Environment"
-    }
-    if (-not (Test-Path -LiteralPath $EnvFile)) {
-        throw "Env file not found: $EnvFile"
-    }
-
-    $values = ConvertFrom-DotEnv -Line (Get-Content -LiteralPath $EnvFile)
-    $plan = Get-SecretPushPlan -Environment $Environment -Values $values
+    $cfg = Get-BootstrapConfig -Environment $Environment -EnvFile $EnvFile
+    $plan = Get-SecretPushPlan -Config $cfg
 
     foreach ($p in $plan) {
         Set-GitHubSecret -Name $p.Secret -Value $p.Value -Repository $Repository -Confirm:$false
         Write-BootstrapLog "Synced secret $($p.Secret)."
     }
-    Write-BootstrapLog "Synced $($plan.Count) secrets to $Repository from $EnvFile."
+    Write-BootstrapLog "Synced $($plan.Count) secrets to $Repository from .env.$Environment."
     return 0
 }
 
