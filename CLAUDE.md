@@ -48,6 +48,8 @@ scripts/dev-migrate.sh       # apply migrations + regenerate schema.sql on throw
 scripts/dev-migrate.sh --check  # schema-drift verdict: normalized diff vs HEAD, exit 1 on drift (CI + local gate run this)
 uv run python -m tools.spec_sync --check       # gate: column_spec.py <-> migrations converge + mart-literal lint (needs Docker)
 uv run python -m tools.spec_sync --name <slug> # author: spec delta -> new migration + schema.sql regen
+uv run python -m tools.matview_sync --check    # gate: canonical db/views/marts/ files <-> pg_matviews converge, both ways (needs Docker)
+uv run python -m tools.matview_sync --name <slug>  # author: edited mart file -> DROP+CREATE+index+GRANT migration (git-HEAD down body) + schema.sql regen
 scripts/ship/local-gate.sh   # path-aware local mirror of CI (JSON verdict; the ship skill's phase-5 gate)
 psql "$DATABASE_URL"         # ad-hoc DB access (Azure otel real data / cc_otel)
 ```
