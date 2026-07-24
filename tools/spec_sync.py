@@ -31,9 +31,7 @@ import os
 import re
 import subprocess
 import sys
-import time
 from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -49,8 +47,11 @@ from cc_otel_sink.column_spec import (
     registry_rows,
 )
 
+from tools import _ephemeral_pg
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _MIGRATIONS_DIR = _REPO_ROOT / "db" / "migrations"
+_CONTAINER = "cc-otel-spec-sync"
 
 # Spec DataType -> information_schema.columns.data_type (raw-table check only;
 # the registry stores the spec's own type string verbatim).
@@ -282,81 +283,6 @@ def lint_mart_literals(migrations_dir: Path = _MIGRATIONS_DIR) -> list[LiteralVi
     return violations
 
 
-# --- ephemeral DB (self-provision when no URL is given) -----------------------
-
-
-def _up_section(sql: str) -> str:
-    return sql.split("-- migrate:up", 1)[1].split("-- migrate:down", 1)[0]
-
-
-def _apply_migrations(conn: psycopg.Connection) -> None:
-    conn.autocommit = True
-    for path in sorted(_MIGRATIONS_DIR.glob("*.sql")):
-        up = _up_section(path.read_text(encoding="utf-8")).strip()
-        if up:
-            conn.execute(up)  # type: ignore[arg-type]
-
-
-@contextmanager
-def _ephemeral_db() -> Iterator[psycopg.Connection]:
-    """Spin a throwaway ``postgres:16``, apply every migration, yield a connection."""
-    name = "cc-otel-spec-sync"
-    subprocess.run(["docker", "rm", "-f", name], capture_output=True, check=False)
-    subprocess.run(
-        [
-            "docker",
-            "run",
-            "-d",
-            "--name",
-            name,
-            "-e",
-            "POSTGRES_USER=postgres",
-            "-e",
-            "POSTGRES_PASSWORD=postgres",
-            "-e",
-            "POSTGRES_DB=cc_otel",
-            "-p",
-            "127.0.0.1::5432",
-            "postgres:16",
-        ],
-        check=True,
-        capture_output=True,
-    )
-    try:
-        port = (
-            subprocess.run(
-                ["docker", "port", name, "5432"], check=True, capture_output=True, text=True
-            )
-            .stdout.strip()
-            .rsplit(":", 1)[-1]
-        )
-        url = f"postgres://postgres:postgres@127.0.0.1:{port}/cc_otel?sslmode=disable"
-        conn = None
-        for _ in range(30):
-            try:
-                conn = psycopg.connect(url)
-                break
-            except psycopg.OperationalError:
-                time.sleep(1)
-        if conn is None:
-            raise RuntimeError("ephemeral Postgres did not become ready within 30s")
-        with conn:
-            _apply_migrations(conn)
-            yield conn
-    finally:
-        subprocess.run(["docker", "rm", "-f", name], capture_output=True, check=False)
-
-
-@contextmanager
-def _connection(database_url: str | None) -> Iterator[psycopg.Connection]:
-    if database_url:
-        with psycopg.connect(database_url) as conn:
-            yield conn
-    else:
-        with _ephemeral_db() as conn:
-            yield conn
-
-
 # --- CLI ----------------------------------------------------------------------
 
 
@@ -369,7 +295,7 @@ def _run_check(database_url: str | None) -> int:
             f"  {v.path.name}:{v.line} {v.column} = '{v.literal}' not in spec catalog" for v in lint
         )
         print("spec_sync: mart-literal lint:\n" + report, file=sys.stderr)
-    with _connection(database_url) as conn:
+    with _ephemeral_pg.connection(database_url, _CONTAINER, _MIGRATIONS_DIR) as conn:
         delta = compute_delta(conn)
     if not delta.empty():
         rc = 1
@@ -380,7 +306,7 @@ def _run_check(database_url: str | None) -> int:
 
 
 def _run_author(name: str, *, allow_destructive: bool) -> int:
-    with _ephemeral_db() as conn:
+    with _ephemeral_pg.ephemeral_db(_CONTAINER, _MIGRATIONS_DIR) as conn:
         delta = compute_delta(conn)
     if delta.empty():
         print("spec_sync: nothing to do — spec already matches migrations.")
@@ -392,7 +318,7 @@ def _run_author(name: str, *, allow_destructive: bool) -> int:
     print(f"spec_sync: wrote {dest.relative_to(_REPO_ROOT)}")
     # Re-apply from zero (incl. the new file) and regenerate schema.sql.
     subprocess.run([str(_REPO_ROOT / "scripts" / "dev-migrate.sh")], check=True)
-    with _ephemeral_db() as conn:
+    with _ephemeral_pg.ephemeral_db(_CONTAINER, _MIGRATIONS_DIR) as conn:
         if not compute_delta(conn).empty():
             print("spec_sync: generated migration did not close the delta.", file=sys.stderr)
             return 1

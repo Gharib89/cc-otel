@@ -40,19 +40,19 @@ import os
 import re
 import subprocess
 import sys
-import time
-from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
 import psycopg
 
+from tools import _ephemeral_pg
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _MIGRATIONS_DIR = _REPO_ROOT / "db" / "migrations"
 _VIEWS_DIR = _REPO_ROOT / "db" / "views" / "marts"
 _READ_ROLE = "cc_otel_read"
+_CONTAINER = "cc-otel-matview-sync"
 
 _HEADER = (
     "-- Canonical definition for marts.{name}.\n"
@@ -192,81 +192,6 @@ def divergence(conn: psycopg.Connection) -> Divergence:
     return compute_divergence(rendered, disk_files())
 
 
-# --- ephemeral DB (self-provision when no URL is given) -----------------------
-
-
-def _up_section(sql: str) -> str:
-    return sql.split("-- migrate:up", 1)[1].split("-- migrate:down", 1)[0]
-
-
-def _apply_migrations(conn: psycopg.Connection) -> None:
-    conn.autocommit = True
-    for path in sorted(_MIGRATIONS_DIR.glob("*.sql")):
-        up = _up_section(path.read_text(encoding="utf-8")).strip()
-        if up:
-            conn.execute(up)  # type: ignore[arg-type]
-
-
-@contextmanager
-def _ephemeral_db() -> Iterator[psycopg.Connection]:
-    """Spin a throwaway ``postgres:16``, apply every migration, yield a connection."""
-    name = "cc-otel-matview-sync"
-    subprocess.run(["docker", "rm", "-f", name], capture_output=True, check=False)
-    subprocess.run(
-        [
-            "docker",
-            "run",
-            "-d",
-            "--name",
-            name,
-            "-e",
-            "POSTGRES_USER=postgres",
-            "-e",
-            "POSTGRES_PASSWORD=postgres",
-            "-e",
-            "POSTGRES_DB=cc_otel",
-            "-p",
-            "127.0.0.1::5432",
-            "postgres:16",
-        ],
-        check=True,
-        capture_output=True,
-    )
-    try:
-        port = (
-            subprocess.run(
-                ["docker", "port", name, "5432"], check=True, capture_output=True, text=True
-            )
-            .stdout.strip()
-            .rsplit(":", 1)[-1]
-        )
-        url = f"postgres://postgres:postgres@127.0.0.1:{port}/cc_otel?sslmode=disable"
-        conn = None
-        for _ in range(30):
-            try:
-                conn = psycopg.connect(url)
-                break
-            except psycopg.OperationalError:
-                time.sleep(1)
-        if conn is None:
-            raise RuntimeError("ephemeral Postgres did not become ready within 30s")
-        with conn:
-            _apply_migrations(conn)
-            yield conn
-    finally:
-        subprocess.run(["docker", "rm", "-f", name], capture_output=True, check=False)
-
-
-@contextmanager
-def _connection(database_url: str | None) -> Iterator[psycopg.Connection]:
-    if database_url:
-        with psycopg.connect(database_url) as conn:
-            yield conn
-    else:
-        with _ephemeral_db() as conn:
-            yield conn
-
-
 # --- CLI ----------------------------------------------------------------------
 
 
@@ -284,7 +209,7 @@ def _git_head_file(slug: str) -> str | None:
 
 
 def _run_check(database_url: str | None) -> int:
-    with _connection(database_url) as conn:
+    with _ephemeral_pg.connection(database_url, _CONTAINER, _MIGRATIONS_DIR) as conn:
         div = divergence(conn)
     if not div.empty():
         print(
@@ -298,7 +223,7 @@ def _run_check(database_url: str | None) -> int:
 
 def _run_bootstrap(database_url: str | None) -> int:
     _VIEWS_DIR.mkdir(parents=True, exist_ok=True)
-    with _connection(database_url) as conn:
+    with _ephemeral_pg.connection(database_url, _CONTAINER, _MIGRATIONS_DIR) as conn:
         marts = read_live_marts(conn)
     for mart in marts:
         dest = _VIEWS_DIR / f"{mart.name}.sql"
@@ -336,7 +261,7 @@ def _run_author(slug: str) -> int:
     # deparsed form, so a hand-edit in any style still converges under --check.
     # Pure Docker + psycopg (no shell-out) so this runs identically on Windows and
     # CI. schema.sql regeneration stays with its owner, scripts/dev-migrate.sh.
-    with _ephemeral_db() as conn:
+    with _ephemeral_pg.ephemeral_db(_CONTAINER, _MIGRATIONS_DIR) as conn:
         live = {m.name: m for m in read_live_marts(conn)}
         if slug not in live:
             print(f"matview_sync: migration did not create marts.{slug}.", file=sys.stderr)
