@@ -29,9 +29,7 @@ def test_render_canonical_wraps_definition_index_and_grant() -> None:
     assert (
         "CREATE MATERIALIZED VIEW marts.dim_model AS\n SELECT model AS model_id\n   FROM ids;"
     ) in text
-    assert (
-        "CREATE UNIQUE INDEX dim_model_pk ON marts.dim_model USING btree (model_id);" in text
-    )
+    assert "CREATE UNIQUE INDEX dim_model_pk ON marts.dim_model USING btree (model_id);" in text
     assert "GRANT SELECT ON marts.dim_model TO cc_otel_read;" in text
     # A header comment names the mart and points at the regen command.
     assert text.startswith("-- Canonical definition for marts.dim_model.")

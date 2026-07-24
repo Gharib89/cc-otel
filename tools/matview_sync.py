@@ -105,10 +105,7 @@ def render_migration(slug: str, current: str, previous: str | None) -> str:
         up_body = current.rstrip()
         down_body = f"DROP MATERIALIZED VIEW IF EXISTS marts.{slug};"
     return (
-        f"-- migrate:up\n-- matview_sync: {slug}\n\n"
-        f"{up_body}\n\n"
-        f"-- migrate:down\n\n"
-        f"{down_body}\n"
+        f"-- migrate:up\n-- matview_sync: {slug}\n\n{up_body}\n\n-- migrate:down\n\n{down_body}\n"
     )
 
 
@@ -168,9 +165,7 @@ def read_live_marts(conn: psycopg.Connection) -> list[Mart]:
             )
             idx = cur.fetchall()
         if len(idx) != 1:
-            raise RuntimeError(
-                f"marts.{name}: expected exactly one unique index, found {len(idx)}"
-            )
+            raise RuntimeError(f"marts.{name}: expected exactly one unique index, found {len(idx)}")
         marts.append(Mart(name=name, definition=definition.rstrip(), index_def=idx[0][0]))
     return marts
 
@@ -339,8 +334,10 @@ def _run_author(slug: str) -> int:
             file=sys.stderr,
         )
         return 1
-    print("matview_sync: migration written; canonical file converges. "
-          "Run scripts/dev-migrate.sh to regenerate db/schema.sql.")
+    print(
+        "matview_sync: migration written; canonical file converges. "
+        "Run scripts/dev-migrate.sh to regenerate db/schema.sql."
+    )
     return 0
 
 
