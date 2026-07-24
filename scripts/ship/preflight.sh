@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ship phase-0 pre-flight: is <issue> actionable, or already in flight/shipped?
+# ship pre-flight: is <issue> actionable, or already in flight/shipped?
 #
 # Checks, in order: issue state, any non-closed PR whose head branch ends in
 # `-<issue>` (the repo's `<type>/<slug>-<issue>` convention), and any remote
@@ -15,7 +15,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 n=${1:?usage: scripts/ship/preflight.sh <issue-number>}
 
 emit() { # emit <true|false> <reason>
-  ship_emit actionable "$1" reason "$(ship_qstr "$2")" assignees "${assignees:-[]}"
+  ship_emit actionable @"$1" reason "$2" assignees @"${assignees:-[]}"
 }
 
 state=$(gh issue view "$n" --json state --jq .state) \

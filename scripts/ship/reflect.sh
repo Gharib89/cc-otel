@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ship phase-6 PR-reflect: comment the PR link on the issue so a scheduled run
+# ship PR-reflect: comment the PR link on the issue so a scheduled run
 # won't re-pick it.
 #
 # stdout: {"issue": N, "reflected": "<pr-url>"}
@@ -13,5 +13,5 @@ n=${1:?usage: scripts/ship/reflect.sh <issue> <pr-url>}
 url=${2:?usage: scripts/ship/reflect.sh <issue> <pr-url>}
 
 gh issue comment "$n" --body "PR: $url" >/dev/null \
-  || { ship_emit issue "$n" error "$(ship_qstr "gh issue comment failed")"; exit 2; }
-ship_emit issue "$n" reflected "$(ship_qstr "$url")"
+  || { ship_emit issue @"$n" error "gh issue comment failed"; exit 2; }
+ship_emit issue @"$n" reflected "$url"

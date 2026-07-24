@@ -6,7 +6,9 @@
 #      back out at merge) — SHIP_ENV_FILES, the single source so a fourth file
 #      can't be added to one side and silently lost at the other;
 #   2. the `<type>/<slug>-<issue>` branch convention — construct + suffix match;
-#   3. the JSON-object emit pattern every script prints on stdout.
+#   3. the JSON-object emit pattern every script prints on stdout;
+#   4. the secrets-scan regexes local-gate.sh greps with (#269) — security
+#      load-bearing, so they live here where test_ship_lib.py can exercise them.
 #
 # Kept intentionally shallow: local-gate.sh keeps its own record()/verdict logic,
 # and claim.sh/reflect.sh stay one-liners over these helpers.
@@ -36,14 +38,32 @@ ship_qstr() { # ship_qstr <string> -> a JSON string literal (escapes \ " and \t 
   printf '"%s"' "$s"
 }
 
-ship_emit() { # ship_emit <key> <raw-json-value> [<key> <raw-json-value> ...]
-  # Values are emitted verbatim: quote strings with ship_qstr, pass bools/arrays raw.
+ship_emit() { # ship_emit <key> <value> [<key> <value> ...]
+  # Default: <value> is quoted/escaped as a JSON string. An @-prefixed value is
+  # emitted as raw JSON (bools, numbers, arrays, objects) after the sigil is
+  # stripped. Forgetting the sigil yields a valid, stringified value — never
+  # invalid JSON. `@` is recognised only as the first character; the inverse
+  # footgun (a string value whose content starts with `@` emits as raw) has no
+  # caller today — every string emitted here has a literal non-`@` prefix.
   local out="" k v
   while [ $# -gt 0 ]; do
     k=$1
     v=$2
     shift 2
+    case $v in
+      @*) v=${v#@} ;;
+      *)  v=$(ship_qstr "$v") ;;
+    esac
     out="$out${out:+,}\"$k\":$v"
   done
   printf '{%s}\n' "$out"
 }
+
+# 4. Secrets-scan regexes ----------------------------------------------------
+# local-gate.sh's always-on secrets grep matches SECRET_RE (case-insensitive)
+# on added diff lines + untracked files, minus IGNORE_RE. The throwaway
+# container creds (postgres:postgres) are the one sanctioned literal.
+# NB: this file is itself a guaranteed SECRET_RE hit — local-gate.sh excludes it
+# from the scan alongside its own path.
+SECRET_RE='postgres(ql)?://[^ "'"'"']+:[^ "'"'"'@]+@|bearer +[a-z0-9._~+/=-]{25,}|AKIA[A-Z0-9]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|client_secret[^a-z_]|sig=[a-z0-9%]{30,}'
+IGNORE_RE='postgres://postgres:postgres@'

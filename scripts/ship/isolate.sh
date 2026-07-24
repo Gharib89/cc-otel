@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ship phase-0 isolate: sibling worktree on a fresh branch off origin's default,
+# ship isolate: sibling worktree on a fresh branch off origin's default,
 # with the gitignored env files copied in (they never get committed).
 #
 # stdout: {"worktree": "...", "branch": "...", "env_files": [...]}
@@ -24,7 +24,7 @@ wt="$(dirname "$root")/$(basename "$root")-$n"
 git fetch origin main >&2
 
 if git show-ref --verify --quiet "refs/heads/$branch" || [ -e "$wt" ]; then
-  ship_emit error "$(ship_qstr "branch $branch or worktree $wt already exists")"
+  ship_emit error "branch $branch or worktree $wt already exists"
   exit 1
 fi
 
@@ -40,4 +40,4 @@ for f in "${SHIP_ENV_FILES[@]}"; do
 done
 [ -n "$files" ] && copied="[$files]"
 
-ship_emit worktree "$(ship_qstr "$wt")" branch "$(ship_qstr "$branch")" env_files "$copied"
+ship_emit worktree "$wt" branch "$branch" env_files @"$copied"
