@@ -68,6 +68,16 @@ _Avoid_: attr map, column table
 **Drift**:
 An `attrs`/`resource` key observed in the raw reservoir but absent from the column registry — the signal that Anthropic added new telemetry. Surfaced on demand by prepared DuckDB queries (`tools/`) over the reservoir; analysis is manual. Postgres cannot detect it — schema-v2 drops the JSONB there.
 
+### Identity
+
+**Linked identity**:
+A telemetry identity on a personal email address, resolved to the corporate identity of the same person because the two emitted under a shared `session_id` — one Claude Code process, one human re-authenticating. Resolved for **visibility only**: the two keep separate `dim_user` rows and separate facts, and the personal one still reads `"Off-roster identity"` on Data Health. The link exists so `OrgScope` admits the personal identity into that person's management chain, which it otherwise cannot, there being no HR row on a personal address. Derived under guards (two shared sessions, exactly one corporate partner, never corporate-to-corporate) or supplied by the operator when no shared session exists; a human-supplied link always outranks a derived one. See ADR-0011.
+_Avoid_: merged user, alias account, identity resolution
+
+**Scoping address**:
+The address an identity is **secured** as, distinct from the address it **emits** as — `dim_user[rls_email]`. Its own address for everyone except a **linked identity**, which carries its corporate counterpart's. Both relationships out of `dim_user` key on it, so the `OrgScope` predicates themselves never mention linking (ADR-0011).
+_Avoid_: canonical email, primary email
+
 ### Licensing
 
 **Seat**:

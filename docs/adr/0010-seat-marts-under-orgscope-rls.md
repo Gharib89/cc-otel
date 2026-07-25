@@ -2,6 +2,12 @@
 
 **Status:** accepted
 
+**Two consequence bullets are amended by ADR-0011** (#303) — "off-roster personal-email identities
+stay invisible to role viewers" becomes conditional on no link existing, and "Data Health is not
+published to a manager audience" loses its stated reason for that class. The decisions below,
+including all four subtree predicates, stand unchanged: ADR-0011 re-points relationship keys and
+adds no permission.
+
 Retiring the fabricated `seat_roster` (#294) put three real seat marts into the semantic model:
 `dim_seat_current`, `dim_seat`, and `fact_seat_day`. All three come from IS's roster drop
 (ADR-0009), and all three sit outside the `OrgScope` security-filter chain, which reaches only
