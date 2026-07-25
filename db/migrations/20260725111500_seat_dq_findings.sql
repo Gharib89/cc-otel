@@ -137,21 +137,6 @@ BEGIN
     -- a real revocation. This catches the plausible-looking bad export that the loader's
     -- truncation guards let through.
     INSERT INTO marts.dq_finding (finding_type, row_count, details)
-    WITH uncovered AS (
-        SELECT
-            t.user_email,
-            t.activity_date,
-            (SELECT MAX(i.valid_to)
-             FROM staging.stg_seat_interval i
-             WHERE i.user_email = t.user_email AND i.valid_to <= t.activity_date) AS closed_on
-        FROM staging.stg_telemetry_day t
-        WHERE NOT EXISTS (
-            SELECT 1 FROM staging.stg_seat_interval i
-            WHERE i.user_email = t.user_email
-              AND i.valid_from <= t.activity_date
-              AND (i.valid_to IS NULL OR i.valid_to > t.activity_date)
-        )
-    )
     SELECT 'seat_telemetry_after_close', COUNT(*),
            jsonb_build_object(
                'user_email', user_email,
@@ -159,7 +144,7 @@ BEGIN
                'first_activity_after_close', MIN(activity_date),
                'last_activity_after_close', MAX(activity_date)
            )
-    FROM uncovered
+    FROM staging.stg_seat_uncovered_day
     WHERE closed_on IS NOT NULL
     GROUP BY user_email;
 
@@ -168,28 +153,13 @@ BEGIN
     -- exactly once. Computed against raw telemetry (through the staging view), never against
     -- marts.dim_user.
     INSERT INTO marts.dq_finding (finding_type, row_count, details)
-    WITH uncovered AS (
-        SELECT
-            t.user_email,
-            t.activity_date,
-            (SELECT MAX(i.valid_to)
-             FROM staging.stg_seat_interval i
-             WHERE i.user_email = t.user_email AND i.valid_to <= t.activity_date) AS closed_on
-        FROM staging.stg_telemetry_day t
-        WHERE NOT EXISTS (
-            SELECT 1 FROM staging.stg_seat_interval i
-            WHERE i.user_email = t.user_email
-              AND i.valid_from <= t.activity_date
-              AND (i.valid_to IS NULL OR i.valid_to > t.activity_date)
-        )
-    )
     SELECT 'seat_emitter_without_seat', COUNT(*),
            jsonb_build_object(
                'user_email', user_email,
                'first_activity_date', MIN(activity_date),
                'last_activity_date', MAX(activity_date)
            )
-    FROM uncovered
+    FROM staging.stg_seat_uncovered_day
     WHERE closed_on IS NULL
     GROUP BY user_email;
 

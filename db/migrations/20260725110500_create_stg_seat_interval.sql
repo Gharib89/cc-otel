@@ -16,8 +16,9 @@
 -- tier change therefore closes the old interval exactly where the new one opens — no overlap,
 -- no gap, and no seat-day counted twice.
 --
--- The staging layer's charter widens here from "views over raw" to the transform layer over
--- both landing schemas. It stays ungranted, feeding matviews only.
+-- These live in staging, alongside the views over raw, because staging is the transform layer
+-- between the landing schemas and the marts. Like them they stay ungranted, feeding matviews
+-- and the refresh job only; Power BI reads the marts schema (#19).
 CREATE VIEW staging.stg_seat_interval AS
 WITH drop_of_date AS (
     -- One observation point per as-of date. ref.roster_drop.as_of_date is deliberately not
@@ -79,6 +80,7 @@ boundary AS (
         user_email,
         seat_tier,
         anthropic_org_name,
+        assignment_date,
         next_as_of,
         -- A new interval starts when the seat reappears after an absence (its previous
         -- sighting is not the immediately preceding drop, which also covers a first-ever
@@ -93,20 +95,28 @@ boundary AS (
         -- assignment date that is new relative to the person's previous sighting (a first
         -- grant, or a date that moved with a tier change), observation-dated otherwise. This
         -- needs no knowledge of whether IS overwrites the assignment date on upgrade, and
-        -- starts producing exact dates by itself if IS's behaviour changes.
-        CASE
-            WHEN assignment_date IS NOT NULL AND (
-                prev_seen_on IS NULL OR assignment_date IS DISTINCT FROM prev_assignment_date
-            ) THEN assignment_date
-            ELSE as_of_date
-        END AS valid_from,
-        CASE
-            WHEN assignment_date IS NOT NULL AND (
-                prev_seen_on IS NULL OR assignment_date IS DISTINCT FROM prev_assignment_date
-            ) THEN 'source-dated'
-            ELSE 'observation-dated'
-        END AS valid_from_basis
+        -- starts producing exact dates by itself if IS's behaviour changes. One predicate,
+        -- because the boundary date and the basis recorded for it must never disagree.
+        (
+            assignment_date IS NOT NULL
+            AND (prev_seen_on IS NULL OR assignment_date IS DISTINCT FROM prev_assignment_date)
+        ) AS is_source_dated
     FROM sighting
+),
+
+dated AS (
+    SELECT
+        as_of_date,
+        user_email,
+        seat_tier,
+        anthropic_org_name,
+        next_as_of,
+        starts_interval,
+        CASE WHEN is_source_dated THEN assignment_date ELSE as_of_date END AS valid_from,
+        CASE
+            WHEN is_source_dated THEN 'source-dated' ELSE 'observation-dated'
+        END AS valid_from_basis
+    FROM boundary
 ),
 
 numbered AS (
@@ -120,10 +130,10 @@ numbered AS (
         valid_from_basis,
         SUM(CASE WHEN starts_interval THEN 1 ELSE 0 END)
             OVER (PARTITION BY user_email ORDER BY as_of_date) AS interval_seq
-    FROM boundary
+    FROM dated
 ),
 
-episode AS (
+interval_run AS (
     -- Collapse the run of sightings that share an interval. The boundary row is the earliest
     -- one in the run, so ordering the aggregates by as-of picks its dating verdict.
     SELECT
@@ -142,7 +152,7 @@ episode AS (
     GROUP BY user_email, interval_seq
 ),
 
-closed AS (
+bounded AS (
     SELECT
         user_email,
         seat_tier,
@@ -161,10 +171,10 @@ closed AS (
         END AS valid_to
     FROM (
         SELECT
-            e.*,
-            LEAD(e.valid_from)
-                OVER (PARTITION BY e.user_email ORDER BY e.interval_seq) AS next_valid_from
-        FROM episode AS e
+            r.*,
+            LEAD(r.valid_from)
+                OVER (PARTITION BY r.user_email ORDER BY r.interval_seq) AS next_valid_from
+        FROM interval_run AS r
     ) AS x
 )
 
@@ -180,7 +190,7 @@ SELECT
     valid_from_basis,
     first_seen_on,
     last_seen_on
-FROM closed
+FROM bounded
 WHERE valid_to IS NULL OR valid_to > valid_from;
 
 -- One row per identity per day it emitted anything. The seat findings compare telemetry to
@@ -199,7 +209,32 @@ SELECT
 FROM raw.events
 WHERE user_email IS NOT NULL;
 
+-- Activity days no seat interval covers, carrying the most recent close that precedes them.
+-- Two findings partition this set — telemetry after a close (`closed_on` present, near-proof
+-- the close was an export artefact) and an emitter that never had a seat (`closed_on` null) —
+-- so it is derived once here rather than restated in each, where the two could drift and
+-- start double-reporting or missing an activity day.
+CREATE VIEW staging.stg_seat_uncovered_day AS
+SELECT
+    t.user_email,
+    t.activity_date,
+    (
+        SELECT MAX(i.valid_to)
+        FROM staging.stg_seat_interval AS i
+        WHERE i.user_email = t.user_email AND i.valid_to <= t.activity_date
+    ) AS closed_on
+FROM staging.stg_telemetry_day AS t
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM staging.stg_seat_interval AS i
+    WHERE
+        i.user_email = t.user_email
+        AND i.valid_from <= t.activity_date
+        AND (i.valid_to IS NULL OR i.valid_to > t.activity_date)
+);
+
 -- migrate:down
 
+DROP VIEW IF EXISTS staging.stg_seat_uncovered_day;
 DROP VIEW IF EXISTS staging.stg_telemetry_day;
 DROP VIEW IF EXISTS staging.stg_seat_interval;

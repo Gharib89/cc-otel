@@ -208,21 +208,6 @@ BEGIN
     -- a real revocation. This catches the plausible-looking bad export that the loader's
     -- truncation guards let through.
     INSERT INTO marts.dq_finding (finding_type, row_count, details)
-    WITH uncovered AS (
-        SELECT
-            t.user_email,
-            t.activity_date,
-            (SELECT MAX(i.valid_to)
-             FROM staging.stg_seat_interval i
-             WHERE i.user_email = t.user_email AND i.valid_to <= t.activity_date) AS closed_on
-        FROM staging.stg_telemetry_day t
-        WHERE NOT EXISTS (
-            SELECT 1 FROM staging.stg_seat_interval i
-            WHERE i.user_email = t.user_email
-              AND i.valid_from <= t.activity_date
-              AND (i.valid_to IS NULL OR i.valid_to > t.activity_date)
-        )
-    )
     SELECT 'seat_telemetry_after_close', COUNT(*),
            jsonb_build_object(
                'user_email', user_email,
@@ -230,7 +215,7 @@ BEGIN
                'first_activity_after_close', MIN(activity_date),
                'last_activity_after_close', MAX(activity_date)
            )
-    FROM uncovered
+    FROM staging.stg_seat_uncovered_day
     WHERE closed_on IS NOT NULL
     GROUP BY user_email;
 
@@ -239,28 +224,13 @@ BEGIN
     -- exactly once. Computed against raw telemetry (through the staging view), never against
     -- marts.dim_user.
     INSERT INTO marts.dq_finding (finding_type, row_count, details)
-    WITH uncovered AS (
-        SELECT
-            t.user_email,
-            t.activity_date,
-            (SELECT MAX(i.valid_to)
-             FROM staging.stg_seat_interval i
-             WHERE i.user_email = t.user_email AND i.valid_to <= t.activity_date) AS closed_on
-        FROM staging.stg_telemetry_day t
-        WHERE NOT EXISTS (
-            SELECT 1 FROM staging.stg_seat_interval i
-            WHERE i.user_email = t.user_email
-              AND i.valid_from <= t.activity_date
-              AND (i.valid_to IS NULL OR i.valid_to > t.activity_date)
-        )
-    )
     SELECT 'seat_emitter_without_seat', COUNT(*),
            jsonb_build_object(
                'user_email', user_email,
                'first_activity_date', MIN(activity_date),
                'last_activity_date', MAX(activity_date)
            )
-    FROM uncovered
+    FROM staging.stg_seat_uncovered_day
     WHERE closed_on IS NULL
     GROUP BY user_email;
 
@@ -648,32 +618,42 @@ CREATE VIEW staging.stg_seat_interval AS
             sighting.user_email,
             sighting.seat_tier,
             sighting.anthropic_org_name,
+            sighting.assignment_date,
             sighting.next_as_of,
             ((sighting.prev_seen_on IS NULL) OR (sighting.prev_seen_on IS DISTINCT FROM sighting.prev_as_of) OR (sighting.seat_tier IS DISTINCT FROM sighting.prev_tier) OR (sighting.anthropic_org_name IS DISTINCT FROM sighting.prev_org)) AS starts_interval,
-                CASE
-                    WHEN ((sighting.assignment_date IS NOT NULL) AND ((sighting.prev_seen_on IS NULL) OR (sighting.assignment_date IS DISTINCT FROM sighting.prev_assignment_date))) THEN sighting.assignment_date
-                    ELSE sighting.as_of_date
-                END AS valid_from,
-                CASE
-                    WHEN ((sighting.assignment_date IS NOT NULL) AND ((sighting.prev_seen_on IS NULL) OR (sighting.assignment_date IS DISTINCT FROM sighting.prev_assignment_date))) THEN 'source-dated'::text
-                    ELSE 'observation-dated'::text
-                END AS valid_from_basis
+            ((sighting.assignment_date IS NOT NULL) AND ((sighting.prev_seen_on IS NULL) OR (sighting.assignment_date IS DISTINCT FROM sighting.prev_assignment_date))) AS is_source_dated
            FROM sighting
-        ), numbered AS (
+        ), dated AS (
          SELECT boundary.as_of_date,
             boundary.user_email,
             boundary.seat_tier,
             boundary.anthropic_org_name,
             boundary.next_as_of,
-            boundary.valid_from,
-            boundary.valid_from_basis,
+            boundary.starts_interval,
+                CASE
+                    WHEN boundary.is_source_dated THEN boundary.assignment_date
+                    ELSE boundary.as_of_date
+                END AS valid_from,
+                CASE
+                    WHEN boundary.is_source_dated THEN 'source-dated'::text
+                    ELSE 'observation-dated'::text
+                END AS valid_from_basis
+           FROM boundary
+        ), numbered AS (
+         SELECT dated.as_of_date,
+            dated.user_email,
+            dated.seat_tier,
+            dated.anthropic_org_name,
+            dated.next_as_of,
+            dated.valid_from,
+            dated.valid_from_basis,
             sum(
                 CASE
-                    WHEN boundary.starts_interval THEN 1
+                    WHEN dated.starts_interval THEN 1
                     ELSE 0
-                END) OVER (PARTITION BY boundary.user_email ORDER BY boundary.as_of_date) AS interval_seq
-           FROM boundary
-        ), episode AS (
+                END) OVER (PARTITION BY dated.user_email ORDER BY dated.as_of_date) AS interval_seq
+           FROM dated
+        ), interval_run AS (
          SELECT numbered.user_email,
             numbered.interval_seq,
             min(numbered.as_of_date) AS first_seen_on,
@@ -685,7 +665,7 @@ CREATE VIEW staging.stg_seat_interval AS
             (array_agg(numbered.next_as_of ORDER BY numbered.as_of_date DESC))[1] AS next_as_of_after_last_seen
            FROM numbered
           GROUP BY numbered.user_email, numbered.interval_seq
-        ), closed AS (
+        ), bounded AS (
          SELECT x.user_email,
             x.seat_tier,
             x.anthropic_org_name,
@@ -697,17 +677,17 @@ CREATE VIEW staging.stg_seat_interval AS
                     WHEN (LEAST(x.next_as_of_after_last_seen, x.next_valid_from) IS NULL) THEN NULL::date
                     ELSE GREATEST(x.valid_from, LEAST(x.next_as_of_after_last_seen, x.next_valid_from))
                 END AS valid_to
-           FROM ( SELECT e.user_email,
-                    e.interval_seq,
-                    e.first_seen_on,
-                    e.last_seen_on,
-                    e.seat_tier,
-                    e.anthropic_org_name,
-                    e.valid_from,
-                    e.valid_from_basis,
-                    e.next_as_of_after_last_seen,
-                    lead(e.valid_from) OVER (PARTITION BY e.user_email ORDER BY e.interval_seq) AS next_valid_from
-                   FROM episode e) x
+           FROM ( SELECT r.user_email,
+                    r.interval_seq,
+                    r.first_seen_on,
+                    r.last_seen_on,
+                    r.seat_tier,
+                    r.anthropic_org_name,
+                    r.valid_from,
+                    r.valid_from_basis,
+                    r.next_as_of_after_last_seen,
+                    lead(r.valid_from) OVER (PARTITION BY r.user_email ORDER BY r.interval_seq) AS next_valid_from
+                   FROM interval_run r) x
         )
  SELECT user_email,
     seat_tier,
@@ -717,7 +697,7 @@ CREATE VIEW staging.stg_seat_interval AS
     valid_from_basis,
     first_seen_on,
     last_seen_on
-   FROM closed
+   FROM bounded
   WHERE ((valid_to IS NULL) OR (valid_to > valid_from));
 
 
@@ -1222,6 +1202,22 @@ UNION
     (events.event_time)::date AS activity_date
    FROM raw.events
   WHERE (events.user_email IS NOT NULL);
+
+
+--
+-- Name: stg_seat_uncovered_day; Type: VIEW; Schema: staging; Owner: -
+--
+
+CREATE VIEW staging.stg_seat_uncovered_day AS
+ SELECT user_email,
+    activity_date,
+    ( SELECT max(i.valid_to) AS max
+           FROM staging.stg_seat_interval i
+          WHERE ((i.user_email = t.user_email) AND (i.valid_to <= t.activity_date))) AS closed_on
+   FROM staging.stg_telemetry_day t
+  WHERE (NOT (EXISTS ( SELECT 1
+           FROM staging.stg_seat_interval i
+          WHERE ((i.user_email = t.user_email) AND (i.valid_from <= t.activity_date) AND ((i.valid_to IS NULL) OR (i.valid_to > t.activity_date))))));
 
 
 --

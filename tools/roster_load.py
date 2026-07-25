@@ -77,8 +77,8 @@ _MAX_SHRINK = 0.10
 # Refreshed on write so Power BI is current without waiting for the hourly cycle, and without
 # rebuilding every telemetry mart. `dim_date` joins the three seat marts because this write can
 # move its floor: the floor considers the earliest assignment date (#293), and a `fact_seat_day`
-# row with no matching date row silently vanishes from every date-filtered measure. Ordered
-# so the date spine is in place before the daily grain that joins it.
+# row with no matching date row silently vanishes from every date-filtered measure. All four
+# read the shared derivation view rather than each other, so the order here is arbitrary.
 _DROP_REFRESHED_MARTS = ("dim_date", "dim_seat", "dim_seat_current", "fact_seat_day")
 
 
