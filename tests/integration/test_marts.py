@@ -704,7 +704,7 @@ def test_refresh_writes_a_log_row_per_matview(conn):
         "(WHERE finished IS NOT NULL AND row_count IS NOT NULL) "
         "FROM marts.mart_refresh_log",
     )
-    assert marts == 16 and complete == 16
+    assert marts == 19 and complete == 19  # 16 telemetry marts + the 3 seat marts (#293)
 
 
 def test_refresh_all_picks_up_new_matview_from_catalog(conn):

@@ -11,6 +11,10 @@ new IS column (the status / revocation date requested in #291) is retained from 
 first appears. No copy of the file is kept — the snapshot plus ``extra`` is the archive, a
 deliberate exception to the blob-reservoir convention (ADR-0009).
 
+A successful write refreshes the seat marts (and ``dim_date``, whose floor this write can move)
+so Power BI is current without waiting for the hourly cycle; every other telemetry mart is left
+to ``marts.refresh_all()``.
+
 Destructive (writes HR data); dry-run by default. Pass ``--execute`` to write. The dry run
 prints the resolved target host and database **first**: the ambient ``DATABASE_URL`` points at
 the retired POC server, so the most natural invocation would otherwise report success against a
@@ -42,6 +46,7 @@ from typing import NamedTuple
 
 import psycopg
 from cc_otel_sink.config import load_settings
+from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict
 from psycopg.types.json import Jsonb
 
@@ -68,6 +73,13 @@ _DATE_FORMATS = ("%Y-%m-%d", "%m/%d/%Y")
 
 # Whole-file truncation guard: a partial export must not silently revoke a population.
 _MAX_SHRINK = 0.10
+
+# Refreshed on write so Power BI is current without waiting for the hourly cycle, and without
+# rebuilding every telemetry mart. `dim_date` joins the three seat marts because this write can
+# move its floor: the floor considers the earliest assignment date (#293), and a `fact_seat_day`
+# row with no matching date row silently vanishes from every date-filtered measure. Ordered
+# so the date spine is in place before the daily grain that joins it.
+_DROP_REFRESHED_MARTS = ("dim_date", "dim_seat", "dim_seat_current", "fact_seat_day")
 
 
 class RosterError(Exception):
@@ -359,6 +371,23 @@ def _insert_drop(
     return drop_id
 
 
+def _refresh_seat_marts(database_url: str) -> None:
+    """Rebuild the marts a drop changes, in a connection of its own.
+
+    ``REFRESH MATERIALIZED VIEW CONCURRENTLY`` cannot run inside a transaction block, so this
+    needs an autocommit connection rather than the one that wrote the drop. Every seat mart is
+    a thin projection of the shared derivation view, so refreshing them re-derives history from
+    the accumulated drops — including this one, wherever its as-of date sorts.
+    """
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        for mart in _DROP_REFRESHED_MARTS:
+            conn.execute(
+                sql.SQL("REFRESH MATERIALIZED VIEW CONCURRENTLY marts.{}").format(
+                    sql.Identifier(mart)
+                )
+            )
+
+
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -445,6 +474,19 @@ def main(argv: list[str] | None = None) -> int:
             conn, args.as_of, args.file.name, digest, rows, getpass.getuser(), args.notes
         )
         print(f"Loaded drop {drop_id}: {len(rows)} snapshot rows at as-of {args.as_of}")
+
+    # The drop is committed; a refresh failure costs freshness, not data, so it is reported
+    # rather than raised — the hourly marts.refresh_all() reconciles either way.
+    try:
+        _refresh_seat_marts(database_url)
+    except psycopg.Error as err:
+        print(
+            f"Warning: seat marts not refreshed ({err}) — marts.refresh_all() will reconcile"
+            " within the hour",
+            file=sys.stderr,
+        )
+    else:
+        print(f"Refreshed {', '.join(_DROP_REFRESHED_MARTS)}")
     return 0
 
 

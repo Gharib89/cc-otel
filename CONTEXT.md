@@ -79,8 +79,12 @@ One roster file as received from IS, identified by its operator-supplied as-of d
 _Avoid_: roster import, seat file
 
 **Seat interval**:
-A contiguous period over which a **seat**'s tier and Anthropic organization were unchanged — the derived SCD2 record (#293). Each boundary carries a `valid_from_basis` marker: source-dated (from IS's assignment date) or observation-dated (from the drop's as-of date, all that exists for a closure until IS supplies a revocation date).
+A contiguous period over which a **seat**'s tier and Anthropic organization were unchanged — the derived SCD2 record, one row of `marts.dim_seat` (#293). Half-open `[valid_from, valid_to)`, with `valid_to` null while the seat is open, so a tier change closes one interval exactly where the next opens and no **seat-day** is counted twice. Each boundary carries a `valid_from_basis` marker: source-dated (from IS's assignment date) or observation-dated (from the drop's as-of date, all that exists for a closure until IS supplies a revocation date).
 _Avoid_: seat history row, validity period
+
+**Seat-day**:
+One date on which one **seat** was open, at the tier and **Anthropic organization** in force that day — one row of `marts.fact_seat_day` (#293). The unit that makes point-in-time licensing structural: licensed seats on a date is a row count under the date filter, and seat-days by tier is a sum, so no measure carries interval logic.
+_Avoid_: licence day, seat count row
 
 **Anthropic organization**:
 The Anthropic org boundary a **seat** belongs to — IS's `Team` column, stored as `anthropic_org_name` (`ITWorx`, `ITWorx2`) and mapping to telemetry's `organization_id`. Not a development team and never joined to a department; ITWorx holds two because a seat cap was reached.
