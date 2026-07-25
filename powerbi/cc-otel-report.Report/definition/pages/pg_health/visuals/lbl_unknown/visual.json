@@ -19,10 +19,10 @@
               {
                 "textRuns": [
                   {
-                    "value": "UNKNOWN-EMAIL USERS",
+                    "value": "UNKNOWN EMAIL",
                     "textStyle": {
                       "fontWeight": "bold",
-                      "fontSize": "8pt",
+                      "fontSize": "12pt",
                       "color": "#5a6473"
                     }
                   }
