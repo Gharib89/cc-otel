@@ -1,38 +1,19 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "cht_tier",
+  "name": "crd_coverage",
   "position": {
     "x": 28,
     "y": 420,
     "z": 27000,
-    "height": 160,
+    "height": 84,
     "width": 480,
     "tabOrder": 27000
   },
   "visual": {
-    "visualType": "clusteredBarChart",
+    "visualType": "card",
     "query": {
       "queryState": {
-        "Category": {
-          "projections": [
-            {
-              "field": {
-                "Column": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "dim_seat_current"
-                    }
-                  },
-                  "Property": "seat_tier"
-                }
-              },
-              "queryRef": "dim_seat_current.seat_tier",
-              "nativeQueryRef": "seat_tier",
-              "active": true
-            }
-          ]
-        },
-        "Y": {
+        "Values": {
           "projections": [
             {
               "field": {
@@ -42,47 +23,33 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Active Roster Users"
+                  "Property": "Instrumented Seats"
                 }
               },
-              "queryRef": "_Measures.Active Roster Users",
-              "nativeQueryRef": "Active Roster Users"
-            },
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "_Measures"
-                    }
-                  },
-                  "Property": "Paid Seats"
-                }
-              },
-              "queryRef": "_Measures.Paid Seats",
-              "nativeQueryRef": "Paid Seats"
+              "queryRef": "_Measures.Instrumented Seats",
+              "nativeQueryRef": "Instrumented Seats"
             }
           ]
         }
       }
     },
     "objects": {
-      "categoryAxis": [
+      "labels": [
         {
           "properties": {
-            "showAxisTitle": {
+            "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "false"
+                  "Value": "32D"
                 }
               }
             },
-            "labelColor": {
+            "color": {
               "solid": {
                 "color": {
                   "expr": {
                     "Literal": {
-                      "Value": "'#44566B'"
+                      "Value": "'#0198CB'"
                     }
                   }
                 }
@@ -91,24 +58,13 @@
           }
         }
       ],
-      "valueAxis": [
+      "categoryLabels": [
         {
           "properties": {
-            "showAxisTitle": {
+            "show": {
               "expr": {
                 "Literal": {
                   "Value": "false"
-                }
-              }
-            },
-            "labelColor": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#7E8CA0'"
-                    }
-                  }
                 }
               }
             }
@@ -123,7 +79,7 @@
             "altText": {
               "expr": {
                 "Literal": {
-                  "Value": "'Grouped bars comparing active users against paid seats per seat tier.'"
+                  "Value": "'Seat coverage: the count of licensed seats telemetry has reached, out of the full licensed population.'"
                 }
               }
             }
@@ -143,7 +99,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'ACTIVE USERS & PAID SEATS BY TIER'"
+                  "Value": "'SEAT COVERAGE — INSTRUMENTED OF LICENSED'"
                 }
               }
             },
@@ -244,77 +200,8 @@
             }
           }
         }
-      ],
-      "subTitle": [
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "false"
-                }
-              }
-            }
-          }
-        }
       ]
     },
     "drillFilterOtherVisuals": true
-  },
-  "filterConfig": {
-    "filters": [
-      {
-        "name": "flt_tier_notblank",
-        "field": {
-          "Column": {
-            "Expression": {
-              "SourceRef": {
-                "Entity": "dim_seat_current"
-              }
-            },
-            "Property": "seat_tier"
-          }
-        },
-        "type": "Categorical",
-        "filter": {
-          "Version": 2,
-          "From": [
-            {
-              "Name": "s",
-              "Entity": "dim_seat_current",
-              "Type": 0
-            }
-          ],
-          "Where": [
-            {
-              "Condition": {
-                "Not": {
-                  "Expression": {
-                    "Comparison": {
-                      "ComparisonKind": 0,
-                      "Left": {
-                        "Column": {
-                          "Expression": {
-                            "SourceRef": {
-                              "Source": "s"
-                            }
-                          },
-                          "Property": "seat_tier"
-                        }
-                      },
-                      "Right": {
-                        "Literal": {
-                          "Value": "null"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          ]
-        }
-      }
-    ]
   }
 }

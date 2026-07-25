@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "cht_cohort",
   "position": {
-    "x": 644,
+    "x": 882,
     "y": 262,
     "z": 420,
     "height": 208,
-    "width": 608,
+    "width": 370,
     "tabOrder": 420
   },
   "visual": {

@@ -1,16 +1,16 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "cht_dq_type",
+  "name": "cht_seat_trend",
   "position": {
-    "x": 892,
+    "x": 28,
     "y": 262,
-    "z": 530,
-    "height": 226,
-    "width": 360,
-    "tabOrder": 530
+    "z": 24000,
+    "height": 208,
+    "width": 460,
+    "tabOrder": 24000
   },
   "visual": {
-    "visualType": "clusteredBarChart",
+    "visualType": "lineChart",
     "query": {
       "queryState": {
         "Category": {
@@ -20,14 +20,14 @@
                 "Column": {
                   "Expression": {
                     "SourceRef": {
-                      "Entity": "dq_finding"
+                      "Entity": "dim_date"
                     }
                   },
-                  "Property": "finding_type"
+                  "Property": "week_label"
                 }
               },
-              "queryRef": "dq_finding.finding_type",
-              "nativeQueryRef": "finding_type",
+              "queryRef": "dim_date.week_label",
+              "nativeQueryRef": "week_label",
               "active": true
             }
           ]
@@ -42,31 +42,42 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "DQ Findings"
+                  "Property": "Paid Seats"
                 }
               },
-              "queryRef": "_Measures.DQ Findings",
-              "nativeQueryRef": "DQ Findings"
+              "queryRef": "_Measures.Paid Seats",
+              "nativeQueryRef": "Paid Seats"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Instrumented Seats"
+                }
+              },
+              "queryRef": "_Measures.Instrumented Seats",
+              "nativeQueryRef": "Instrumented Seats"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Active Roster Users"
+                }
+              },
+              "queryRef": "_Measures.Active Roster Users",
+              "nativeQueryRef": "Active Roster Users"
             }
           ]
         }
-      },
-      "sortDefinition": {
-        "sort": [
-          {
-            "field": {
-              "Measure": {
-                "Expression": {
-                  "SourceRef": {
-                    "Entity": "_Measures"
-                  }
-                },
-                "Property": "DQ Findings"
-              }
-            },
-            "direction": "Descending"
-          }
-        ]
       }
     },
     "objects": {
@@ -85,16 +96,9 @@
                 "color": {
                   "expr": {
                     "Literal": {
-                      "Value": "'#44566B'"
+                      "Value": "'#7E8CA0'"
                     }
                   }
-                }
-              }
-            },
-            "maxMarginFactor": {
-              "expr": {
-                "Literal": {
-                  "Value": "40D"
                 }
               }
             }
@@ -104,13 +108,6 @@
       "valueAxis": [
         {
           "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "false"
-                }
-              }
-            },
             "showAxisTitle": {
               "expr": {
                 "Literal": {
@@ -138,7 +135,108 @@
             "show": {
               "expr": {
                 "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "position": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Bottom'"
+                }
+              }
+            },
+            "showTitle": {
+              "expr": {
+                "Literal": {
                   "Value": "false"
+                }
+              }
+            },
+            "labelColor": {
+              "solid": {
+                "color": {
+                  "expr": {
+                    "Literal": {
+                      "Value": "'#44566B'"
+                    }
+                  }
+                }
+              }
+            },
+            "fontSize": {
+              "expr": {
+                "Literal": {
+                  "Value": "9D"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "dataPoint": [
+        {
+          "properties": {
+            "fill": {
+              "solid": {
+                "color": {
+                  "expr": {
+                    "Literal": {
+                      "Value": "'#00197F'"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "_Measures.Paid Seats"
+          }
+        },
+        {
+          "properties": {
+            "fill": {
+              "solid": {
+                "color": {
+                  "expr": {
+                    "Literal": {
+                      "Value": "'#0198CB'"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "_Measures.Instrumented Seats"
+          }
+        },
+        {
+          "properties": {
+            "fill": {
+              "solid": {
+                "color": {
+                  "expr": {
+                    "Literal": {
+                      "Value": "'#3A44D4'"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "_Measures.Active Roster Users"
+          }
+        }
+      ],
+      "lineStyles": [
+        {
+          "properties": {
+            "showMarker": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
                 }
               }
             }
@@ -151,32 +249,7 @@
             "show": {
               "expr": {
                 "Literal": {
-                  "Value": "true"
-                }
-              }
-            },
-            "color": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#7E8CA0'"
-                    }
-                  }
-                }
-              }
-            },
-            "fontSize": {
-              "expr": {
-                "Literal": {
-                  "Value": "9D"
-                }
-              }
-            },
-            "labelDisplayUnits": {
-              "expr": {
-                "Literal": {
-                  "Value": "1D"
+                  "Value": "false"
                 }
               }
             }
@@ -191,7 +264,7 @@
             "altText": {
               "expr": {
                 "Literal": {
-                  "Value": "'Horizontal bars of data-quality findings by finding type.'"
+                  "Value": "'Weekly lines comparing licensed seats against the seats telemetry has reached and the seats actually active, showing whether provisioning is outrunning activation.'"
                 }
               }
             }
@@ -211,7 +284,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'DQ FINDINGS BY TYPE'"
+                  "Value": "'SEAT PROVISIONING VS ACTIVATION'"
                 }
               }
             },
