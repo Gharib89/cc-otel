@@ -1,5 +1,5 @@
 {
-  "$comment": "AIWorx brand tokens. Theme colors extracted from AIWorx_template.pptx (ppt/theme/theme1.xml, clrScheme 'Custom 6'); logo colors sampled from AIWorx_logo.png. Consumed by powerbi/theme.json, README, and docs styling.",
+  "$comment": "AIWorx corporate-brand tokens — a faithful extract of the brand assets, not a description of what the report renders. Theme colors extracted from AIWorx_template.pptx (ppt/theme/theme1.xml, clrScheme 'Custom 6'); logo colors sampled from AIWorx_logo.png. The report's theme (powerbi/cc-otel-report.Report/StaticResources/RegisteredResources/AIWorx.json) consumes most of these verbatim, but deliberately departs on two (specified in #130, agreed #129, shipped #132): Segoe UI / Segoe UI Semibold rather than 'fonts', and logo.wordmark rather than theme.accent1.",
   "fonts": {
     "major": "Century Gothic",
     "minor": "Century Gothic"
