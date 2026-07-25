@@ -2,10 +2,58 @@
 /// management chain contains them (any depth) — a manager sees everyone reporting up to them.
 /// Workspace Admin/Member (Ahmed, Karim) bypass RLS via Power BI workspace-role semantics.
 /// Requires a clean, acyclic ManagerEmail chain, normalized to the same casing as Email.
+/// #301 (ADR-0010) extends the same subtree to the three seat marts, so both the licensed-seat count
+/// and the 184 real roster addresses are viewer-scoped. Notes on the three permissions below, which
+/// TMDL cannot carry inline — a tablePermission takes no description and no comment line:
+/// - Each restates the subtree predicate against vw_UserBasicInfo under ALL() instead of leaning on
+///   the permission above it. A security filter must not depend on evaluation order, so the
+///   repetition is the point; deduplicating it into a measure would reintroduce that dependency.
+/// - No LOWER/TRIM on either side: DAX string comparison is case-insensitive and the existing joins
+///   on these same columns already resolve, so normalizing would mask an upstream mismatch.
+/// - dim_seat_current sits on the one-side of dim_user_to_dim_seat_current, so its filter also
+///   narrows dim_user to seat holders in the subtree — consistent with the HR-view permission, which
+///   already hides every identity without an HR row. dim_seat is disconnected and carries its own.
+/// - fact_seat_day is the licensed-count grain, so it is what scopes [Paid Seats] and everything
+///   composed over it. Accepted consequence: the predicate keys on a live HR row, so a seat-day
+///   belonging to someone who has since left disappears for role viewers and the seats-over-time
+///   line rewrites its own past. Workspace members keep the stable org-wide history.
 role OrgScope
 	modelPermission: read
 
 	tablePermission vw_UserBasicInfo = vw_UserBasicInfo[Email] = USERPRINCIPALNAME() || PATHCONTAINS(vw_UserBasicInfo[ManagementPath], USERPRINCIPALNAME())
+
+	tablePermission dim_seat_current =
+			dim_seat_current[user_email]
+			    IN SELECTCOLUMNS (
+			        FILTER (
+			            ALL ( vw_UserBasicInfo ),
+			            vw_UserBasicInfo[Email] = USERPRINCIPALNAME ()
+			                || PATHCONTAINS ( vw_UserBasicInfo[ManagementPath], USERPRINCIPALNAME () )
+			        ),
+			        "@Email", vw_UserBasicInfo[Email]
+			    )
+
+	tablePermission dim_seat =
+			dim_seat[user_email]
+			    IN SELECTCOLUMNS (
+			        FILTER (
+			            ALL ( vw_UserBasicInfo ),
+			            vw_UserBasicInfo[Email] = USERPRINCIPALNAME ()
+			                || PATHCONTAINS ( vw_UserBasicInfo[ManagementPath], USERPRINCIPALNAME () )
+			        ),
+			        "@Email", vw_UserBasicInfo[Email]
+			    )
+
+	tablePermission fact_seat_day =
+			fact_seat_day[user_email]
+			    IN SELECTCOLUMNS (
+			        FILTER (
+			            ALL ( vw_UserBasicInfo ),
+			            vw_UserBasicInfo[Email] = USERPRINCIPALNAME ()
+			                || PATHCONTAINS ( vw_UserBasicInfo[ManagementPath], USERPRINCIPALNAME () )
+			        ),
+			        "@Email", vw_UserBasicInfo[Email]
+			    )
 
 	annotation PBI_Id = 6989c039aaf549d78edd30d991fc66cd
 

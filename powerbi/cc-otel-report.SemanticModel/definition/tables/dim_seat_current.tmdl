@@ -46,7 +46,10 @@ table dim_seat_current
 	/// column will mean genuinely idle, with no code change and nothing to alert anyone — which is why the
 	/// install beacon is the real fix and this bucket only ever claims an observation.
 	/// Evaluated against dim_user (telemetry-only) and never vw_UserBasicInfo, so the worklist needs no
-	/// relationship traversal to the HR view and stays off the OrgScope security-filter chain.
+	/// relationship traversal to the HR view. #301 does put this table on the OrgScope security-filter
+	/// chain, which does not reach the expression: a calculated column materialises at refresh, before
+	/// any role is evaluated, so the bucket is always computed over the whole roster. RLS decides which
+	/// of those rows a viewer sees, never how one is bucketed.
 	/// Deliberately all-time, not window-aware: a calculated column evaluates under empty filter context, so this
 	/// is the ever-emitted set. [Instrumented Seats] is bounded on first_seen instead, so the exec card's remainder
 	/// moves with the date slicer while this worklist does not — they agree only while the window spans every
