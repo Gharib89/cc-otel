@@ -59,21 +59,6 @@
               "queryRef": "dq_finding.row_count",
               "nativeQueryRef": "row_count",
               "displayName": "Rows"
-            },
-            {
-              "field": {
-                "Column": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "dq_finding"
-                    }
-                  },
-                  "Property": "details"
-                }
-              },
-              "queryRef": "dq_finding.details",
-              "nativeQueryRef": "details",
-              "displayName": "Details"
             }
           ]
         }
@@ -103,7 +88,7 @@
             "altText": {
               "expr": {
                 "Literal": {
-                  "Value": "'Table of data-quality findings with type, detection time, and affected row count.'"
+                  "Value": "'Table of data-quality findings with type, detection time, and affected row count. Hover a finding to reveal its full JSON payload.'"
                 }
               }
             }
@@ -172,6 +157,26 @@
             }
           }
         }
+      ],
+      "visualTooltip": [
+        {
+          "properties": {
+            "type": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Canvas'"
+                }
+              }
+            },
+            "section": {
+              "expr": {
+                "Literal": {
+                  "Value": "'pg_tt_dq'"
+                }
+              }
+            }
+          }
+        }
       ]
     },
     "drillFilterOtherVisuals": true,
@@ -182,7 +187,7 @@
             "value": {
               "expr": {
                 "Literal": {
-                  "Value": "150D"
+                  "Value": "185D"
                 }
               }
             }
@@ -210,27 +215,13 @@
             "value": {
               "expr": {
                 "Literal": {
-                  "Value": "50D"
+                  "Value": "55D"
                 }
               }
             }
           },
           "selector": {
             "metadata": "dq_finding.row_count"
-          }
-        },
-        {
-          "properties": {
-            "value": {
-              "expr": {
-                "Literal": {
-                  "Value": "250D"
-                }
-              }
-            }
-          },
-          "selector": {
-            "metadata": "dq_finding.details"
           }
         }
       ]
