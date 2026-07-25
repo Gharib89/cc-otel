@@ -18,7 +18,9 @@ HEADER = "name,email,manager,department,cost_center,Team,subscription_1,assignme
 SHORT_HEADER = "email,Team,subscription_1,assignment_date_1"  # every descriptive column absent
 
 
-def roster(tmp_path: Path, *rows: str, name: str = "claude_users.csv", header: str = HEADER) -> Path:
+def roster(
+    tmp_path: Path, *rows: str, name: str = "claude_users.csv", header: str = HEADER
+) -> Path:
     path = tmp_path / name
     path.write_text("\n".join((header, *rows)) + "\n", encoding="utf-8")
     return path

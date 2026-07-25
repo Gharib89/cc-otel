@@ -157,9 +157,7 @@ def parse_rows(text: str) -> list[SeatRow]:
     unmapped = [
         header
         for header, key in lowered.items()
-        if key not in _COLUMNS
-        and not _SUBSCRIPTION_RE.match(key)
-        and not _ASSIGNMENT_RE.match(key)
+        if key not in _COLUMNS and not _SUBSCRIPTION_RE.match(key) and not _ASSIGNMENT_RE.match(key)
     ]
 
     rows: list[SeatRow] = []
@@ -172,9 +170,7 @@ def parse_rows(text: str) -> list[SeatRow]:
         if not mapped.get("user_email"):
             raise RosterError(f"line {line}: blank email — the roster's only required column")
         extra = {
-            header: value
-            for header in unmapped
-            if (value := (record.get(header) or "").strip())
+            header: value for header in unmapped if (value := (record.get(header) or "").strip())
         }
         for seq in seqs or [1]:
             subscription = (record.get(f"subscription_{seq}") or "").strip()

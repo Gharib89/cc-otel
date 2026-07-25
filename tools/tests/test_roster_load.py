@@ -26,7 +26,9 @@ def csv_text(*rows: str, header: str = HEADER) -> str:
     return "\n".join((header, *rows)) + "\n"
 
 
-def seat(email: str, tier: str | None = "Standard", *, seq: int = 1, org: str = "ITWorx") -> SeatRow:
+def seat(
+    email: str, tier: str | None = "Standard", *, seq: int = 1, org: str = "ITWorx"
+) -> SeatRow:
     return SeatRow(
         user_email=email,
         subscription_seq=seq,
@@ -189,7 +191,11 @@ class TestParseRows:
 class TestComputeDelta:
     def test_counts_new_tier_changed_closed_and_unchanged_seats(self) -> None:
         prior = [seat("stay@itworx.com"), seat("up@itworx.com"), seat("gone@itworx.com")]
-        incoming = [seat("stay@itworx.com"), seat("up@itworx.com", "Premium"), seat("new@itworx.com")]
+        incoming = [
+            seat("stay@itworx.com"),
+            seat("up@itworx.com", "Premium"),
+            seat("new@itworx.com"),
+        ]
         assert compute_delta(prior, incoming) == (1, 1, 1, 1)
 
     def test_treats_every_seat_as_new_against_a_first_drop(self) -> None:
