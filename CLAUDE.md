@@ -7,7 +7,7 @@ Pipeline: Claude Code OTel exporter → OTel Collector (bearer auth) → FastAPI
 ## Design sources
 
 - **`CONTEXT.md`** — the glossary. Use its vocabulary in issues, code, and tests; don't drift to the avoided synonyms.
-- **`docs/adr/`** — settled decisions: 0001 no traces, 0002 fresh schema / no backfill, 0003 minimal wrapper contract, 0004 production in Azure, 0005 blob raw reservoir, 0006 interim POC backfill, 0007 cost as API-equivalent value, 0008 canonical mart definitions. Conflicts get surfaced, never silently overridden.
+- **`docs/adr/`** — settled decisions: 0001 no traces, 0002 fresh schema / no backfill, 0003 minimal wrapper contract, 0004 production in Azure, 0005 blob raw reservoir, 0006 interim POC backfill, 0007 cost as API-equivalent value, 0008 canonical mart definitions, 0009 roster drops as immutable dated snapshots. Conflicts get surfaced, never silently overridden.
 - **Map issue #1** — the full locked design and decision log. Every implementation issue (#17–#31) traces to a decision bullet there; read the relevant bullet before implementing.
 
 ## Way of working
@@ -50,6 +50,8 @@ uv run python -m tools.spec_sync --check       # gate: column_spec.py <-> migrat
 uv run python -m tools.spec_sync --name <slug> # author: spec delta -> new migration + schema.sql regen
 uv run python -m tools.matview_sync --check    # gate: canonical db/views/marts/ files <-> pg_matviews converge, both ways (needs Docker)
 uv run python -m tools.matview_sync --name <slug>  # author: edited mart file -> DROP+CREATE+index+GRANT migration (git-HEAD down body); then dev-migrate.sh regenerates schema.sql
+uv run python -m tools.roster_load --file <csv> --as-of YYYY-MM-DD  # dry-run an IS seat-roster drop: prints target host/db, then the delta (ADR-0009)
+uv run python -m tools.roster_load --file <csv> --as-of YYYY-MM-DD --execute [--force]  # land the drop in ref (--force overrides the as-of/truncation guards)
 scripts/ship/local-gate.sh   # path-aware local mirror of CI (JSON verdict; the ship skill's phase-5 gate)
 psql "$DATABASE_URL"         # ad-hoc DB access (Azure otel real data / cc_otel)
 ```
@@ -92,7 +94,7 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 | `installer/` | `install.ps1` fleet setup |
 | `bootstrap/` | env bring-up runbook + PowerShell scripts (operator-run) |
 | `powerbi/` | `.pbip` semantic model + report + branding |
-| `tools/` | Curation + ops tooling over the blob reservoir (sweep, data dictionary, replay, scrub) + CI gate-path derivation (`gate_paths.py`) |
+| `tools/` | Curation + ops tooling over the blob reservoir (sweep, data dictionary, replay, scrub) + reference-data ingest (`roster_load.py`) + CI gate-path derivation (`gate_paths.py`) |
 | `analysis/` | marimo + DuckDB notebook lab over the blob reservoir (on-demand local EDA, `--group analysis`; #87) |
 | `tests/integration/` | end-to-end suite |
 | `scripts/` | skill-sync + cloud-ship bootstrap + dev-migrate + `ship/` (the ship skill's deterministic mechanics: preflight, isolate, claim, local-gate, ci-wait, merge) + `backfill/` (one-shot POC→interim backfill, ADR-0006) |
