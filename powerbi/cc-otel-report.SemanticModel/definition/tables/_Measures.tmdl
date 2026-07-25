@@ -180,6 +180,39 @@ table _Measures
 		displayFolder: Ingest Health
 		lineageTag: a1970001-0000-4000-8000-000000000197
 
+	/// #305 tooltip payload: the finding's JSON detail, lifted out of the tbl_dq grid so the table keeps
+	/// only scannable columns. SELECTEDVALUE, not CONCATENATEX — a tooltip page evaluates under the hovered
+	/// row's filter context, so exactly one finding is ever in scope. Guarded on finding_type rather than on
+	/// details itself, so a finding that genuinely recorded no payload still says so instead of rendering an
+	/// empty card indistinguishable from a failed hover.
+	measure 'DQ Detail Payload' =
+			IF (
+			    NOT ISBLANK ( SELECTEDVALUE ( dq_finding[finding_type] ) ),
+			    COALESCE ( SELECTEDVALUE ( dq_finding[details] ), "(no payload recorded)" )
+			)
+		displayFolder: Ingest Health
+		lineageTag: d3050001-0000-4000-8000-000000000305
+
+	/// #305 tooltip header: the finding's identity in one line, so the tooltip names what it is showing
+	/// without a second visual competing for a 320px canvas.
+	measure 'DQ Finding Header' =
+			VAR FindingType = SELECTEDVALUE ( dq_finding[finding_type] )
+			VAR Detected = SELECTEDVALUE ( dq_finding[detected_at] )
+			VAR Affected = SUM ( dq_finding[row_count] )
+			VAR AffectedClause =
+			    IF (
+			        ISBLANK ( Affected ),
+			        "",
+			        "  ·  " & FORMAT ( Affected, "#,##0" ) & IF ( Affected = 1, " row", " rows" )
+			    )
+			RETURN
+			    IF (
+			        NOT ISBLANK ( FindingType ),
+			        FindingType & "  ·  detected " & FORMAT ( Detected, "dd MMM HH:mm" ) & AffectedClause
+			    )
+		displayFolder: Ingest Health
+		lineageTag: d3050002-0000-4000-8000-000000000305
+
 	/// Report-data-contract user-page fields (#28). commits/prs are doubles in the daily mart.
 	measure 'Total Commits' = SUM(fact_session_daily[commits])
 		formatString: #,##0

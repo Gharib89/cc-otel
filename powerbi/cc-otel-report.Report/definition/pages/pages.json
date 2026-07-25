@@ -8,7 +8,8 @@
     "pg_eco",
     "pg_health",
     "pg_user_detail",
-    "pg_session_detail"
+    "pg_session_detail",
+    "pg_tt_dq"
   ],
   "activePageName": "pg_exec"
 }
