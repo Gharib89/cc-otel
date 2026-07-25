@@ -60,8 +60,23 @@ table dim_user
 		annotation SummarizationSetBy = Automatic
 
 	/// Roster/telemetry reconciliation bucket for the Data Health mismatch table (#124), model-side calc column, no migration.
-	/// Unknown-id first (spoofed/blank emails, #8); then off-roster (telemetry email absent from the seat_roster snapshot, #116).
-	column 'Roster Status' = SWITCH ( TRUE (), dim_user[is_unknown] = TRUE (), "Unknown id", ISBLANK ( RELATED ( seat_roster[user_email] ) ), "Off-roster", "On-roster" )
+	/// #294: rewritten to the seat-population taxonomy (#290) now that the roster is IS's and not fabricated from telemetry —
+	/// "Off-roster identity" is reachable for the first time. Unknown-id stays first (spoofed/blank emails, #8): those have no
+	/// resolvable seat, so folding them into off-roster would hide an ingest defect behind a licensing state.
+	/// Recency is a fixed 28 days against the imported dim_date ceiling, matching the report's default relative-date window:
+	/// a calculated column materialises at refresh and cannot read the date slicer.
+	/// "Silent seat" (a seat that has never emitted) is unreachable here by construction — dim_user is telemetry-only, so a
+	/// never-emitting seat has no row. It belongs to the untracked-seat worklist read off dim_seat_current (#295).
+	column 'Roster Status' =
+			VAR Cutoff = MAX ( dim_date[date_day] ) - 27
+			RETURN
+			    SWITCH (
+			        TRUE (),
+			        dim_user[is_unknown] = TRUE (), "Unknown id",
+			        ISBLANK ( RELATED ( dim_seat_current[user_email] ) ), "Off-roster identity",
+			        dim_user[last_seen] >= Cutoff, "Active seat",
+			        "Dormant seat"
+			    )
 		dataType: string
 		lineageTag: b1d70001-0000-4000-8000-000000000124
 		summarizeBy: none

@@ -35,13 +35,13 @@
                 "Column": {
                   "Expression": {
                     "SourceRef": {
-                      "Entity": "seat_roster"
+                      "Entity": "dim_seat_current"
                     }
                   },
                   "Property": "seat_tier"
                 }
               },
-              "queryRef": "seat_roster.seat_tier",
+              "queryRef": "dim_seat_current.seat_tier",
               "nativeQueryRef": "seat_tier",
               "displayName": "Tier"
             },
@@ -195,7 +195,7 @@
             }
           },
           "selector": {
-            "metadata": "seat_roster.seat_tier"
+            "metadata": "dim_seat_current.seat_tier"
           }
         },
         {

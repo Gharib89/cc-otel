@@ -248,17 +248,65 @@ table _Measures
 	/// #117 measure layer, #165 relative-date rewrite. The window comes from the report's relative-date
 	/// slicer (default last 28 days); "PP" = the immediately preceding equal-length window. Headline
 	/// (Seat ROI) numerators are roster-matched only; plain [Active Users] stays for non-ROI contexts.
-	measure 'Paid Seats' = DISTINCTCOUNT ( seat_roster[user_email] )
+	/// #294: the licensed-seat denominator, counted over the daily seat fact so it is point-in-time correct and
+	/// responds to the date slicer — the seats open in the selected window (184 today), not the observed-user
+	/// count the fabricated roster returned by construction.
+	/// The bridge exists because fact_seat_day has no relationship to dim_seat_current, so a selection made on the
+	/// dimension — the sl_tier slicers, the cht_tier category — reaches the fact only through TREATAS. It carries
+	/// user_email, not seat_tier, for two reasons: every dimension column then propagates (tier, org, the seat's own
+	/// email) rather than only the one an ISFILTERED guard happened to name; and both series of a per-tier visual end
+	/// up on the same tier basis. [Active Roster Users] receives the tier through the dim_user relationship, i.e.
+	/// today's tier, so counting seat-days by the tier in force *each day* would split one person across two
+	/// categories the moment their tier changed mid-window and drive per-tier [Idle Seats] negative.
+	/// KEEPFILTERS so an outer tier filter (see [Instrumented Seat Cost]) intersects rather than being overridden.
+	/// This is the *licensed* population. Every ratio whose numerator comes from telemetry divides by
+	/// [Instrumented Seats] instead — see the note there.
+	measure 'Paid Seats' =
+			CALCULATE (
+			    DISTINCTCOUNT ( fact_seat_day[user_email] ),
+			    KEEPFILTERS ( TREATAS ( VALUES ( dim_seat_current[user_email] ), fact_seat_day[user_email] ) )
+			)
 		formatString: #,##0
 		displayFolder: Seat ROI
 		lineageTag: b9365732-93a2-497e-b49d-0215e0fe0d5e
+
+	/// Licensed seats telemetry has actually reached: the open seats in the window whose email also appears in
+	/// dim_user (telemetry-only). Not the licensed population (184) and not the window's actives (19) — a seat
+	/// instrumented but quiet in the window still counts, because the install did reach that machine.
+	/// #294: the honest denominator for every ratio with a telemetry-derived numerator. [Value Consumed] and
+	/// [Active Roster Users] can only be observed on instrumented seats, so dividing either by [Paid Seats] would
+	/// measure the instrumentation gap (17 tracked machines against 184 seats) and report it as developer
+	/// behaviour. ADR-0009 makes the rule explicit: these measures must stay on tracked members.
+	/// Composed over [Paid Seats] so the seat bridge is not duplicated; the extra TREATAS is needed because
+	/// fact_seat_day is deliberately unrelated to dim_user — most licensed seats have no dim_user row at all.
+	/// The licensed-versus-instrumented share itself is #295's coverage card, not this measure.
+	/// The first_seen bound makes the count date-aware, which the emitter side is not otherwise: dim_user has no
+	/// relationship to dim_date, so a bare VALUES( dim_user[user_email] ) is the all-time emitter set in every
+	/// window, and a shifted window (the PP measures) would credit machines the installer had not yet reached.
+	/// Unguarded it reported the prior 28 days as 20 instrumented seats when 13 of those machines had never emitted
+	/// by then, turning a flat ~-5 pp into a +60 pp jump on the exec hero.
+	measure 'Instrumented Seats' =
+			VAR WindowEnd = MAX ( dim_date[date_day] )
+			VAR Reached =
+			    CALCULATETABLE (
+			        VALUES ( dim_user[user_email] ),
+			        KEEPFILTERS ( dim_user[first_seen] <= WindowEnd )
+			    )
+			RETURN
+			    CALCULATE (
+			        [Paid Seats],
+			        KEEPFILTERS ( TREATAS ( Reached, fact_seat_day[user_email] ) )
+			    )
+		formatString: #,##0
+		displayFolder: Seat ROI
+		lineageTag: d2940301-0000-4000-8000-000000000294
 
 	/// Roster-matched distinct actives; the window comes from the report's relative-date slicer (#165),
 	/// not DAX (#117: off-roster identities excluded from the headline, surfaced on Data Health instead).
 	measure 'Active Roster Users' =
 			CALCULATE (
 			    DISTINCTCOUNT ( fact_session_daily[user_email] ),
-			    FILTER ( dim_user, NOT ISBLANK ( RELATED ( seat_roster[user_email] ) ) )
+			    FILTER ( dim_user, NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
 			)
 		formatString: #,##0
 		displayFolder: Seat ROI
@@ -278,25 +326,49 @@ table _Measures
 		displayFolder: Seat ROI\Support
 		lineageTag: 402883f1-9edf-442d-ba50-a3e8e88fb7cd
 
-	/// The seat-ROI hero KPI: roster-matched actives (selected window) / paid seats.
-	measure 'Seat Utilization %' = DIVIDE ( [Active Roster Users], [Paid Seats] )
+	/// The seat-ROI hero KPI: roster-matched actives (selected window) / instrumented seats.
+	/// #294: divides by [Instrumented Seats], not [Paid Seats]. Over the licensed population this reads 10% and
+	/// measures rollout coverage while being titled utilization — two readings that lead to opposite actions
+	/// (#295). Against instrumented seats it stays what its name claims: of the seats we can observe, how many
+	/// were used. Coverage is #295's own card.
+	measure 'Seat Utilization %' = DIVIDE ( [Active Roster Users], [Instrumented Seats] )
 		formatString: 0.0%;-0.0%;0.0%
 		displayFolder: Seat ROI
 		lineageTag: 5f25b658-d758-494e-bab7-cae193ccf083
 
 	/// Percentage-point delta vs the prior equal-length window (#117: pp for ratio KPIs, % for count KPIs).
 	/// BLANK unless both windows have data — a delta against an empty prior window is meaningless.
+	/// #294: the prior ratio shifts the window around the whole quotient (the [Idle Seats PP] pattern) rather than
+	/// dividing prior-window actives by current-window seats. Once [Paid Seats] is date-aware that mixed form is
+	/// wrong by the seat growth itself — 13 seats in April against 184 in July.
 	measure 'Seat Utilization Δ' =
+			VAR Days = COUNTROWS ( dim_date )
+			VAR FirstDay = MIN ( dim_date[date_day] )
 			VAR Cur = [Seat Utilization %]
-			VAR Prior = DIVIDE ( [Active Roster Users PP], [Paid Seats] )
+			VAR Prior =
+			    CALCULATE (
+			        [Seat Utilization %],
+			        DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 )
+			    )
 			RETURN
 			    IF ( NOT ISBLANK ( Cur ) && NOT ISBLANK ( Prior ), ( Cur - Prior ) * 100 )
 		formatString: +0.0 "pp";-0.0 "pp";0.0 "pp"
 		displayFolder: Seat ROI
 		lineageTag: 7d3fb1ad-3b35-4a81-ae17-112bd15b133a
 
-	/// Roster seats with no activity in the selected window, incl. never-seen seats.
-	measure 'Idle Seats' = [Paid Seats] - [Active Roster Users]
+	/// Instrumented seats with no activity in the selected window — the taxonomy's dormant seats (#290).
+	/// #294: subtracted from [Instrumented Seats], not [Paid Seats]. Over the licensed population the remainder is
+	/// 165, of which 164 are seats the installer never reached; calling those idle charges developers for an
+	/// instrumentation gap. Scoped to instrumented seats the word is true again — a working install, unused in the
+	/// window. The never-reached seats are #295's coverage story, not an idleness figure.
+	/// Both guards cover a window with no seat-days (an absolute range in the Filters pane predating the roster
+	/// history, or a PP window before it): BLANK - 19 is -19 in DAX, and a stray active whose seat has no seat-day
+	/// in the window would otherwise render a negative bar and invert the sign of [Idle Seats Δ].
+	measure 'Idle Seats' =
+			IF (
+			    NOT ISBLANK ( [Instrumented Seats] ),
+			    MAX ( 0, [Instrumented Seats] - [Active Roster Users] )
+			)
 		formatString: #,##0
 		displayFolder: Seat ROI
 		lineageTag: bd969746-a64b-4bec-a015-c34ffbc8417c
@@ -321,11 +393,19 @@ table _Measures
 		displayFolder: Seat ROI\Cost
 		lineageTag: a1730003-0000-4000-8000-000000000173
 
-	/// Monthly seat cost of the paid roster: Premium seats × Premium price + the rest at Standard price.
-	/// Period-independent (a monthly figure); the ratio prorates it to the selected window.
-	measure 'Monthly Seat Cost' =
-			VAR Premium = CALCULATE ( [Paid Seats], seat_roster[seat_tier] = "Premium" )
-			VAR Standard = [Paid Seats] - Premium
+	/// Monthly cost of the *instrumented* seats: Premium seats × Premium price + the rest at Standard price.
+	/// A monthly rate, but no longer period-independent — [Instrumented Seats] is now counted over the daily seat
+	/// fact, so the rate follows the window's seat population; [Value vs Seat Ratio] prorates it by Days/30.
+	/// #294: renamed from 'Monthly Seat Cost' and rebased onto [Instrumented Seats]. It exists only as the ROI
+	/// denominator (no visual binds it), and its numerator [Value Consumed] is observable on instrumented seats
+	/// alone — costing all 184 against value from 20 would divide by the rollout gap and read as a 9x collapse in
+	/// the tool's worth. Total licensed spend, if a card ever needs it, is this formula over [Paid Seats].
+	/// The Premium split filters the dimension, matching the tier basis [Paid Seats] bridges on, so it follows IS's
+	/// real tier mix instead of the two tiers the fabricated roster hardcoded. KEEPFILTERS so an outer tier
+	/// selection intersects: without it, sl_tier = Standard would be overwritten and every seat priced at Premium.
+	measure 'Instrumented Seat Cost' =
+			VAR Premium = CALCULATE ( [Instrumented Seats], KEEPFILTERS ( dim_seat_current[seat_tier] = "Premium" ) )
+			VAR Standard = [Instrumented Seats] - Premium
 			RETURN Premium * [Premium Seat Price] + Standard * [Standard Seat Price]
 		formatString: \$#,##0
 		displayFolder: Seat ROI\Cost
@@ -334,17 +414,20 @@ table _Measures
 	/// Value-vs-seat ROI (#173, research item 7): value consumed in the window over the seat cost for the
 	/// SAME window. Monthly seat cost is prorated by Days/30 (nominal month) so the multiple stays
 	/// period-consistent when the relative-date window changes (#165).
+	/// #294: both sides are now scoped to instrumented seats — see [Instrumented Seat Cost].
 	measure 'Value vs Seat Ratio' =
 			VAR Days = COUNTROWS ( dim_date )
-			VAR WindowSeatCost = [Monthly Seat Cost] * DIVIDE ( Days, 30 )
+			VAR WindowSeatCost = [Instrumented Seat Cost] * DIVIDE ( Days, 30 )
 			RETURN DIVIDE ( [Value Consumed], WindowSeatCost )
 		formatString: 0.0"×"
 		displayFolder: Seat ROI\Cost
 		lineageTag: a1730005-0000-4000-8000-000000000173
 
 	/// ROI-tile delta triplet (mirrors the Overview KPI pattern): hidden prior-window ratio / Δ (% change) /
-	/// label. Seat cost is date-independent and the prior window is equal-length, so the ratio delta reduces
-	/// to the value-consumed change — meaningful and window-consistent.
+	/// label. The prior window is equal-length, so the Days/30 proration cancels and the delta compares two
+	/// like-for-like ratios.
+	/// #294: seat cost is no longer date-independent — [Instrumented Seats] moves with the window — so the delta is
+	/// a genuine ROI change (value per seat-dollar), not just the value-consumed change it reduced to before.
 	measure 'Value vs Seat Ratio PP' =
 			VAR Days = COUNTROWS ( dim_date )
 			VAR FirstDay = MIN ( dim_date[date_day] )
@@ -409,7 +492,9 @@ table _Measures
 		lineageTag: c9e2a7d4-5b81-42f0-9c36-8a1e4f7b2d63
 
 	/// Cohorts (#117): growth-accounting semantics, leadership labels, roster-scoped, exhaustive
-	/// with [Idle Seats]: New + Retained + Reactivated + Idle = Paid Seats. Window = selection (#165).
+	/// with [Idle Seats]: New + Retained + Reactivated + Idle = Instrumented Seats. Window = selection (#165).
+	/// #294: the identity is against [Instrumented Seats], not [Paid Seats] — the cohorts count instrumented people
+	/// whose seat is on IS's roster, so the licensed seats the installer never reached are outside it by design.
 	measure 'New Users' =
 			VAR WindowStart = MIN ( dim_date[date_day] )
 			VAR WindowEnd = MAX ( dim_date[date_day] )
@@ -417,7 +502,7 @@ table _Measures
 			    COUNTROWS (
 			        FILTER (
 			            dim_user,
-			            NOT ISBLANK ( RELATED ( seat_roster[user_email] ) )
+			            NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
 			                && dim_user[first_seen] >= WindowStart
 			                && dim_user[first_seen] <= WindowEnd
 			        )
@@ -432,7 +517,7 @@ table _Measures
 			VAR Roster =
 			    CALCULATETABLE (
 			        VALUES ( dim_user[user_email] ),
-			        FILTER ( dim_user, NOT ISBLANK ( RELATED ( seat_roster[user_email] ) ) )
+			        FILTER ( dim_user, NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
 			    )
 			VAR Cur = VALUES ( fact_session_daily[user_email] )
 			VAR Prior =
@@ -453,7 +538,7 @@ table _Measures
 			VAR Roster =
 			    CALCULATETABLE (
 			        VALUES ( dim_user[user_email] ),
-			        FILTER ( dim_user, NOT ISBLANK ( RELATED ( seat_roster[user_email] ) ) )
+			        FILTER ( dim_user, NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
 			    )
 			VAR OldUsers =
 			    CALCULATETABLE (
@@ -634,14 +719,14 @@ table _Measures
 	measure 'Off-Roster Active Users' =
 			CALCULATE (
 			    DISTINCTCOUNT ( fact_session_daily[user_email] ),
-			    FILTER ( dim_user, ISBLANK ( RELATED ( seat_roster[user_email] ) ) )
+			    FILTER ( dim_user, ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
 			)
 		formatString: #,##0
 		displayFolder: Data Health
 		lineageTag: ad8752e9-4c15-4182-a3c2-a571460975f0
 
 	/// All-time: telemetry identities (incl. is_unknown) with no roster row.
-	measure 'Roster Mismatch Count' = COUNTROWS ( FILTER ( ALL ( dim_user ), ISBLANK ( RELATED ( seat_roster[user_email] ) ) ) )
+	measure 'Roster Mismatch Count' = COUNTROWS ( FILTER ( ALL ( dim_user ), ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) ) )
 		formatString: #,##0
 		displayFolder: Data Health
 		lineageTag: 7f426481-4c81-4b6a-9e31-c45412e896fd
@@ -652,7 +737,16 @@ table _Measures
 		lineageTag: 62b922f3-1e40-4a6a-8f0e-cabed5dbf026
 
 	/// Report-display helper: Executive Overview hero card sub-line.
-	measure 'Seat Utilization Detail' = [Active Roster Users] & " of " & [Paid Seats] & " paid seats · " & [Idle Seats] & " idle"
+	/// #294: says "instrumented", not "paid seats" — it explains a utilization headline now denominated on the seats
+	/// telemetry reaches, so quoting the licensed count here would leave the ratio looking wrong.
+	/// Kept to ~30 characters: crd_hero_detail is 232px with 4px of slack before crd_roi and is left-aligned with
+	/// crd_hero_delta, so it cannot be widened — a longer string truncates to an ellipsis mid-sentence.
+	/// Blank when the window holds no seat-days, rather than concatenating an empty count into "19 of  instrumented".
+	measure 'Seat Utilization Detail' =
+			IF (
+			    NOT ISBLANK ( [Instrumented Seats] ),
+			    [Active Roster Users] & " of " & [Instrumented Seats] & " instrumented · " & [Idle Seats] & " idle"
+			)
 		displayFolder: Seat ROI
 		lineageTag: 437fa2bc-e7ee-4ba3-ab8b-4499e3ed9cfc
 
@@ -1311,11 +1405,17 @@ table _Measures
 		displayFolder: User Detail
 		lineageTag: d1250001-0000-4000-8000-000000000125
 
-	/// RELATED walks dim_user (many) -> seat_roster (one); blank means the user is not on the paid-seat roster.
+	/// RELATED walks dim_user (many) -> dim_seat_current (one); blank means the identity holds no open seat.
+	/// #294: the fallback carries the taxonomy's state name so the User Detail card and the Data Health
+	/// reconciliation column say the same word for the same state.
+	/// HASONEVALUE because MAXX over many users returns the alphabetical max, which is "Standard" — a plausible
+	/// wrong tier rather than a visible fallback if the drillthrough filter ever fails to land.
 	measure 'Selected User Tier' =
-			VAR T = MAXX ( dim_user, RELATED ( seat_roster[seat_tier] ) )
-			RETURN
-			    COALESCE ( T, "Off-roster" )
+			IF (
+			    HASONEVALUE ( dim_user[user_email] ),
+			    COALESCE ( MAXX ( dim_user, RELATED ( dim_seat_current[seat_tier] ) ), "Off-roster identity" ),
+			    "All users"
+			)
 		displayFolder: User Detail
 		lineageTag: d1250002-0000-4000-8000-000000000125
 

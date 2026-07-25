@@ -92,7 +92,7 @@
             "altText": {
               "expr": {
                 "Literal": {
-                  "Value": "'Active seats versus paid seats behind the utilization headline.'"
+                  "Value": "'Seats active in the window against instrumented seats, behind the utilization headline.'"
                 }
               }
             }

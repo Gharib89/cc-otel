@@ -261,9 +261,11 @@ Findings from driving semantic-model edits through Desktop headlessly:
   manually refreshed" banner**, which overlays the top ~60px of the canvas in
   screenshots and blanks roster/calc-column visuals. Clear it headlessly:
   `Model.RequestRefresh(RefreshType.Calculate)` + `SaveChanges()` over the same
-  TOM connection (add a table-scoped `Full` refresh for `seat_roster` after a
-  fresh open — it re-imports the local CSV, no credentials needed). Local
-  recompute only; the Azure source is never touched.
+  TOM connection. Local recompute only; the Azure source is never touched.
+  Since #294 every seat table is an Azure mart (`dim_seat`, `dim_seat_current`,
+  `fact_seat_day`) rather than a local CSV, so a *new* seat column or table needs
+  a table-scoped `Full` against Postgres — credentials required — before
+  `Calculate` has anything to recompute over.
 
 ## Rejected / out
 
