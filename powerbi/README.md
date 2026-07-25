@@ -10,7 +10,7 @@ Desktop-published semantic model + report.
 | `cc-otel-report.pbip` | PBIP project pointer |
 | `cc-otel-report.SemanticModel/` | TMDL semantic model (this issue, #27) |
 | `cc-otel-report.Report/` | Report pages + theme (#28) |
-| `branding/` | AIWorx logo, PPT template, corporate-brand tokens — chart colours feed #28; typography deliberately does not (see `design-tokens.json`) |
+| `branding/` | AIWorx logo, PPT template, corporate-brand tokens — chart colours feed #28; typography deliberately does not (see `branding/design-tokens.json`) |
 
 ## Semantic model (#27)
 
@@ -55,7 +55,8 @@ Structure:
 ## Report (#28)
 
 Seven pages, authored offline as PBIR JSON via `pbi-cli-tool` v3.11.1's Report layer
-(`pbi report`/`visual`/`format` with `--no-sync`; see `docs/research/pbi-cli-visual-authoring.md`).
+(`pbi report`/`visual`/`format` with `--no-sync`; see `docs/research/pbi-cli-visual-authoring.md`
+— a dated snapshot, so its `set-theme` row no longer reflects the theme path below).
 Canvas 1280×720. The report's custom theme is
 `cc-otel-report.Report/StaticResources/RegisteredResources/AIWorx.json`, hand-edited in place
 (routing + the `set-theme` trap: `CLAUDE.md`). It consumes most of `branding/design-tokens.json`

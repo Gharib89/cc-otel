@@ -6,7 +6,7 @@ the source of truth and publishing is manual from Desktop. Route Power BI work:
 | Task | Reach for |
 |---|---|
 | Edit report visuals, pages, filters, bookmarks (PBIR) | `pbi-cli` Report-layer commands with `--no-sync`; check the `pbir-gotchas` skill first |
-| Edit the report **theme** | Hand-edit `cc-otel-report.Report/StaticResources/RegisteredResources/AIWorx.json` — the report's only custom theme. Never `pbi report set-theme` (orphans it; writes invalid `report.json` — `powerbi-tooling.md`) |
+| Edit the report **theme** | Hand-edit `cc-otel-report.Report/StaticResources/RegisteredResources/AIWorx.json` — the report's only custom theme. Never `pbi report set-theme` (orphans it; writes invalid `report.json` — `docs/agents/powerbi-tooling.md`) |
 | PBIR / TMDL / pbip format reference | data-goblin `pbip` plugin (`pbip`, `pbir-format`, `tmdl`) |
 | Report design / layout / accessibility | data-goblin `reports:pbi-report-design` (invoke on demand) |
 | Semantic-model measures | edit TMDL on disk directly — no live connection |
