@@ -3,9 +3,9 @@
   "name": "crd_plugins_d",
   "position": {
     "x": 1004,
-    "y": 240,
+    "y": 248,
     "z": 20012,
-    "height": 20,
+    "height": 28,
     "width": 232,
     "tabOrder": 20013
   },
@@ -40,7 +40,7 @@
             "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "8D"
+                  "Value": "12D"
                 }
               }
             },

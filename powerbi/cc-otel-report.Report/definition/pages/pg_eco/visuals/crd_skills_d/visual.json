@@ -3,9 +3,9 @@
   "name": "crd_skills_d",
   "position": {
     "x": 28,
-    "y": 240,
+    "y": 248,
     "z": 20013,
-    "height": 20,
+    "height": 28,
     "width": 232,
     "tabOrder": 20009
   },
@@ -40,7 +40,7 @@
             "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "8D"
+                  "Value": "12D"
                 }
               }
             },

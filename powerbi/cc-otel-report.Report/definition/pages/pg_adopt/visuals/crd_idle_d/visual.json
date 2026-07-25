@@ -5,7 +5,7 @@
     "x": 1016,
     "y": 232,
     "z": 20001,
-    "height": 22,
+    "height": 28,
     "width": 235,
     "tabOrder": 20001
   },
@@ -40,7 +40,7 @@
             "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "8D"
+                  "Value": "12D"
                 }
               }
             },

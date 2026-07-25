@@ -3,9 +3,9 @@
   "name": "crd_mcp_d",
   "position": {
     "x": 272,
-    "y": 240,
+    "y": 248,
     "z": 20011,
-    "height": 20,
+    "height": 28,
     "width": 232,
     "tabOrder": 20010
   },
@@ -40,7 +40,7 @@
             "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "8D"
+                  "Value": "12D"
                 }
               }
             },

@@ -22,7 +22,7 @@
                     "value": "LIMIT-HIT RATE (5H WINDOWS)",
                     "textStyle": {
                       "fontWeight": "bold",
-                      "fontSize": "8pt",
+                      "fontSize": "12pt",
                       "color": "#5a6473"
                     }
                   }

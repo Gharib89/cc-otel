@@ -530,7 +530,7 @@ table _Measures
 			VAR D = [Value vs Seat Ratio Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" )
 		displayFolder: Seat ROI\Cost
 		lineageTag: a1730009-0000-4000-8000-000000000173
 
@@ -858,12 +858,15 @@ table _Measures
 		lineageTag: 5fee9ee6-e3d6-4277-8492-0091cbbbd88a
 
 	/// Report-display helpers: KPI delta sub-lines (#119 polish, #165 dynamic window). Never blank — a
-	/// first-window report shows "— vs prior N days" instead of "(Blank)"; N tracks the selected window.
+	/// first-window report shows "— vs Nd" instead of "(Blank)"; N tracks the selected window.
+	/// These six use the compact "vs Nd" suffix rather than the "vs prior N days" the other pages carry:
+	/// Executive Overview packs a hero card plus five KPIs into 1224 units, so its delta cards are 137
+	/// wide and the long form truncates at the 12pt readable minimum (#309).
 	measure 'Seat Utilization Δ Label' =
 			VAR D = [Seat Utilization Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0;-0.0" ) & " pp vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0;-0.0" ) & " pp vs " & N & "d" )
 		displayFolder: Seat ROI
 		lineageTag: b1190001-0000-4000-8000-000000000119
 
@@ -871,7 +874,7 @@ table _Measures
 			VAR D = [Commits Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" )
 		displayFolder: Overview KPIs
 		lineageTag: b1190002-0000-4000-8000-000000000119
 
@@ -879,7 +882,7 @@ table _Measures
 			VAR D = [PRs Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" )
 		displayFolder: Overview KPIs
 		lineageTag: b1190003-0000-4000-8000-000000000119
 
@@ -887,7 +890,7 @@ table _Measures
 			VAR D = [Lines of Code Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" )
 		displayFolder: Overview KPIs
 		lineageTag: b1190004-0000-4000-8000-000000000119
 
@@ -895,7 +898,7 @@ table _Measures
 			VAR D = [Tool Acceptance Rate Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0;-0.0" ) & " pp vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0;-0.0" ) & " pp vs " & N & "d" )
 		displayFolder: Overview KPIs
 		lineageTag: b1190005-0000-4000-8000-000000000119
 

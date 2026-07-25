@@ -11,7 +11,7 @@
             "paragraphs": [
               {
                 "textRuns": [
-                  { "value": "COMMITS", "textStyle": { "fontWeight": "bold", "fontSize": "8pt", "color": "#5a6473" } }
+                  { "value": "COMMITS", "textStyle": { "fontWeight": "bold", "fontSize": "12pt", "color": "#5a6473" } }
                 ],
                 "horizontalTextAlignment": "center"
               }
