@@ -85,14 +85,14 @@ The repo validator (`.github/powerbi/validate-pbir.mjs`, run via `validate.ps1`)
 
 The trap: if Desktop writes a `$schema` URL for a version Microsoft hasn't published yet on `developer.microsoft.com`, the ajv fetch returns HTTP 404. As of #195 the validator treats an unreachable schema (404 or offline) as a **skip with a warning** (`schema unreachable, validation skipped: ...`), matching the MS conformance CLI, so the gate stays green and no hand-reverting of Desktop's `$schema` bump is needed. Genuinely invalid PBIR against a *reachable* schema still fails. Aligning the `$schema` line to the nearest **published** version is now optional cleanup, not a gate requirement.
 
-## 9. `theme.json` transparency overrides per-visual transparency
+## 9. Theme transparency overrides per-visual transparency
 
 `actionButton.fill.transparency: 100` in the shared theme makes every action button transparent — even visuals that explicitly set `transparency: 0D` in `visualContainerObjects.fill`.
 
 Theme wins when both target the same property. Fix theme first, then trust per-visual.
 
 ```json
-// theme.json
+// StaticResources/RegisteredResources/AIWorx.json
 "actionButton": {
   "*": {
     "fill": [{ "transparency": 0 }]   // NOT 100
