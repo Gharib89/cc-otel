@@ -153,6 +153,9 @@ def parse_rows(text: str) -> list[SeatRow]:
     if "email" not in lowered.values():
         raise RosterError(f"no `email` column in header: {', '.join(headers) or '(empty)'}")
 
+    # Normalized key -> the header as written, so every lookup below is case- and
+    # whitespace-insensitive: a re-cased IS export must not land a blank tier and date.
+    by_key = {key: header for header, key in lowered.items()}
     seqs = _sequences(list(lowered.values()))
     unmapped = [
         header
@@ -173,9 +176,10 @@ def parse_rows(text: str) -> list[SeatRow]:
             header: value for header in unmapped if (value := (record.get(header) or "").strip())
         }
         for seq in seqs or [1]:
-            subscription = (record.get(f"subscription_{seq}") or "").strip()
+            subscription = (record.get(by_key.get(f"subscription_{seq}", "")) or "").strip()
             assigned = _parse_date(
-                record.get(f"assignment_date_{seq}") or "", f"assignment_date_{seq}"
+                record.get(by_key.get(f"assignment_date_{seq}", "")) or "",
+                f"assignment_date_{seq}",
             )
             if seq != 1 and not subscription and assigned is None:
                 continue

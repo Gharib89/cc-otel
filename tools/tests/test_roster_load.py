@@ -146,6 +146,16 @@ class TestParseRows:
         (row,) = parse_rows(text)
         assert (row.subscription_seq, row.seat_tier, row.assignment_date) == (1, None, None)
 
+    def test_reads_subscription_columns_whatever_their_casing(self) -> None:
+        # Header names are matched case- and whitespace-insensitively throughout, so an IS
+        # export that re-cases its headers must not silently land a blank tier and date.
+        text = csv_text(
+            "a@example.com,Claude Premium,6/16/2026",
+            header="Email, Subscription_1 ,ASSIGNMENT_DATE_1",
+        )
+        (row,) = parse_rows(text)
+        assert (row.seat_tier, row.assignment_date) == ("Premium", date(2026, 6, 16))
+
     def test_accepts_iso_assignment_dates(self) -> None:
         text = csv_text(
             "a@itworx.com,Claude Standard,2026-04-08",
