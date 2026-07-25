@@ -26,12 +26,17 @@ roster was fabricated and every roster email was already inside the scoped user 
 - **The predicate is strict subtree membership, restated against the HR view.** Each permission asks
   whether the seat's email is in the set of `vw_UserBasicInfo[Email]` where the email equals the
   viewer's UPN or the management path contains it — the same test the `vw_UserBasicInfo` permission
-  applies, written out rather than inherited. A security filter must not depend on another filter
-  having already been evaluated, so each expression wraps the HR view in `ALL()` and stands alone.
+  applies, written out rather than inherited, so no permission depends on another having been
+  evaluated first. To be precise about the mechanism: the `ALL()` in each expression does not buy
+  that independence, because nothing in DAX strips a security filter. What buys it is that the four
+  predicates are *identical*, so intersecting them is idempotent. The hazard that leaves is
+  divergence — narrowing the HR-view rule alone would silently narrow the three seat rules with it.
 - **No `LOWER`/`TRIM` normalization on either side.** DAX string comparison is case-insensitive, and
-  the existing `dim_user`-to-HR-view and `dim_user`-to-`dim_seat_current` relationships both join
-  these columns successfully, which is empirical proof the values already match. Normalizing in the
-  predicate would mask an upstream roster/HR mismatch instead of surfacing it.
+  the two sides do agree: 0 of the 184 seat emails fail to match a `vw_UserBasicInfo[Email]`, measured
+  against the live model while writing this. That is a query result and not a join — no relationship
+  exists between any seat mart and the HR view, so nothing enforces the agreement. Normalizing in the
+  predicate would hide the day it stops holding; leaving it out means the offending seat drops out of
+  every role viewer's count, which is visible.
 - **The relationship topology is unchanged.** A `fromCardinality: one` edge into `dim_user` makes
   Desktop reject the model silently (#118), and relating the seat marts to the HR view would create
   an ambiguous path. #294's shape — fact to date only, current-seat on the one side of `dim_user`,
@@ -68,9 +73,23 @@ roster was fabricated and every roster email was already inside the scoped user 
   makes the page safe, but a manager viewing it sees zero off-roster active users and an empty
   mismatch table, because those identities have no HR row — so the page reads "everything is fine"
   when it is not. Recorded in `powerbi/README.md` where the publish runbook lives.
-- **Off-roster personal-email identities stay invisible to role viewers.** They have no HR row, which
-  was already true before this change. Making them visible needs session-data linking, its own
-  ticket.
+- **Off-roster personal-email identities stay invisible to role viewers.** They have no HR row, so the
+  pre-existing HR-view permission already hid them; `Off-Roster Active Users` and `Roster Mismatch
+  Count` returned blank under the role before this change and still do. Verified by A/B against the
+  role as it stands on `main`. Making them visible needs session-data linking, its own ticket.
+- **`dim_seat_current` propagates into `dim_user`.** It sits on the one side of
+  `dim_user_to_dim_seat_current`, so its permission also filters the telemetry user dimension — and
+  therefore every telemetry measure, not just the seat ones. Today that subtracts nothing: every
+  telemetry identity carrying an HR row also holds a seat, so the seat filter is a superset of what
+  the HR-view permission already imposes (measured: a manager's `dim_user` rows and `Active Users` are
+  identical before and after). The case it would bite is a developer instrumented between roster
+  drops — HR row present, seat row not yet — who would drop out of their own manager's adoption
+  numbers until the next drop. Roster drops are irregular and manual (ADR-0009), so that window is
+  real; it is accepted rather than worked around, because the alternative is leaving the licensed
+  count unscoped.
+- **A seat whose holder has no HR row is invisible to every role viewer, including the org top.**
+  Currently zero of 184. Contractors or service accounts appearing on a future drop would undercount
+  silently — the failure direction is closed, never over-disclosure.
 - **The subtree predicate is repeated three times.** Deduplicating it into a measure or calculated
   table would reintroduce the evaluation-order dependency the decision rejects, so the repetition is
   the point rather than an oversight.
