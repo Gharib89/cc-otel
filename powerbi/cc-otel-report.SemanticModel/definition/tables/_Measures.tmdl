@@ -255,7 +255,9 @@ table _Measures
 	/// seat-days by today's tier instead of the tier in force each day): a tier selection made on the dimension —
 	/// the sl_tier slicers, the cht_tier category — is carried across to the fact's own tier column. Guarded on
 	/// ISFILTERED so an unfiltered total counts every seat-day, including a tier that has since left the roster;
-	/// KEEPFILTERS so an outer fact-tier filter (see [Monthly Seat Cost]) intersects rather than being overridden.
+	/// KEEPFILTERS so an outer fact-tier filter (see [Instrumented Seat Cost]) intersects rather than being overridden.
+	/// This is the *licensed* population. Every ratio whose numerator comes from telemetry divides by
+	/// [Instrumented Seats] instead — see the note there.
 	measure 'Paid Seats' =
 			IF (
 			    ISFILTERED ( dim_seat_current[seat_tier] ),
@@ -268,6 +270,25 @@ table _Measures
 		formatString: #,##0
 		displayFolder: Seat ROI
 		lineageTag: b9365732-93a2-497e-b49d-0215e0fe0d5e
+
+	/// Licensed seats telemetry has actually reached: the open seats in the window whose email also appears in
+	/// dim_user (telemetry-only). Not the licensed population (184) and not the window's actives (19) — a seat
+	/// instrumented but quiet in the window still counts, because the install did reach that machine.
+	/// #294: the honest denominator for every ratio with a telemetry-derived numerator. [Value Consumed] and
+	/// [Active Roster Users] can only be observed on instrumented seats, so dividing either by [Paid Seats] would
+	/// measure the instrumentation gap (17 tracked machines against 184 seats) and report it as developer
+	/// behaviour. ADR-0009 makes the rule explicit: these measures must stay on tracked members.
+	/// Composed over [Paid Seats] so the seat-tier bridge is not duplicated; the extra TREATAS is needed because
+	/// fact_seat_day is deliberately unrelated to dim_user — most licensed seats have no dim_user row at all.
+	/// The licensed-versus-instrumented share itself is #295's coverage card, not this measure.
+	measure 'Instrumented Seats' =
+			CALCULATE (
+			    [Paid Seats],
+			    KEEPFILTERS ( TREATAS ( VALUES ( dim_user[user_email] ), fact_seat_day[user_email] ) )
+			)
+		formatString: #,##0
+		displayFolder: Seat ROI
+		lineageTag: d2940301-0000-4000-8000-000000000294
 
 	/// Roster-matched distinct actives; the window comes from the report's relative-date slicer (#165),
 	/// not DAX (#117: off-roster identities excluded from the headline, surfaced on Data Health instead).
@@ -294,8 +315,12 @@ table _Measures
 		displayFolder: Seat ROI\Support
 		lineageTag: 402883f1-9edf-442d-ba50-a3e8e88fb7cd
 
-	/// The seat-ROI hero KPI: roster-matched actives (selected window) / paid seats.
-	measure 'Seat Utilization %' = DIVIDE ( [Active Roster Users], [Paid Seats] )
+	/// The seat-ROI hero KPI: roster-matched actives (selected window) / instrumented seats.
+	/// #294: divides by [Instrumented Seats], not [Paid Seats]. Over the licensed population this reads 10% and
+	/// measures rollout coverage while being titled utilization — two readings that lead to opposite actions
+	/// (#295). Against instrumented seats it stays what its name claims: of the seats we can observe, how many
+	/// were used. Coverage is #295's own card.
+	measure 'Seat Utilization %' = DIVIDE ( [Active Roster Users], [Instrumented Seats] )
 		formatString: 0.0%;-0.0%;0.0%
 		displayFolder: Seat ROI
 		lineageTag: 5f25b658-d758-494e-bab7-cae193ccf083
@@ -320,8 +345,12 @@ table _Measures
 		displayFolder: Seat ROI
 		lineageTag: 7d3fb1ad-3b35-4a81-ae17-112bd15b133a
 
-	/// Roster seats with no activity in the selected window, incl. never-seen seats.
-	measure 'Idle Seats' = [Paid Seats] - [Active Roster Users]
+	/// Instrumented seats with no activity in the selected window — the taxonomy's dormant seats (#290).
+	/// #294: subtracted from [Instrumented Seats], not [Paid Seats]. Over the licensed population the remainder is
+	/// 165, of which 164 are seats the installer never reached; calling those idle charges developers for an
+	/// instrumentation gap. Scoped to instrumented seats the word is true again — a working install, unused in the
+	/// window. The never-reached seats are #295's coverage story, not an idleness figure.
+	measure 'Idle Seats' = [Instrumented Seats] - [Active Roster Users]
 		formatString: #,##0
 		displayFolder: Seat ROI
 		lineageTag: bd969746-a64b-4bec-a015-c34ffbc8417c
@@ -346,13 +375,17 @@ table _Measures
 		displayFolder: Seat ROI\Cost
 		lineageTag: a1730003-0000-4000-8000-000000000173
 
-	/// Monthly seat cost of the paid roster: Premium seats × Premium price + the rest at Standard price.
-	/// Period-independent (a monthly figure); the ratio prorates it to the selected window.
-	/// #294: the Premium split filters the daily seat fact, so it counts IS's real tier mix (8 Premium) and follows
-	/// the date slicer instead of the two tiers the fabricated roster hardcoded.
-	measure 'Monthly Seat Cost' =
-			VAR Premium = CALCULATE ( [Paid Seats], fact_seat_day[seat_tier] = "Premium" )
-			VAR Standard = [Paid Seats] - Premium
+	/// Monthly cost of the *instrumented* seats: Premium seats × Premium price + the rest at Standard price.
+	/// Period-independent (a monthly figure); [Value vs Seat Ratio] prorates it to the selected window.
+	/// #294: renamed from 'Monthly Seat Cost' and rebased onto [Instrumented Seats]. It exists only as the ROI
+	/// denominator (no visual binds it), and its numerator [Value Consumed] is observable on instrumented seats
+	/// alone — costing all 184 against value from 20 would divide by the rollout gap and read as a 9x collapse in
+	/// the tool's worth. Total licensed spend, if a card ever needs it, is this formula over [Paid Seats].
+	/// The Premium split filters the daily seat fact, so it follows IS's real tier mix and the date slicer instead
+	/// of the two tiers the fabricated roster hardcoded.
+	measure 'Instrumented Seat Cost' =
+			VAR Premium = CALCULATE ( [Instrumented Seats], fact_seat_day[seat_tier] = "Premium" )
+			VAR Standard = [Instrumented Seats] - Premium
 			RETURN Premium * [Premium Seat Price] + Standard * [Standard Seat Price]
 		formatString: \$#,##0
 		displayFolder: Seat ROI\Cost
@@ -361,9 +394,10 @@ table _Measures
 	/// Value-vs-seat ROI (#173, research item 7): value consumed in the window over the seat cost for the
 	/// SAME window. Monthly seat cost is prorated by Days/30 (nominal month) so the multiple stays
 	/// period-consistent when the relative-date window changes (#165).
+	/// #294: both sides are now scoped to instrumented seats — see [Instrumented Seat Cost].
 	measure 'Value vs Seat Ratio' =
 			VAR Days = COUNTROWS ( dim_date )
-			VAR WindowSeatCost = [Monthly Seat Cost] * DIVIDE ( Days, 30 )
+			VAR WindowSeatCost = [Instrumented Seat Cost] * DIVIDE ( Days, 30 )
 			RETURN DIVIDE ( [Value Consumed], WindowSeatCost )
 		formatString: 0.0"×"
 		displayFolder: Seat ROI\Cost
@@ -435,10 +469,10 @@ table _Measures
 		displayFolder: Seat ROI
 		lineageTag: c9e2a7d4-5b81-42f0-9c36-8a1e4f7b2d63
 
-	/// Cohorts (#117): growth-accounting semantics, leadership labels, roster-scoped. Window = selection (#165).
-	/// #294: no longer exhaustive against [Paid Seats]. The cohorts count instrumented people whose seat is on IS's
-	/// roster; [Idle Seats] now absorbs every licensed seat that has never been instrumented at all (164 of 184), so
-	/// New + Retained + Reactivated + Idle = Paid Seats holds only by [Idle Seats] being a remainder.
+	/// Cohorts (#117): growth-accounting semantics, leadership labels, roster-scoped, exhaustive
+	/// with [Idle Seats]: New + Retained + Reactivated + Idle = Instrumented Seats. Window = selection (#165).
+	/// #294: the identity is against [Instrumented Seats], not [Paid Seats] — the cohorts count instrumented people
+	/// whose seat is on IS's roster, so the licensed seats the installer never reached are outside it by design.
 	measure 'New Users' =
 			VAR WindowStart = MIN ( dim_date[date_day] )
 			VAR WindowEnd = MAX ( dim_date[date_day] )
@@ -681,7 +715,11 @@ table _Measures
 		lineageTag: 62b922f3-1e40-4a6a-8f0e-cabed5dbf026
 
 	/// Report-display helper: Executive Overview hero card sub-line.
-	measure 'Seat Utilization Detail' = [Active Roster Users] & " of " & [Paid Seats] & " paid seats · " & [Idle Seats] & " idle"
+	/// #294: says "instrumented", not "paid seats" — it explains a utilization headline now denominated on the seats
+	/// telemetry reaches, so quoting the licensed count here would leave the ratio looking wrong.
+	/// Kept to ~30 characters: crd_hero_detail is 232px with 4px of slack before crd_roi and is left-aligned with
+	/// crd_hero_delta, so it cannot be widened — a longer string truncates to an ellipsis mid-sentence.
+	measure 'Seat Utilization Detail' = [Active Roster Users] & " of " & [Instrumented Seats] & " instrumented · " & [Idle Seats] & " idle"
 		displayFolder: Seat ROI
 		lineageTag: 437fa2bc-e7ee-4ba3-ab8b-4499e3ed9cfc
 
