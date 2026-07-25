@@ -1,6 +1,8 @@
 /// Current seat dimension (#294) — one row per person holding an open seat, from marts.dim_seat_current (ADR-0009).
 /// Occupies the one-side relationship slot the fabricated seat_roster held, so the roster-reaching measures survive a rename.
 /// Sourced from IS's roster, never from telemetry: it holds the full licensed population (184), not the instrumented one.
+/// dim_user_to_dim_seat_current is plain many:1 with this table on the to-side, never 1:1 — a fromCardinality:one edge into
+/// dim_user, which sits on the OrgScope security-filter chain, makes Desktop reject the model silently (#118).
 table dim_seat_current
 	lineageTag: d2940101-0000-4000-8000-000000000294
 

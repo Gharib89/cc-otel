@@ -89,8 +89,6 @@ relationship dim_user_to_vw_UserBasicInfo
 	fromColumn: dim_user.user_email
 	toColumn: vw_UserBasicInfo.Email
 
-/// Plain many:1 with the seat dimension on the to-side, never 1:1 — a fromCardinality:one edge into dim_user,
-/// which sits on the OrgScope security-filter chain, makes Desktop reject the model silently (#118).
 relationship dim_user_to_dim_seat_current
 	fromColumn: dim_user.user_email
 	toColumn: dim_seat_current.user_email
