@@ -314,7 +314,8 @@ table _Measures
 	measure 'Seat Coverage Detail' =
 			IF (
 			    NOT ISBLANK ( [Paid Seats] ),
-			    "of " & [Paid Seats] & " licensed seats · " & FORMAT ( [Instrumented Seat Share], "0.0%" ) & " coverage"
+			    "of " & FORMAT ( [Paid Seats], "#,##0" ) & " licensed seats · "
+			        & FORMAT ( [Instrumented Seat Share], "0.0%" ) & " coverage"
 			)
 		displayFolder: Seat ROI
 		lineageTag: d2950102-0000-4000-8000-000000000295
@@ -327,15 +328,25 @@ table _Measures
 	measure 'Seat Coverage Note' =
 			IF (
 			    NOT ISBLANK ( [Paid Seats] ),
-			    "Install status is unknown for the remaining " & ( [Paid Seats] - [Instrumented Seats] ) & " seats"
+			    "Install status is unknown for the remaining "
+			        & FORMAT ( [Paid Seats] - [Instrumented Seats], "#,##0" ) & " seats"
 			)
 		displayFolder: Seat ROI
 		lineageTag: d2950103-0000-4000-8000-000000000295
 
-	/// How long the seat has been held, for the untracked-seat worklist (#295). Measured against the viewer clock
-	/// rather than the imported dim_date ceiling because the question it answers — how long has IS been paying for
-	/// a machine the installer never reached — is asked in real time, and a stale snapshot must not shrink it.
-	measure 'Days Since Assignment' = INT ( TODAY () - MAX ( dim_seat_current[valid_from] ) )
+	/// How long the seat has been held, for the untracked-seat worklist (#295). Measured against the query clock
+	/// (TODAY() resolves server-side, in the capacity timezone — not the viewer's) rather than the imported
+	/// dim_date ceiling, because the question it answers — how long has IS been paying for a machine the installer
+	/// never reached — is asked in real time and a stale snapshot must not shrink it. Note the model therefore
+	/// carries two clocks: this one, and dim_user['Roster Status']'s refresh-frozen MAX ( dim_date[date_day] ).
+	/// MIN, not MAX: identical at the one-seat grain the worklist renders, but at any coarser grain MAX would
+	/// silently answer the opposite question — the newest assignment, i.e. the *shortest* tenure — so a totals row
+	/// or a tier rollup would report the least urgent seat as the headline. MIN keeps "the longest-held untracked
+	/// seat has been paid for N days" true at every grain, which is the number the worklist exists to surface.
+	measure 'Days Since Assignment' =
+			VAR Oldest = MIN ( dim_seat_current[valid_from] )
+			RETURN
+			    IF ( NOT ISBLANK ( Oldest ), INT ( TODAY () - Oldest ) )
 		formatString: #,##0
 		displayFolder: Seat ROI
 		lineageTag: d2950104-0000-4000-8000-000000000295

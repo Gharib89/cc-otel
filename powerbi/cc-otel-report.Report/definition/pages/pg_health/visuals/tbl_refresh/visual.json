@@ -6,7 +6,7 @@
     "y": 262,
     "z": 500,
     "height": 226,
-    "width": 400,
+    "width": 396,
     "tabOrder": 500
   },
   "visual": {
@@ -88,7 +88,7 @@
             "value": {
               "expr": {
                 "Literal": {
-                  "Value": "170D"
+                  "Value": "165D"
                 }
               }
             }
@@ -102,7 +102,7 @@
             "value": {
               "expr": {
                 "Literal": {
-                  "Value": "155D"
+                  "Value": "150D"
                 }
               }
             }

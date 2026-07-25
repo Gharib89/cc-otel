@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "tbl_untracked",
   "position": {
-    "x": 510,
-    "y": 496,
+    "x": 514,
+    "y": 504,
     "z": 540,
-    "height": 208,
-    "width": 742,
+    "height": 200,
+    "width": 738,
     "tabOrder": 540
   },
   "visual": {

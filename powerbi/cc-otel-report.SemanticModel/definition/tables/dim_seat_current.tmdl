@@ -47,6 +47,14 @@ table dim_seat_current
 	/// install beacon is the real fix and this bucket only ever claims an observation.
 	/// Evaluated against dim_user (telemetry-only) and never vw_UserBasicInfo, so the worklist needs no
 	/// relationship traversal to the HR view and stays off the OrgScope security-filter chain.
+	/// Deliberately all-time, not window-aware: a calculated column evaluates under empty filter context, so this
+	/// is the ever-emitted set. [Instrumented Seats] is bounded on first_seen instead, so the exec card's remainder
+	/// moves with the date slicer while this worklist does not — they agree only while the window spans every
+	/// first_seen. Current-state is the right basis for a rollout list; the measure's is right for a windowed KPI.
+	/// Depends on the *base* column dim_user[user_email], which is what keeps the dependency graph acyclic:
+	/// dim_user['Roster Status'] reaches back here through RELATED ( dim_seat_current[user_email] ), also a base
+	/// column. Repointing either at the other's *calculated* column closes the loop, and it fails at refresh
+	/// rather than at edit time — neither TMDL parse nor Desktop load catches it.
 	column telemetry_status =
 			IF (
 			    dim_seat_current[user_email] IN VALUES ( dim_user[user_email] ),
