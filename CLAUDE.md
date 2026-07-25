@@ -70,9 +70,7 @@ The shell here is **PowerShell** (pwsh primary, WinPS 5.1 on the fleet). Four tr
 
 ## Dev database
 
-**Authoring migrations:** run `scripts/dev-migrate.sh` — it spins a throwaway `postgres:16` container, applies migrations, and regenerates `db/schema.sql` via `pg_dump 17`; with `--check` it also diffs the dump against HEAD (pg_dump version comments normalized) and exits nonzero on drift. CI's schema-drift job and the local gate run that same `--check` call, so the verdict has one owner. Authoring from-zero avoids drift that a persistent DB accumulates when a migration is edited after being applied. Requires `dbmate` (pin v2.34.1) + `pg_dump 17` on PATH and a running Docker daemon.
-
-_Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` holds `DATABASE_URL` pointing at the retired POC's Azure Postgres Flexible Server (a dedicated `cc_otel` database for this repo; real POC telemetry lives in the sibling `otel` database). Migrations no longer target it — `.env` `DATABASE_URL` is for ad-hoc `psql` only. `.env` also carries the Azure identity vars (`AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_CLIENT_ID`, …) used by deploy tooling.
+Migration-authoring loop, the throwaway-container rationale, and the POC `.env` caveat: `db/CLAUDE.md` (loads when working under `db/`).
 
 ## Environments & deploys
 
@@ -87,16 +85,10 @@ _Until POC decommission (parallel cutover, ADR-0004):_ the gitignored `.env` hol
 
 | Dir | Concern |
 |---|---|
-| `iac/` | Bicep only |
-| `sink/` | FastAPI OTLP sink (uv workspace member) |
-| `collector/` | OTel Collector config |
 | `db/` | dbmate migrations + `schema.sql` + `views/marts/` canonical mart definitions |
-| `installer/` | `install.ps1` fleet setup |
 | `bootstrap/` | env bring-up runbook + PowerShell scripts (operator-run) |
-| `powerbi/` | `.pbip` semantic model + report + branding |
 | `tools/` | Curation + ops tooling over the blob reservoir (sweep, data dictionary, replay, scrub) + reference-data ingest (`roster_load.py`) + CI gate-path derivation (`gate_paths.py`) |
 | `analysis/` | marimo + DuckDB notebook lab over the blob reservoir (on-demand local EDA, `--group analysis`; #87) |
-| `tests/integration/` | end-to-end suite |
 | `scripts/` | skill-sync + cloud-ship bootstrap + dev-migrate + `ship/` (the ship skill's deterministic mechanics: preflight, isolate, claim, local-gate, ci-wait, merge) + `backfill/` (one-shot POC→interim backfill, ADR-0006) |
 | `.claude/skills/` | tracked agent skills (vendored + project-native) |
 
@@ -146,17 +138,6 @@ drives `cloud-ship` over the `ready-for-agent` frontier:
 
 ### Power BI authoring
 
-The report under `powerbi/` is authored **on disk** (PBIR/TMDL); on-disk PBIP is
-the source of truth and publishing is manual from Desktop. Route Power BI work:
-
-| Task | Reach for |
-|---|---|
-| Edit report visuals, pages, filters, themes, bookmarks (PBIR) | `pbi-cli` Report-layer commands with `--no-sync`; check the `pbir-gotchas` skill first |
-| PBIR / TMDL / pbip format reference | data-goblin `pbip` plugin (`pbip`, `pbir-format`, `tmdl`) |
-| Report design / layout / accessibility | data-goblin `reports:pbi-report-design` (invoke on demand) |
-| Semantic-model measures | edit TMDL on disk directly — no live connection |
-| Validate before commit | `pwsh .github/powerbi/validate.ps1` (mirrors the `ci-powerbi` gate) |
-
-Do **not** use the `pbir-cli` / `create-pbi-report` skills (rejected: license +
-no linux wheel) — author with `pbi-cli`. Full roster, setup, and the plugin set:
-`docs/agents/powerbi-tooling.md`.
+On-disk PBIP (PBIR/TMDL) is the source of truth; publishing is manual from
+Desktop. Tool routing table and the rejected-skill list: `powerbi/CLAUDE.md`
+(loads when working under `powerbi/`).
