@@ -48,8 +48,9 @@ once in Desktop — see `pbir-gotchas` trap 1); emits `visualContainer` schema
 `$schema`); `report set-theme` writes report.json **invalid** against
 report/3.3.0 — `customTheme.reportVersionAtImport` as a string instead of a
 `{visual,page,report}` object, and the RegisteredResources item `type` as int
-`202` with a wrong `path` (must be string `"CustomTheme"` with a
-resource-folder-relative filename). It also registers the resource under its
+`202` plus a wrong `path` — correctly, `type` is the string `"CustomTheme"` and
+`path` is a resource-folder-relative filename (today, `AIWorx.json`). It also
+registers the resource under its
 **source filename**, so pointing it at anything but the live theme orphans the
 current one. Consequence: `set-theme` is not the authoring path for this repo —
 hand-edit the registered theme in place (`powerbi/CLAUDE.md`). If it is ever run,
