@@ -6,6 +6,7 @@ fixtures reproduce its header and shape, and the real 184-row load is verified b
 
 from __future__ import annotations
 
+import getpass
 from pathlib import Path
 
 import psycopg
@@ -70,7 +71,7 @@ def test_execute_records_the_drop_and_its_snapshot_rows(
         "Ahmed,ahmed.gharib@itworx.com,Boss,Eng,03-100,ITWorx2,Claude Premium,6/16/2026",
     )
 
-    load(pg_url, path, "2026-07-24", "--notes", "second July drop", "--ingested-by", "tester")
+    load(pg_url, path, "2026-07-24", "--notes", "second July drop")
 
     drop = conn.execute(
         "SELECT as_of_date, source_filename, length(file_sha256), row_count, ingested_by, notes"
@@ -79,7 +80,7 @@ def test_execute_records_the_drop_and_its_snapshot_rows(
     assert drop is not None
     as_of, filename, digest_len, row_count, ingested_by, notes = drop
     assert (str(as_of), filename, digest_len) == ("2026-07-24", "claude_users.csv", 64)
-    assert (row_count, ingested_by, notes) == (2, "tester", "second July drop")
+    assert (row_count, ingested_by, notes) == (2, getpass.getuser(), "second July drop")
 
     rows = conn.execute(
         "SELECT user_email, subscription_seq, subscription_raw, seat_tier, assignment_date,"

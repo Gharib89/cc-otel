@@ -34,7 +34,7 @@ import hashlib
 import io
 import re
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -264,23 +264,23 @@ def guard_violations(
             f"against the prior drop ({len(prior)}) — possible truncated export"
         )
 
-    def vanished(field: str) -> list[str]:
-        before = {getattr(row, field) for row in prior if getattr(row, field)}
-        after = {getattr(row, field) for row in incoming if getattr(row, field)}
+    def vanished(value: Callable[[SeatRow], str | None]) -> list[str]:
+        before = {v for row in prior if (v := value(row))}
+        after = {v for row in incoming if (v := value(row))}
         return sorted(before - after)
 
     violations.extend(
         f"organization {name!r} present in the prior drop is absent from this one"
-        for name in vanished("anthropic_org_name")
+        for name in vanished(lambda row: row.anthropic_org_name)
     )
     violations.extend(
         f"tier {tier!r} present in the prior drop is absent from this one"
-        for tier in vanished("seat_tier")
+        for tier in vanished(lambda row: row.seat_tier)
     )
     return violations
 
 
-def _target(database_url: str) -> str:
+def _target_label(database_url: str) -> str:
     """The host + database the write would land in — printed before anything else."""
     info = conninfo_to_dict(database_url)
     return f"host={info.get('host', '(unset)')} database={info.get('dbname', '(unset)')}"
@@ -303,27 +303,12 @@ def _newest_drop(conn: psycopg.Connection) -> tuple[date | None, list[SeatRow]]:
         return None, []
     drop_id, as_of = row
     snapshot = conn.execute(
-        "SELECT user_email, subscription_seq, seat_tier, anthropic_org_name"
+        "SELECT user_email, subscription_seq, subscription_raw, seat_tier, assignment_date,"
+        " anthropic_org_name, person_name, manager_name, department, cost_center, extra"
         " FROM ref.seat_roster_snapshot WHERE drop_id = %s",
         (drop_id,),
     ).fetchall()
-    rows = [
-        SeatRow(
-            user_email=email,
-            subscription_seq=seq,
-            subscription_raw=None,
-            seat_tier=tier,
-            assignment_date=None,
-            anthropic_org_name=org,
-            person_name=None,
-            manager_name=None,
-            department=None,
-            cost_center=None,
-            extra={},
-        )
-        for email, seq, tier, org in snapshot
-    ]
-    return as_of, rows
+    return as_of, [SeatRow(*record) for record in snapshot]
 
 
 def _insert_drop(
@@ -386,9 +371,6 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="the drop's as-of date (YYYY-MM-DD); the file carries no export timestamp",
     )
     p.add_argument("--notes", help="free-text note recorded on the drop")
-    p.add_argument(
-        "--ingested-by", default=getpass.getuser(), help="operator recorded on the drop"
-    )
     p.add_argument("--database-url", help="target DB; defaults to $DATABASE_URL")
     p.add_argument(
         "--force", action="store_true", help="override the as-of ordering and truncation guards"
@@ -405,7 +387,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     # Before anything else, including reading the file: the operator's first line of defense
     # against loading HR data into the retired POC server.
-    print(f"Target: {_target(database_url)}")
+    print(f"Target: {_target_label(database_url)}")
 
     try:
         content = args.file.read_bytes()
@@ -460,7 +442,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         drop_id = _insert_drop(
-            conn, args.as_of, args.file.name, digest, rows, args.ingested_by, args.notes
+            conn, args.as_of, args.file.name, digest, rows, getpass.getuser(), args.notes
         )
         print(f"Loaded drop {drop_id}: {len(rows)} snapshot rows at as-of {args.as_of}")
     return 0

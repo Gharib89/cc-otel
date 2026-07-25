@@ -71,7 +71,7 @@ An `attrs`/`resource` key observed in the raw reservoir but absent from the colu
 ### Licensing
 
 **Seat**:
-A licensed Claude subscription entitlement assigned to one person, at a tier, within an **Anthropic organization**. The licensed-population denominator: 184 seats against 17 **tracked machines** and 20 observed users, which is exactly why seats and machines need separate names. Sourced from IS's roster, never from telemetry. See ADR-0009.
+A licensed Claude subscription entitlement assigned to one person, at a tier, within an **Anthropic organization**. The licensed-population denominator, an order of magnitude larger than the instrumented one (the first drop: 184 seats against 17 **tracked machines**), which is exactly why seats and machines need separate names. Sourced from IS's roster, never from telemetry. See ADR-0009.
 _Avoid_: licence, user (a seat may never emit)
 
 **Roster drop**:
@@ -90,7 +90,7 @@ _Avoid_: team, tenant
 
 **Tracked machine**:
 A developer machine with Claude Code telemetry configured (managed settings + wrapper). The scale unit for infra sizing, token distribution, and fleet config. Distinct from developer — one dev may have several tracked machines; reporting keys on `user.email`.
-_Avoid_: endpoint; **seat** means the licence, not the machine
+_Avoid_: endpoint (for the entitlement, say **seat** — the two are distinct, not synonyms)
 
 **Installer**:
 `install.ps1` — the idempotent, **drift-repairing** per-machine setup script. Each tick it verifies real state (installed files — `managed-settings.json` including the wrapper `statusLine.command`, plus the wrapper itself — machine-scope env vars, and user-settings telemetry keys) and repairs any drift; a clean machine no-ops fast. It leaves each user's own `settings.json` statusline untouched (the wrapper resolves it at runtime, ADR-0003). It **checks** for Node.js but never installs it (the LTS MSI is an IS prerequisite, issue #31); because the statusline is delivered through managed settings, it self-heals the moment Node appears with no install-time action. IS pushes it fleet-wide via their managed tool on a 90-minute cadence; the distribution mechanism itself is out of our scope, the script is ours. `build-installer.ps1` bakes the collector endpoint + fleet token + wrapper into a **single self-contained `install.ps1`** (the only file handed to IS) and **stamps** it (`SHA256(wrapper + managed-settings + schema version)`), so a rotated token forces every machine to re-converge. The token lives only in the gitignored `.env.<env>` and the gitignored built artifact — never the repo.
