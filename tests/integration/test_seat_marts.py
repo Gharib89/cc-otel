@@ -82,8 +82,11 @@ def finding(conn: psycopg.Connection, finding_type: str):
 
 
 def test_a_seat_opens_from_its_assignment_date(conn, pg_url, tmp_path):
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
-         "2026-05-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-05-20",
+    )
     refresh(conn)
 
     assert intervals(conn) == [
@@ -101,8 +104,11 @@ def test_a_seat_with_no_assignment_date_opens_observation_dated(conn, pg_url, tm
 
 
 def test_a_tier_change_with_a_moved_assignment_date_is_source_dated(conn, pg_url, tmp_path):
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
-         "2026-05-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-05-20",
+    )
     load(
         pg_url,
         roster(tmp_path, seat("a@itworx.com", "Claude Premium", "6/1/2026"), name="d2.csv"),
@@ -116,11 +122,12 @@ def test_a_tier_change_with_a_moved_assignment_date_is_source_dated(conn, pg_url
     ]
 
 
-def test_a_tier_change_without_a_moved_assignment_date_is_observation_dated(
-    conn, pg_url, tmp_path
-):
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
-         "2026-05-20")
+def test_a_tier_change_without_a_moved_assignment_date_is_observation_dated(conn, pg_url, tmp_path):
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-05-20",
+    )
     load(
         pg_url,
         roster(tmp_path, seat("a@itworx.com", "Claude Premium", "4/8/2026"), name="d2.csv"),
@@ -145,8 +152,11 @@ def test_a_seat_absent_from_a_later_drop_closes_at_that_drops_as_of(conn, pg_url
         ),
         "2026-05-20",
     )
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d2.csv"),
-         "2026-06-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d2.csv"),
+        "2026-06-20",
+    )
     refresh(conn)
 
     assert intervals(conn) == [
@@ -156,8 +166,11 @@ def test_a_seat_absent_from_a_later_drop_closes_at_that_drops_as_of(conn, pg_url
 
 
 def test_an_organization_move_opens_a_new_interval(conn, pg_url, tmp_path):
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
-         "2026-05-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-05-20",
+    )
     load(
         pg_url,
         roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026", org="ITWorx2"), name="d2.csv"),
@@ -221,8 +234,11 @@ def test_deleting_a_bad_drop_and_refreshing_restores_correct_history(conn, pg_ur
         "2026-05-20",
     )
     # A truncated export drops b; the operator forces it through, then spots the error.
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="bad.csv"),
-         "2026-06-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="bad.csv"),
+        "2026-06-20",
+    )
     load(
         pg_url,
         roster(
@@ -246,8 +262,11 @@ def test_deleting_a_bad_drop_and_refreshing_restores_correct_history(conn, pg_ur
 
 
 def test_a_same_day_corrected_re_export_supersedes_the_drop_it_corrects(conn, pg_url, tmp_path):
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
-         "2026-05-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-05-20",
+    )
     load(
         pg_url,
         roster(tmp_path, seat("a@itworx.com", "Claude Premium", "4/8/2026"), name="fixed.csv"),
@@ -274,8 +293,11 @@ def test_daily_fact_row_count_equals_the_sum_of_interval_day_spans(conn, pg_url,
         ),
         "2026-05-20",
     )
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", "Claude Premium", "6/1/2026"),
-                        name="d2.csv"), "2026-06-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", "Claude Premium", "6/1/2026"), name="d2.csv"),
+        "2026-06-20",
+    )
     refresh(conn)
 
     spans = one(
@@ -295,8 +317,11 @@ def test_no_daily_fact_row_falls_outside_the_date_dimension(conn, pg_url, tmp_pa
         value_kind="sum_delta",
         user_email="a@itworx.com",
     )
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
-         "2026-05-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-05-20",
+    )
     refresh(conn)
 
     orphans = one(
@@ -307,9 +332,7 @@ def test_no_daily_fact_row_falls_outside_the_date_dimension(conn, pg_url, tmp_pa
     assert orphans == 0
 
 
-def test_the_date_dimension_floor_accounts_for_the_earliest_assignment_date(
-    conn, pg_url, tmp_path
-):
+def test_the_date_dimension_floor_accounts_for_the_earliest_assignment_date(conn, pg_url, tmp_path):
     ins_metric(
         conn,
         ts="2026-07-01T10:00:00Z",
@@ -319,8 +342,11 @@ def test_the_date_dimension_floor_accounts_for_the_earliest_assignment_date(
         value_kind="sum_delta",
         user_email="a@itworx.com",
     )
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
-         "2026-05-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-05-20",
+    )
     refresh(conn)
 
     assert one(conn, "SELECT MIN(date_day)::text FROM marts.dim_date")[0] == "2026-04-08"
@@ -336,10 +362,16 @@ def test_the_date_dimension_floor_falls_back_to_the_drop_as_of_with_no_assignmen
 
 
 def test_fact_seat_day_carries_the_tier_in_force_on_each_date(conn, pg_url, tmp_path):
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
-         "2026-05-20")
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", "Claude Premium", "6/1/2026"),
-                        name="d2.csv"), "2026-06-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-05-20",
+    )
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", "Claude Premium", "6/1/2026"), name="d2.csv"),
+        "2026-06-20",
+    )
     refresh(conn)
 
     assert all_(
@@ -391,8 +423,11 @@ def test_dim_seat_current_holds_one_row_per_person_with_an_open_seat(conn, pg_ur
         ),
         "2026-05-20",
     )
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", "Claude Premium", "6/1/2026"),
-                        name="d2.csv"), "2026-06-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", "Claude Premium", "6/1/2026"), name="d2.csv"),
+        "2026-06-20",
+    )
     refresh(conn)
 
     assert all_(
@@ -403,8 +438,11 @@ def test_dim_seat_current_holds_one_row_per_person_with_an_open_seat(conn, pg_ur
 
 
 def test_the_three_seat_marts_are_registered_in_the_full_refresh(conn, pg_url, tmp_path):
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
-         "2026-05-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-05-20",
+    )
     refresh(conn)
 
     logged = {row[0] for row in all_(conn, "SELECT mart FROM marts.mart_refresh_log")}
@@ -413,18 +451,21 @@ def test_the_three_seat_marts_are_registered_in_the_full_refresh(conn, pg_url, t
 
 def test_the_read_login_selects_the_seat_marts_but_not_the_reference_tables(conn):
     for mart in SEAT_MARTS:
-        assert one(
-            conn, f"SELECT has_table_privilege('cc_otel_read', 'marts.{mart}', 'SELECT')"
-        )[0], mart
+        assert one(conn, f"SELECT has_table_privilege('cc_otel_read', 'marts.{mart}', 'SELECT')")[
+            0
+        ], mart
     for table in ("ref.roster_drop", "ref.seat_roster_snapshot"):
-        assert not one(
-            conn, f"SELECT has_table_privilege('cc_otel_read', '{table}', 'SELECT')"
-        )[0], table
+        assert not one(conn, f"SELECT has_table_privilege('cc_otel_read', '{table}', 'SELECT')")[
+            0
+        ], table
 
 
 def test_the_loader_refreshes_the_seat_marts_on_write(conn, pg_url, tmp_path):
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
-         "2026-05-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-05-20",
+    )
 
     # No marts.refresh_all() here: the loader's own targeted refresh must have landed it.
     assert one(conn, "SELECT COUNT(*) FROM marts.dim_seat_current")[0] == 1
@@ -445,8 +486,11 @@ def test_telemetry_after_a_close_is_flagged(conn, pg_url, tmp_path):
         ),
         "2026-05-20",
     )
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d2.csv"),
-         "2026-06-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d2.csv"),
+        "2026-06-20",
+    )
     ins_event(
         conn,
         event_time="2026-07-01T10:00:00Z",
@@ -467,8 +511,11 @@ def test_telemetry_after_a_close_is_flagged(conn, pg_url, tmp_path):
 def test_a_seat_reopening_after_one_missed_drop_is_flagged(conn, pg_url, tmp_path):
     both = (seat("a@itworx.com", assigned="4/8/2026"), seat("b@itworx.com", assigned="4/9/2026"))
     load(pg_url, roster(tmp_path, *both, name="d1.csv"), "2026-05-20")
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d2.csv"),
-         "2026-06-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d2.csv"),
+        "2026-06-20",
+    )
     load(pg_url, roster(tmp_path, *both, name="d3.csv"), "2026-07-20")
     refresh(conn)
 
@@ -480,10 +527,16 @@ def test_a_seat_reopening_after_one_missed_drop_is_flagged(conn, pg_url, tmp_pat
 
 
 def test_a_continuous_seat_is_not_flagged_as_reopened(conn, pg_url, tmp_path):
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
-         "2026-05-20")
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", "Claude Premium", "6/1/2026"),
-                        name="d2.csv"), "2026-06-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-05-20",
+    )
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", "Claude Premium", "6/1/2026"), name="d2.csv"),
+        "2026-06-20",
+    )
     refresh(conn)
 
     assert finding(conn, "seat_reopened_within_cadence") == []
@@ -509,8 +562,11 @@ def test_an_assignment_date_with_no_tier_is_flagged(conn, pg_url, tmp_path):
 
 
 def test_an_emitter_with_no_seat_is_flagged_against_raw_telemetry(conn, pg_url, tmp_path):
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
-         "2026-05-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-05-20",
+    )
     ins_event(
         conn,
         event_time="2026-07-01T10:00:00Z",
@@ -529,10 +585,15 @@ def test_an_emitter_with_no_seat_is_flagged_against_raw_telemetry(conn, pg_url, 
 
 
 def test_a_seat_holder_emitting_inside_their_interval_is_not_flagged(conn, pg_url, tmp_path):
-    load(pg_url, roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
-         "2026-05-20")
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-05-20",
+    )
     ins_event(
-        conn, event_time="2026-05-01T10:00:00Z", event_name="api_request",
+        conn,
+        event_time="2026-05-01T10:00:00Z",
+        event_name="api_request",
         user_email="a@itworx.com",
     )
     refresh(conn)
@@ -588,7 +649,9 @@ def test_the_observation_dated_share_of_boundaries_is_reported(conn, pg_url, tmp
 
 def test_no_seat_findings_fire_with_no_roster_loaded(conn):
     ins_event(
-        conn, event_time="2026-07-01T10:00:00Z", event_name="api_request",
+        conn,
+        event_time="2026-07-01T10:00:00Z",
+        event_name="api_request",
         user_email="a@itworx.com",
     )
     refresh(conn)
