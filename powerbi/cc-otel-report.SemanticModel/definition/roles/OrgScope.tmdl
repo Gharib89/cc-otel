@@ -2,10 +2,65 @@
 /// management chain contains them (any depth) — a manager sees everyone reporting up to them.
 /// Workspace Admin/Member (Ahmed, Karim) bypass RLS via Power BI workspace-role semantics.
 /// Requires a clean, acyclic ManagerEmail chain, normalized to the same casing as Email.
+/// #301 (ADR-0010) extends the same subtree to the three seat marts, so both the licensed-seat count
+/// and the 184 real roster addresses are viewer-scoped. Notes on the three permissions below, which
+/// TMDL cannot carry inline — a tablePermission takes no description and no comment line:
+/// - Each restates the subtree predicate against vw_UserBasicInfo rather than leaning on the
+///   permission above it, so no permission depends on another having been evaluated first. ALL() is
+///   not what buys that: nothing in DAX strips a security filter. What buys it is that each predicate
+///   is self-contained and *identical* to the HR-view rule, so intersecting with it is idempotent.
+///   The hazard is divergence — narrow the HR-view rule (a Department clause, say) and these three
+///   silently inherit the intersection. Change all four together or not at all.
+/// - No LOWER/TRIM on either side. DAX string comparison is case-insensitive, and the roster and the
+///   HR view do agree: 0 of the 184 seat emails fail to match a vw_UserBasicInfo[Email] (measured
+///   under #301). Note that is a query result, not a join — no relationship exists between the seat
+///   marts and the HR view, so nothing enforces it. Normalizing here would hide the day it stops
+///   holding; the seat instead drops out of every role viewer's count, which is the visible failure.
+/// - dim_seat_current sits on the one-side of dim_user_to_dim_seat_current, so its filter propagates
+///   into dim_user. That subtracts nothing today — every telemetry identity with an HR row also holds
+///   a seat — but it would hide a developer instrumented between roster drops. dim_seat is
+///   disconnected and carries its own predicate.
+/// - fact_seat_day is the licensed-count grain, so it is what scopes [Paid Seats] and everything
+///   composed over it. Accepted consequence: the predicate keys on a live HR row, so a seat-day
+///   belonging to someone who has since left disappears for role viewers and the seats-over-time
+///   line rewrites its own past. Workspace members keep the stable org-wide history.
 role OrgScope
 	modelPermission: read
 
 	tablePermission vw_UserBasicInfo = vw_UserBasicInfo[Email] = USERPRINCIPALNAME() || PATHCONTAINS(vw_UserBasicInfo[ManagementPath], USERPRINCIPALNAME())
+
+	tablePermission dim_seat_current =
+			dim_seat_current[user_email]
+			    IN SELECTCOLUMNS (
+			        FILTER (
+			            ALL ( vw_UserBasicInfo ),
+			            vw_UserBasicInfo[Email] = USERPRINCIPALNAME ()
+			                || PATHCONTAINS ( vw_UserBasicInfo[ManagementPath], USERPRINCIPALNAME () )
+			        ),
+			        "@Email", vw_UserBasicInfo[Email]
+			    )
+
+	tablePermission dim_seat =
+			dim_seat[user_email]
+			    IN SELECTCOLUMNS (
+			        FILTER (
+			            ALL ( vw_UserBasicInfo ),
+			            vw_UserBasicInfo[Email] = USERPRINCIPALNAME ()
+			                || PATHCONTAINS ( vw_UserBasicInfo[ManagementPath], USERPRINCIPALNAME () )
+			        ),
+			        "@Email", vw_UserBasicInfo[Email]
+			    )
+
+	tablePermission fact_seat_day =
+			fact_seat_day[user_email]
+			    IN SELECTCOLUMNS (
+			        FILTER (
+			            ALL ( vw_UserBasicInfo ),
+			            vw_UserBasicInfo[Email] = USERPRINCIPALNAME ()
+			                || PATHCONTAINS ( vw_UserBasicInfo[ManagementPath], USERPRINCIPALNAME () )
+			        ),
+			        "@Email", vw_UserBasicInfo[Email]
+			    )
 
 	annotation PBI_Id = 6989c039aaf549d78edd30d991fc66cd
 

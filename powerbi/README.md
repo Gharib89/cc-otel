@@ -41,6 +41,11 @@ Structure:
   management chain contains them. `vw_UserBasicInfo` carries a hidden `ManagementPath` calculated
   column (`PATH(Email, ManagerEmailClean)`); the role filters it with
   `Email = USERPRINCIPALNAME() || PATHCONTAINS(ManagementPath, USERPRINCIPALNAME())`.
+  The three seat marts (`dim_seat_current`, `dim_seat`, `fact_seat_day`) carry the **same subtree
+  predicate restated against the HR view** (#301, ADR-0010), so both the licensed-seat count and the
+  184 real roster addresses are viewer-scoped. Each is written out rather than inherited — a security
+  filter must not depend on another having already applied. Accepted consequence: seat history is
+  viewer-relative, since a departed person has no HR row and their seat-days vanish for role viewers.
   Workspace Admin/Member bypass RLS. Requires a clean, acyclic, same-cased `ManagerEmail` chain.
   The HR view currently violates that (service accounts create cycles), so `ManagerEmailClean`
   carries a **stopgap** exclusion list (`{"internal.application@itworx.com"}`) that roots those
@@ -71,6 +76,16 @@ These four steps are **not** authorable offline and are done once in Desktop at 
 2. **Conditional formatting** — the freshness cards' green/amber/red background via the `Freshness Color` measure (Overview `ov_fresh`, Ingest `ih_fresh`), and the heatmap gradient on `uc_heat`. The `pbi format` verbs need pywin32 + a live Desktop, so they can't run in the offline build.
 3. **Fixed per-model-family colours** — pin each `dim_model[family]` series to a stable colour so families read consistently report-wide.
 4. **Publish** — manual from Desktop to the PPU workspace; configure the daily scheduled refresh at 07:00 (public Postgres, no gateway).
+
+### Audiences — Data Health is owner + IS only
+
+If the report is published as a **Power BI App with audiences**, the **Data Health** page
+(`pg_health`) goes to the owner/IS audience only — never a manager audience. The reason is product,
+not security: `OrgScope` (ADR-0010) makes the page *safe* for a manager, but not *truthful*. Its
+off-roster-active-users and identity-mismatch visuals key on identities with no HR row, so under the
+role they render zero and empty — the page reads "everything is fine" precisely when it is not.
+Scoping is the model's job and holds regardless of audience (see RLS above); the audience split here
+only keeps a page whose meaning depends on org-wide visibility away from viewers who lack it.
 
 ## CI validation
 

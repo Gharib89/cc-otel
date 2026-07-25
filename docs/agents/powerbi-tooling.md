@@ -266,6 +266,39 @@ Findings from driving semantic-model edits through Desktop headlessly:
   `fact_seat_day`) rather than a local CSV, so a *new* seat column or table needs
   a table-scoped `Full` against Postgres — credentials required — before
   `Calculate` has anything to recompute over.
+- **A `tablePermission` carries no doc comment.** A `///` line above one fails
+  TMDL deserialization with `Property 'description' is unknown and is not expected
+  in the situation it appears`, and a plain `//` line fails with
+  `InvalidLineType — Unexpected line type: Other!`. Neither is a TE2 quirk: the
+  same TOM `TmdlSerializer` Desktop uses rejects both. Role reasoning goes in the
+  role's own `///` header (see `roles/OrgScope.tmdl`). Fastest way to bisect a TMDL
+  parse error without a 2-minute `validate.ps1` run: load the cached
+  `.pbi-tools/te2-2.28.0/Microsoft.AnalysisServices.Tabular.dll` under **WinPS 5.1**
+  (it is .NET Framework) and call
+  `TmdlSerializer.DeserializeDatabaseFromFolder(<...>/definition)`.
+
+## RLS verification off the corporate network (#301)
+
+`View as`-equivalent impersonation via ADOMD — `Roles=OrgScope;EffectiveUserName=<upn>`
+— **fails off the ITWorx network**: Analysis Services resolves the effective user
+against a domain controller and `Open()` throws *"your domain isn't available"*
+(`nltest /dsgetdc:ITWORX.COM` → `ERROR_NO_SUCH_DOMAIN` confirms the cause is the
+network, not the role). Two ways round it, and a run should use both:
+
+- **`Roles=OrgScope` with no `EffectiveUserName`** needs no DC and is the real
+  end-to-end test: `USERPRINCIPALNAME()` returns the connected operator, so the
+  shipped role is exercised verbatim against a genuine identity.
+- **A temp clone of the role with `USERPRINCIPALNAME()` replaced by a literal UPN**,
+  TOM-added to the live model and queried via `Roles=<clone>`, covers any other
+  identity. It exercises the real filter engine — propagation included — and only
+  substitutes the identity function. Delete the clones before the merge gate; a TOM
+  `SaveChanges()` does not touch the on-disk TMDL, but a Desktop **save** would
+  serialize them into the pbip.
+
+An empty result is the silent failure mode here — a scoped view of someone with no
+reports is indistinguishable from a broken predicate — so assert a **non-empty**
+result of an **independently computed size**, for a manager *and* a no-reports
+contributor. Compute the expectation with a bypassed-RLS query in the same session.
 
 ## Rejected / out
 
