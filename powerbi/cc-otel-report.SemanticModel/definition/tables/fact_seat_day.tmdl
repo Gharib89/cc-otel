@@ -1,0 +1,50 @@
+/// Daily seat fact (#294) — one row per date per open seat, from marts.fact_seat_day (ADR-0009).
+/// Makes point-in-time licensing structural: licensed seats at a date is a row count under the date filter,
+/// so no measure carries interval logic. Relates to dim_date only; deliberately not to dim_user, which stays
+/// telemetry-only (most licensed seats have never emitted and have no dim_user row).
+table fact_seat_day
+	lineageTag: d2940201-0000-4000-8000-000000000294
+
+	column date_day
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: d2940202-0000-4000-8000-000000000294
+		summarizeBy: none
+		sourceColumn: date_day
+
+		annotation SummarizationSetBy = Automatic
+
+	column user_email
+		dataType: string
+		lineageTag: d2940203-0000-4000-8000-000000000294
+		summarizeBy: none
+		sourceColumn: user_email
+
+		annotation SummarizationSetBy = Automatic
+
+	column seat_tier
+		dataType: string
+		lineageTag: d2940204-0000-4000-8000-000000000294
+		summarizeBy: none
+		sourceColumn: seat_tier
+
+		annotation SummarizationSetBy = Automatic
+
+	column anthropic_org_name
+		dataType: string
+		lineageTag: d2940205-0000-4000-8000-000000000294
+		summarizeBy: none
+		sourceColumn: anthropic_org_name
+
+		annotation SummarizationSetBy = Automatic
+
+	partition fact_seat_day = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT * FROM marts.fact_seat_day")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table
+

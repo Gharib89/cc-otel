@@ -248,7 +248,23 @@ table _Measures
 	/// #117 measure layer, #165 relative-date rewrite. The window comes from the report's relative-date
 	/// slicer (default last 28 days); "PP" = the immediately preceding equal-length window. Headline
 	/// (Seat ROI) numerators are roster-matched only; plain [Active Users] stays for non-ROI contexts.
-	measure 'Paid Seats' = DISTINCTCOUNT ( seat_roster[user_email] )
+	/// #294: the licensed-seat denominator, counted over the daily seat fact so it is point-in-time correct and
+	/// responds to the date slicer — the seats open in the selected window (184 today), not the observed-user
+	/// count the fabricated roster returned by construction.
+	/// The tier bridge exists because fact_seat_day has no relationship to dim_seat_current (that would filter
+	/// seat-days by today's tier instead of the tier in force each day): a tier selection made on the dimension —
+	/// the sl_tier slicers, the cht_tier category — is carried across to the fact's own tier column. Guarded on
+	/// ISFILTERED so an unfiltered total counts every seat-day, including a tier that has since left the roster;
+	/// KEEPFILTERS so an outer fact-tier filter (see [Monthly Seat Cost]) intersects rather than being overridden.
+	measure 'Paid Seats' =
+			IF (
+			    ISFILTERED ( dim_seat_current[seat_tier] ),
+			    CALCULATE (
+			        DISTINCTCOUNT ( fact_seat_day[user_email] ),
+			        KEEPFILTERS ( TREATAS ( VALUES ( dim_seat_current[seat_tier] ), fact_seat_day[seat_tier] ) )
+			    ),
+			    DISTINCTCOUNT ( fact_seat_day[user_email] )
+			)
 		formatString: #,##0
 		displayFolder: Seat ROI
 		lineageTag: b9365732-93a2-497e-b49d-0215e0fe0d5e
@@ -258,7 +274,7 @@ table _Measures
 	measure 'Active Roster Users' =
 			CALCULATE (
 			    DISTINCTCOUNT ( fact_session_daily[user_email] ),
-			    FILTER ( dim_user, NOT ISBLANK ( RELATED ( seat_roster[user_email] ) ) )
+			    FILTER ( dim_user, NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
 			)
 		formatString: #,##0
 		displayFolder: Seat ROI
@@ -286,9 +302,18 @@ table _Measures
 
 	/// Percentage-point delta vs the prior equal-length window (#117: pp for ratio KPIs, % for count KPIs).
 	/// BLANK unless both windows have data — a delta against an empty prior window is meaningless.
+	/// #294: the prior ratio shifts the window around the whole quotient (the [Idle Seats PP] pattern) rather than
+	/// dividing prior-window actives by current-window seats. Once [Paid Seats] is date-aware that mixed form is
+	/// wrong by the seat growth itself — 13 seats in April against 184 in July.
 	measure 'Seat Utilization Δ' =
+			VAR Days = COUNTROWS ( dim_date )
+			VAR FirstDay = MIN ( dim_date[date_day] )
 			VAR Cur = [Seat Utilization %]
-			VAR Prior = DIVIDE ( [Active Roster Users PP], [Paid Seats] )
+			VAR Prior =
+			    CALCULATE (
+			        [Seat Utilization %],
+			        DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 )
+			    )
 			RETURN
 			    IF ( NOT ISBLANK ( Cur ) && NOT ISBLANK ( Prior ), ( Cur - Prior ) * 100 )
 		formatString: +0.0 "pp";-0.0 "pp";0.0 "pp"
@@ -323,8 +348,10 @@ table _Measures
 
 	/// Monthly seat cost of the paid roster: Premium seats × Premium price + the rest at Standard price.
 	/// Period-independent (a monthly figure); the ratio prorates it to the selected window.
+	/// #294: the Premium split filters the daily seat fact, so it counts IS's real tier mix (8 Premium) and follows
+	/// the date slicer instead of the two tiers the fabricated roster hardcoded.
 	measure 'Monthly Seat Cost' =
-			VAR Premium = CALCULATE ( [Paid Seats], seat_roster[seat_tier] = "Premium" )
+			VAR Premium = CALCULATE ( [Paid Seats], fact_seat_day[seat_tier] = "Premium" )
 			VAR Standard = [Paid Seats] - Premium
 			RETURN Premium * [Premium Seat Price] + Standard * [Standard Seat Price]
 		formatString: \$#,##0
@@ -408,8 +435,10 @@ table _Measures
 		displayFolder: Seat ROI
 		lineageTag: c9e2a7d4-5b81-42f0-9c36-8a1e4f7b2d63
 
-	/// Cohorts (#117): growth-accounting semantics, leadership labels, roster-scoped, exhaustive
-	/// with [Idle Seats]: New + Retained + Reactivated + Idle = Paid Seats. Window = selection (#165).
+	/// Cohorts (#117): growth-accounting semantics, leadership labels, roster-scoped. Window = selection (#165).
+	/// #294: no longer exhaustive against [Paid Seats]. The cohorts count instrumented people whose seat is on IS's
+	/// roster; [Idle Seats] now absorbs every licensed seat that has never been instrumented at all (164 of 184), so
+	/// New + Retained + Reactivated + Idle = Paid Seats holds only by [Idle Seats] being a remainder.
 	measure 'New Users' =
 			VAR WindowStart = MIN ( dim_date[date_day] )
 			VAR WindowEnd = MAX ( dim_date[date_day] )
@@ -417,7 +446,7 @@ table _Measures
 			    COUNTROWS (
 			        FILTER (
 			            dim_user,
-			            NOT ISBLANK ( RELATED ( seat_roster[user_email] ) )
+			            NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
 			                && dim_user[first_seen] >= WindowStart
 			                && dim_user[first_seen] <= WindowEnd
 			        )
@@ -432,7 +461,7 @@ table _Measures
 			VAR Roster =
 			    CALCULATETABLE (
 			        VALUES ( dim_user[user_email] ),
-			        FILTER ( dim_user, NOT ISBLANK ( RELATED ( seat_roster[user_email] ) ) )
+			        FILTER ( dim_user, NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
 			    )
 			VAR Cur = VALUES ( fact_session_daily[user_email] )
 			VAR Prior =
@@ -453,7 +482,7 @@ table _Measures
 			VAR Roster =
 			    CALCULATETABLE (
 			        VALUES ( dim_user[user_email] ),
-			        FILTER ( dim_user, NOT ISBLANK ( RELATED ( seat_roster[user_email] ) ) )
+			        FILTER ( dim_user, NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
 			    )
 			VAR OldUsers =
 			    CALCULATETABLE (
@@ -634,14 +663,14 @@ table _Measures
 	measure 'Off-Roster Active Users' =
 			CALCULATE (
 			    DISTINCTCOUNT ( fact_session_daily[user_email] ),
-			    FILTER ( dim_user, ISBLANK ( RELATED ( seat_roster[user_email] ) ) )
+			    FILTER ( dim_user, ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
 			)
 		formatString: #,##0
 		displayFolder: Data Health
 		lineageTag: ad8752e9-4c15-4182-a3c2-a571460975f0
 
 	/// All-time: telemetry identities (incl. is_unknown) with no roster row.
-	measure 'Roster Mismatch Count' = COUNTROWS ( FILTER ( ALL ( dim_user ), ISBLANK ( RELATED ( seat_roster[user_email] ) ) ) )
+	measure 'Roster Mismatch Count' = COUNTROWS ( FILTER ( ALL ( dim_user ), ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) ) )
 		formatString: #,##0
 		displayFolder: Data Health
 		lineageTag: 7f426481-4c81-4b6a-9e31-c45412e896fd
@@ -1311,11 +1340,13 @@ table _Measures
 		displayFolder: User Detail
 		lineageTag: d1250001-0000-4000-8000-000000000125
 
-	/// RELATED walks dim_user (many) -> seat_roster (one); blank means the user is not on the paid-seat roster.
+	/// RELATED walks dim_user (many) -> dim_seat_current (one); blank means the identity holds no open seat.
+	/// #294: the fallback carries the taxonomy's state name so the User Detail card and the Data Health
+	/// reconciliation column say the same word for the same state.
 	measure 'Selected User Tier' =
-			VAR T = MAXX ( dim_user, RELATED ( seat_roster[seat_tier] ) )
+			VAR T = MAXX ( dim_user, RELATED ( dim_seat_current[seat_tier] ) )
 			RETURN
-			    COALESCE ( T, "Off-roster" )
+			    COALESCE ( T, "Off-roster identity" )
 		displayFolder: User Detail
 		lineageTag: d1250002-0000-4000-8000-000000000125
 

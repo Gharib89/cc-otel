@@ -331,7 +331,7 @@
           "Column": {
             "Expression": {
               "SourceRef": {
-                "Entity": "seat_roster"
+                "Entity": "dim_seat_current"
               }
             },
             "Property": "seat_tier"
@@ -343,7 +343,7 @@
           "From": [
             {
               "Name": "s",
-              "Entity": "seat_roster",
+              "Entity": "dim_seat_current",
               "Type": 0
             }
           ],

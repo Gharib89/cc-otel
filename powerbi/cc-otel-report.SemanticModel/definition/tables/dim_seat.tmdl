@@ -1,0 +1,68 @@
+/// Seat interval dimension (#294) — the derived SCD2 record, one row per seat interval, from marts.dim_seat (ADR-0009).
+/// Half-open [valid_from, valid_to); valid_to blank while the seat is open. valid_from_basis marks whether the
+/// boundary is source-dated (IS's assignment date) or observation-dated (the drop's as-of date).
+/// Disconnected by design: it is the auditable tier-change history, read on its own grain — the daily fact carries
+/// the date relationship and the current dimension carries the person relationship.
+table dim_seat
+	lineageTag: d2940001-0000-4000-8000-000000000294
+
+	column user_email
+		dataType: string
+		lineageTag: d2940002-0000-4000-8000-000000000294
+		summarizeBy: none
+		sourceColumn: user_email
+
+		annotation SummarizationSetBy = Automatic
+
+	column seat_tier
+		dataType: string
+		lineageTag: d2940003-0000-4000-8000-000000000294
+		summarizeBy: none
+		sourceColumn: seat_tier
+
+		annotation SummarizationSetBy = Automatic
+
+	column anthropic_org_name
+		dataType: string
+		lineageTag: d2940004-0000-4000-8000-000000000294
+		summarizeBy: none
+		sourceColumn: anthropic_org_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column valid_from
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: d2940005-0000-4000-8000-000000000294
+		summarizeBy: none
+		sourceColumn: valid_from
+
+		annotation SummarizationSetBy = Automatic
+
+	column valid_to
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: d2940006-0000-4000-8000-000000000294
+		summarizeBy: none
+		sourceColumn: valid_to
+
+		annotation SummarizationSetBy = Automatic
+
+	column valid_from_basis
+		dataType: string
+		lineageTag: d2940007-0000-4000-8000-000000000294
+		summarizeBy: none
+		sourceColumn: valid_from_basis
+
+		annotation SummarizationSetBy = Automatic
+
+	partition dim_seat = m
+		mode: import
+		source =
+				let
+				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT * FROM marts.dim_seat")
+				in
+				  Source
+
+	annotation PBI_ResultType = Table
+

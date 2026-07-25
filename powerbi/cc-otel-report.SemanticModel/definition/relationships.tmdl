@@ -89,9 +89,11 @@ relationship dim_user_to_vw_UserBasicInfo
 	fromColumn: dim_user.user_email
 	toColumn: vw_UserBasicInfo.Email
 
-relationship dim_user_to_seat_roster
+/// Plain many:1 with the seat dimension on the to-side, never 1:1 — a fromCardinality:one edge into dim_user,
+/// which sits on the OrgScope security-filter chain, makes Desktop reject the model silently (#118).
+relationship dim_user_to_dim_seat_current
 	fromColumn: dim_user.user_email
-	toColumn: seat_roster.user_email
+	toColumn: dim_seat_current.user_email
 
 relationship fact_tool_outcome_to_dim_date
 	fromColumn: fact_tool_outcome.activity_date
@@ -99,5 +101,9 @@ relationship fact_tool_outcome_to_dim_date
 
 relationship fact_api_error_rate_to_dim_date
 	fromColumn: fact_api_error_rate.activity_date
+	toColumn: dim_date.date_day
+
+relationship fact_seat_day_to_dim_date
+	fromColumn: fact_seat_day.date_day
 	toColumn: dim_date.date_day
 

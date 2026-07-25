@@ -47,10 +47,10 @@ cultureInfo en-US
 			        }
 			      ]
 			    },
-			    "seat_roster.seat_tier": {
+			    "dim_seat_current.seat_tier": {
 			      "Definition": {
 			        "Binding": {
-			          "ConceptualEntity": "seat_roster",
+			          "ConceptualEntity": "dim_seat_current",
 			          "ConceptualProperty": "seat_tier"
 			        }
 			      },
