@@ -60,5 +60,9 @@ def conn(pg_url: str):
     """Fresh connection with raw tables truncated — each test owns its fixtures."""
     with psycopg.connect(pg_url) as c:
         c.autocommit = True
-        c.execute("TRUNCATE raw.metrics, raw.events, marts.mart_refresh_log, marts.dq_finding")
+        # CASCADE reaches ref.seat_roster_snapshot through its drop_id FK (#292).
+        c.execute(
+            "TRUNCATE raw.metrics, raw.events, marts.mart_refresh_log, marts.dq_finding,"
+            " ref.roster_drop CASCADE"
+        )
         yield c

@@ -68,11 +68,29 @@ _Avoid_: attr map, column table
 **Drift**:
 An `attrs`/`resource` key observed in the raw reservoir but absent from the column registry — the signal that Anthropic added new telemetry. Surfaced on demand by prepared DuckDB queries (`tools/`) over the reservoir; analysis is manual. Postgres cannot detect it — schema-v2 drops the JSONB there.
 
+### Licensing
+
+**Seat**:
+A licensed Claude subscription entitlement assigned to one person, at a tier, within an **Anthropic organization**. The licensed-population denominator, an order of magnitude larger than the instrumented one (the first drop: 184 seats against 17 **tracked machines**), which is exactly why seats and machines need separate names. Sourced from IS's roster, never from telemetry. See ADR-0009.
+_Avoid_: licence, user (a seat may never emit)
+
+**Roster drop**:
+One roster file as received from IS, identified by its operator-supplied as-of date — a current-state snapshot with no status column, no revocation date, no export timestamp. Landed immutably in `ref` (`roster_drop` + `seat_roster_snapshot`, assignment grain) by `tools.roster_load`; seat history is derived from the accumulated drops, never merged at load time. Absence from a newer drop is revocation.
+_Avoid_: roster import, seat file
+
+**Seat interval**:
+A contiguous period over which a **seat**'s tier and Anthropic organization were unchanged — the derived SCD2 record (#293). Each boundary carries a `valid_from_basis` marker: source-dated (from IS's assignment date) or observation-dated (from the drop's as-of date, all that exists for a closure until IS supplies a revocation date).
+_Avoid_: seat history row, validity period
+
+**Anthropic organization**:
+The Anthropic org boundary a **seat** belongs to — IS's `Team` column, stored as `anthropic_org_name` (`ITWorx`, `ITWorx2`) and mapping to telemetry's `organization_id`. Not a development team and never joined to a department; ITWorx holds two because a seat cap was reached.
+_Avoid_: team, tenant
+
 ### Deployment
 
 **Tracked machine**:
 A developer machine with Claude Code telemetry configured (managed settings + wrapper). The scale unit for infra sizing, token distribution, and fleet config. Distinct from developer — one dev may have several tracked machines; reporting keys on `user.email`.
-_Avoid_: seat, endpoint
+_Avoid_: endpoint (for the entitlement, say **seat** — the two are distinct, not synonyms)
 
 **Installer**:
 `install.ps1` — the idempotent, **drift-repairing** per-machine setup script. Each tick it verifies real state (installed files — `managed-settings.json` including the wrapper `statusLine.command`, plus the wrapper itself — machine-scope env vars, and user-settings telemetry keys) and repairs any drift; a clean machine no-ops fast. It leaves each user's own `settings.json` statusline untouched (the wrapper resolves it at runtime, ADR-0003). It **checks** for Node.js but never installs it (the LTS MSI is an IS prerequisite, issue #31); because the statusline is delivered through managed settings, it self-heals the moment Node appears with no install-time action. IS pushes it fleet-wide via their managed tool on a 90-minute cadence; the distribution mechanism itself is out of our scope, the script is ours. `build-installer.ps1` bakes the collector endpoint + fleet token + wrapper into a **single self-contained `install.ps1`** (the only file handed to IS) and **stamps** it (`SHA256(wrapper + managed-settings + schema version)`), so a rotated token forces every machine to re-converge. The token lives only in the gitignored `.env.<env>` and the gitignored built artifact — never the repo.

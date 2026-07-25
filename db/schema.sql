@@ -37,6 +37,13 @@ CREATE SCHEMA raw;
 
 
 --
+-- Name: ref; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA ref;
+
+
+--
 -- Name: staging; Type: SCHEMA; Schema: -; Owner: -
 --
 
@@ -854,6 +861,56 @@ CREATE TABLE public.schema_migrations (
 
 
 --
+-- Name: roster_drop; Type: TABLE; Schema: ref; Owner: -
+--
+
+CREATE TABLE ref.roster_drop (
+    drop_id bigint NOT NULL,
+    as_of_date date NOT NULL,
+    source_filename text NOT NULL,
+    file_sha256 text NOT NULL,
+    row_count integer NOT NULL,
+    ingested_at timestamp with time zone DEFAULT now() NOT NULL,
+    ingested_by text NOT NULL,
+    notes text
+);
+
+
+--
+-- Name: roster_drop_drop_id_seq; Type: SEQUENCE; Schema: ref; Owner: -
+--
+
+ALTER TABLE ref.roster_drop ALTER COLUMN drop_id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME ref.roster_drop_drop_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: seat_roster_snapshot; Type: TABLE; Schema: ref; Owner: -
+--
+
+CREATE TABLE ref.seat_roster_snapshot (
+    drop_id bigint NOT NULL,
+    user_email text NOT NULL,
+    subscription_seq smallint NOT NULL,
+    subscription_raw text,
+    seat_tier text,
+    assignment_date date,
+    anthropic_org_name text,
+    person_name text,
+    manager_name text,
+    department text,
+    cost_center text,
+    extra jsonb DEFAULT '{}'::jsonb NOT NULL
+);
+
+
+--
 -- Name: dq_finding dq_finding_pkey; Type: CONSTRAINT; Schema: marts; Owner: -
 --
 
@@ -891,6 +948,30 @@ ALTER TABLE ONLY meta.processed_batches
 
 ALTER TABLE ONLY public.schema_migrations
     ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
+
+
+--
+-- Name: roster_drop roster_drop_file_sha256_key; Type: CONSTRAINT; Schema: ref; Owner: -
+--
+
+ALTER TABLE ONLY ref.roster_drop
+    ADD CONSTRAINT roster_drop_file_sha256_key UNIQUE (file_sha256);
+
+
+--
+-- Name: roster_drop roster_drop_pkey; Type: CONSTRAINT; Schema: ref; Owner: -
+--
+
+ALTER TABLE ONLY ref.roster_drop
+    ADD CONSTRAINT roster_drop_pkey PRIMARY KEY (drop_id);
+
+
+--
+-- Name: seat_roster_snapshot seat_roster_snapshot_pkey; Type: CONSTRAINT; Schema: ref; Owner: -
+--
+
+ALTER TABLE ONLY ref.seat_roster_snapshot
+    ADD CONSTRAINT seat_roster_snapshot_pkey PRIMARY KEY (drop_id, user_email, subscription_seq);
 
 
 --
@@ -1062,6 +1143,21 @@ CREATE INDEX metrics_user_ts_idx ON raw.metrics USING btree (user_email, ts DESC
 
 
 --
+-- Name: roster_drop_as_of_idx; Type: INDEX; Schema: ref; Owner: -
+--
+
+CREATE INDEX roster_drop_as_of_idx ON ref.roster_drop USING btree (as_of_date DESC);
+
+
+--
+-- Name: seat_roster_snapshot seat_roster_snapshot_drop_id_fkey; Type: FK CONSTRAINT; Schema: ref; Owner: -
+--
+
+ALTER TABLE ONLY ref.seat_roster_snapshot
+    ADD CONSTRAINT seat_roster_snapshot_drop_id_fkey FOREIGN KEY (drop_id) REFERENCES ref.roster_drop(drop_id) ON DELETE CASCADE;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
@@ -1101,4 +1197,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260724091032'),
     ('20260724091038'),
     ('20260724091043'),
-    ('20260724091053');
+    ('20260724091053'),
+    ('20260725092718');
