@@ -127,8 +127,11 @@ whose stated reason no longer holds for this class.
   using their *work* email with a *personal* subscription passes the domain test, so no link is
   needed and no flag fires, and unlicensed usage blends silently into corporate adoption numbers.
   Closing it needs a mapping from telemetry's `organization_id` to `anthropic_org_name` — which
-  `CONTEXT.md` already claims exists and which no relation in the database actually holds. Deferred
-  with its own ticket rather than widened into this decision.
+  `CONTEXT.md` already claims exists and which no relation in the database actually holds. Left
+  open deliberately rather than widened into this decision, and deliberately without a tracking
+  ticket (#313, closed unplanned): the hole is theoretical on the observed population, and Ahmed
+  raises it himself if a case ever surfaces. The re-entry signal is a telemetry identity on an
+  `@itworx.com` address emitting under an `organization_id` that holds no seats.
 - **`marts.email_bucket()` remains a pure `IMMUTABLE` expression.** Had the merge been chosen it
   would have had to read a relation and drop to `STABLE`. Nothing depends on that volatility today,
   but the seven marts that call it stay inlined and unchanged.
