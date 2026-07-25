@@ -56,7 +56,7 @@ SYNC: list[SkillEntry] = [
     {"name": "codebase-design", "model_invokable": False},
     {"name": "code-review", "model_invokable": True},
     {"name": "copilot-pr-review-loop", "model_invokable": True},
-    {"name": "diagnose", "model_invokable": False},
+    {"name": "diagnosing-bugs", "model_invokable": False},
     {"name": "domain-modeling", "model_invokable": False},
     {"name": "grill-me", "model_invokable": False},
     {"name": "grill-with-docs", "model_invokable": False},
@@ -82,7 +82,7 @@ EXCLUDE = {"setup-matt-pocock-skills"}
 # Hand-authored in this repo — `.claude/skills/` IS their source of truth. Never
 # vendor over these: a same-named personal skill (via SYNC or a dependency
 # reference) must never `rmtree` the tracked copy and destroy project edits.
-PROJECT_NATIVE = {"ship", "cloud-ship", "pbir-gotchas"}
+PROJECT_NATIVE = {"ship", "powerbi-ship", "cloud-ship", "pbir-gotchas"}
 
 # A backticked `/name` / `name` token, or a plain-text /name slash-command
 # mention. False positives (URL path segments etc.) are harmless: only tokens
