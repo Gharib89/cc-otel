@@ -67,28 +67,28 @@ class TestNormalizeTier:
 class TestParseRows:
     def test_maps_every_is_column(self) -> None:
         text = csv_text(
-            "Nermine,nermine.ghonima@itworx.com,Asser Ezzo,PMO,"
+            "Dana,dana.doe@example.com,Sam Lead,PMO,"
             "02-500-Executive COR (Gulf),ITWorx,Claude Standard,4/8/2026"
         )
         (row,) = parse_rows(text)
         assert row == SeatRow(
-            user_email="nermine.ghonima@itworx.com",
+            user_email="dana.doe@example.com",
             subscription_seq=1,
             subscription_raw="Claude Standard",
             seat_tier="Standard",
             assignment_date=date(2026, 4, 8),
             anthropic_org_name="ITWorx",
-            person_name="Nermine",
-            manager_name="Asser Ezzo",
+            person_name="Dana",
+            manager_name="Sam Lead",
             department="PMO",
             cost_center="02-500-Executive COR (Gulf)",
             extra={},
         )
 
     def test_normalizes_email_to_lowercase(self) -> None:
-        text = csv_text("A,  Ahmed.Gharib@ITWorx.com ,,,,ITWorx,Claude Premium,6/16/2026")
+        text = csv_text("D,  Dana.Doe@Example.com ,,,,ITWorx,Claude Premium,6/16/2026")
         (row,) = parse_rows(text)
-        assert row.user_email == "ahmed.gharib@itworx.com"
+        assert row.user_email == "dana.doe@example.com"
 
     def test_captures_unmapped_headers_into_extra(self) -> None:
         text = csv_text(

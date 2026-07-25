@@ -69,8 +69,8 @@ def test_execute_records_the_drop_and_its_snapshot_rows(
 ) -> None:
     path = roster(
         tmp_path,
-        "Nermine,Nermine.Ghonima@itworx.com,Asser Ezzo,PMO,02-500,ITWorx,Claude Standard,4/8/2026",
-        "Ahmed,ahmed.gharib@itworx.com,Boss,Eng,03-100,ITWorx2,Claude Premium,6/16/2026",
+        "Dana,Dana.Doe@Example.com,Sam Lead,PMO,02-500,ITWorx,Claude Standard,4/8/2026",
+        "Alex,alex.roe@example.com,Sam Lead,Eng,03-100,ITWorx2,Claude Premium,6/16/2026",
     )
 
     load(pg_url, path, "2026-07-24", "--notes", "second July drop")
@@ -90,7 +90,7 @@ def test_execute_records_the_drop_and_its_snapshot_rows(
         " FROM ref.seat_roster_snapshot ORDER BY user_email"
     ).fetchall()
     assert rows[0][:6] == (
-        "ahmed.gharib@itworx.com",
+        "alex.roe@example.com",
         1,
         "Claude Premium",
         "Premium",
@@ -98,9 +98,9 @@ def test_execute_records_the_drop_and_its_snapshot_rows(
         "ITWorx2",
     )
     assert str(rows[0][4]) == "2026-06-16"
-    assert rows[1][0] == "nermine.ghonima@itworx.com"  # email normalized to lowercase
+    assert rows[1][0] == "dana.doe@example.com"  # email normalized to lowercase
     assert rows[1][3] == "Standard"  # tier normalized off "Claude Standard"
-    assert rows[1][6:10] == ("Nermine", "Asser Ezzo", "PMO", "02-500")
+    assert rows[1][6:10] == ("Dana", "Sam Lead", "PMO", "02-500")
     assert rows[1][10] == {}
 
 
