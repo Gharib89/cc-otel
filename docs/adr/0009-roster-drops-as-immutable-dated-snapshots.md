@@ -64,6 +64,27 @@ denominator that did not exist yet. Decision log: #290; implementation: #292 (in
   hash remains the idempotency key. This is a deliberate exception to the convention that raw
   artefacts land in the blob reservoir (ADR-0005), taken because the roster is a small,
   fully-parsed CSV rather than an evolving payload shape.
+- **The derivation lives in one shared view; every seat mart is a thin projection of it.**
+  `staging.stg_seat_interval` reads only the `ref` snapshot tables, and `marts.dim_seat`,
+  `marts.dim_seat_current` and `marts.fact_seat_day` each project it (#293). A daily-grain mart
+  reading an interval mart would be the first violation of `marts.refresh_all()`'s invariant
+  that no mart reads another — the invariant its alphabetical catalog loop depends on. Routing
+  all three through a view keeps that untouched, at the accepted cost that the view body sits
+  outside the mart-definition drift gate, the same exposure the shared mart rule functions
+  already carry. Intervals are half-open, so a tier change counts no seat-day twice. Two
+  supporting staging views serve the findings on the same terms: `stg_telemetry_day` (raw
+  activity days, so "never emitted" is computed against telemetry and not against
+  `marts.dim_user`) and `stg_seat_uncovered_day`, which the telemetry-after-close and
+  emitter-without-seat findings partition between them.
+- **`marts.dim_date`'s floor considers the earliest roster date.** The first drop carries
+  assignments 46 days before the earliest telemetry; without the extended floor those daily seat
+  rows would have no matching date row and would vanish from every date-filtered measure —
+  discarding exactly the history the source-dating rule recovers. The floor takes the earliest
+  assignment date *and* the earliest drop as-of date, because an interval opened
+  observation-dated is bounded by the latter when the source supplies no assignment date at all.
+  The visible consequence is a flat run-in on unfiltered trend visuals over a period with seats
+  but no instrumentation, which is true and informative; the synced relative-date slicer already
+  defaults the window.
 - **The roster is additive.** It does not re-base `marts.dim_user`, which stays telemetry-only:
   extending it to the union of telemetry and roster people would silently move every distinct-user
   count from 20 to 184, re-basing exactly the measures that must stay on tracked members.
@@ -80,3 +101,6 @@ denominator that did not exist yet. Decision log: #290; implementation: #292 (in
   server-side, so a genuinely revoked seat cannot emit.
 - If IS adds a status or revocation column (#291), it lands in `extra` on the next drop with no
   code change, and promoting it is a column plus a derivation edit — not a backfill.
+- A drop landing between hourly refreshes would leave the seat marts stale, so `roster_load`
+  refreshes them on write, plus `dim_date`, whose floor that same write can move. Every other
+  telemetry mart is left to `marts.refresh_all()`.

@@ -142,3 +142,11 @@ preceding the newest drop, and the three truncation guards — row count down >1
 organization gone, a tier gone. Only force when you have confirmed the file is genuinely
 smaller. If a bad drop does land, delete it (`DELETE FROM ref.roster_drop WHERE drop_id = …`,
 snapshots cascade) and re-derive; history heals.
+
+A successful write then refreshes `marts.dim_seat`, `marts.dim_seat_current`,
+`marts.fact_seat_day` and `marts.dim_date`, so Power BI is current without waiting for the
+hourly cycle; every other telemetry mart is left to `marts.refresh_all()`. `dim_date` is in the
+list because its floor considers the earliest assignment date (#293), which this write can
+move — a `fact_seat_day` row with no matching date row vanishes from every date-filtered
+measure. A refresh failure is reported and does not fail the load: the drop is already
+committed, and the hourly `marts.refresh_all()` reconciles.

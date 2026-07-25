@@ -201,6 +201,113 @@ BEGIN
     ) c
     WHERE abs(promoted - counter) > 0.01
       AND abs(promoted - counter) / GREATEST(counter, 0.01) > 0.01;
+
+    -- DQ (#293): telemetry from a seat after its close date — the strongest detector in the
+    -- seat set. Anthropic enforces licensing server-side, so a genuinely revoked seat cannot
+    -- emit; telemetry after a close is near-proof the close was an export artefact rather than
+    -- a real revocation. This catches the plausible-looking bad export that the loader's
+    -- truncation guards let through.
+    INSERT INTO marts.dq_finding (finding_type, row_count, details)
+    SELECT 'seat_telemetry_after_close', COUNT(*),
+           jsonb_build_object(
+               'user_email', user_email,
+               'closed_on', MAX(closed_on),
+               'first_activity_after_close', MIN(activity_date),
+               'last_activity_after_close', MAX(activity_date)
+           )
+    FROM staging.stg_seat_uncovered_day
+    WHERE closed_on IS NOT NULL
+    GROUP BY user_email;
+
+    -- DQ (#293): an identity emitting telemetry with no open seat on that date and no prior
+    -- close — the complement of the finding above, so every uncovered activity day is reported
+    -- exactly once. Computed against raw telemetry (through the staging view), never against
+    -- marts.dim_user.
+    INSERT INTO marts.dq_finding (finding_type, row_count, details)
+    SELECT 'seat_emitter_without_seat', COUNT(*),
+           jsonb_build_object(
+               'user_email', user_email,
+               'first_activity_date', MIN(activity_date),
+               'last_activity_date', MAX(activity_date)
+           )
+    FROM staging.stg_seat_uncovered_day
+    WHERE closed_on IS NULL
+    GROUP BY user_email;
+
+    -- DQ (#293): a seat closing and reopening with exactly one drop missed in between —
+    -- almost certainly an export artefact, not a genuine revoke-and-regrant.
+    INSERT INTO marts.dq_finding (finding_type, row_count, details)
+    WITH chained AS (
+        SELECT
+            user_email,
+            valid_to,
+            last_seen_on,
+            LEAD(first_seen_on) OVER (PARTITION BY user_email ORDER BY valid_from)
+                AS next_first_seen_on,
+            LEAD(valid_from) OVER (PARTITION BY user_email ORDER BY valid_from)
+                AS next_valid_from
+        FROM staging.stg_seat_interval
+    )
+    SELECT 'seat_reopened_within_cadence', 1,
+           jsonb_build_object(
+               'user_email', c.user_email,
+               'closed_on', c.valid_to,
+               'reopened_on', c.next_valid_from,
+               'missed_drops', 1
+           )
+    FROM chained c
+    WHERE c.valid_to IS NOT NULL
+      AND c.next_first_seen_on IS NOT NULL
+      AND (SELECT COUNT(DISTINCT d.as_of_date)
+           FROM ref.roster_drop d
+           WHERE d.as_of_date > c.last_seen_on AND d.as_of_date < c.next_first_seen_on) = 1;
+
+    -- DQ (#293): an assignment date present with no tier — a real pending-provisioning state
+    -- (one such row in the first drop); #291 asks IS whether it is intentional.
+    INSERT INTO marts.dq_finding (finding_type, row_count, details)
+    SELECT 'seat_assignment_without_tier', COUNT(*),
+           jsonb_build_object(
+               'user_email', s.user_email,
+               'assignment_date', MAX(s.assignment_date),
+               'first_drop_as_of', MIN(d.as_of_date),
+               'last_drop_as_of', MAX(d.as_of_date)
+           )
+    FROM ref.seat_roster_snapshot s
+    JOIN ref.roster_drop d ON s.drop_id = d.drop_id
+    WHERE s.assignment_date IS NOT NULL AND s.seat_tier IS NULL
+    GROUP BY s.user_email;
+
+    -- DQ (#293): one person holding more than one concurrent subscription — the grain
+    -- assertion. The landing grain permits it; the reporting dimension asserts one active tier
+    -- per person, so a violation is reported rather than silently multiplying seat-days.
+    INSERT INTO marts.dq_finding (finding_type, row_count, details)
+    SELECT 'seat_multi_subscription', COUNT(*),
+           jsonb_build_object(
+               'user_email', s.user_email,
+               'as_of_date', d.as_of_date,
+               'tiers', to_jsonb(ARRAY_AGG(s.seat_tier ORDER BY s.subscription_seq))
+           )
+    FROM ref.seat_roster_snapshot s
+    JOIN ref.roster_drop d ON s.drop_id = d.drop_id
+    GROUP BY s.user_email, d.as_of_date
+    HAVING COUNT(*) > 1;
+
+    -- DQ (#293): the share of interval boundaries that are observation-dated rather than
+    -- source-dated. Not an error — it makes the inferred share of the timeline measurable
+    -- rather than invisible, so the request for a revocation column (#291) carries a number.
+    INSERT INTO marts.dq_finding (finding_type, row_count, details)
+    SELECT 'seat_boundary_basis',
+           COUNT(*) FILTER (WHERE valid_from_basis = 'observation-dated'),
+           jsonb_build_object(
+               'observation_dated', COUNT(*) FILTER (WHERE valid_from_basis = 'observation-dated'),
+               'source_dated', COUNT(*) FILTER (WHERE valid_from_basis = 'source-dated'),
+               'total', COUNT(*),
+               'observation_dated_share',
+               round((COUNT(*) FILTER (WHERE valid_from_basis = 'observation-dated'))::numeric
+                     / COUNT(*), 4)
+           )
+    FROM staging.stg_seat_interval
+    HAVING COUNT(*) > 0;
 END
 $_$;
 
@@ -382,6 +489,42 @@ CREATE TABLE raw.metrics (
 
 
 --
+-- Name: roster_drop; Type: TABLE; Schema: ref; Owner: -
+--
+
+CREATE TABLE ref.roster_drop (
+    drop_id bigint NOT NULL,
+    as_of_date date NOT NULL,
+    source_filename text NOT NULL,
+    file_sha256 text NOT NULL,
+    row_count integer NOT NULL,
+    ingested_at timestamp with time zone DEFAULT now() NOT NULL,
+    ingested_by text NOT NULL,
+    notes text
+);
+
+
+--
+-- Name: seat_roster_snapshot; Type: TABLE; Schema: ref; Owner: -
+--
+
+CREATE TABLE ref.seat_roster_snapshot (
+    drop_id bigint NOT NULL,
+    user_email text NOT NULL,
+    subscription_seq smallint NOT NULL,
+    subscription_raw text,
+    seat_tier text,
+    assignment_date date,
+    anthropic_org_name text,
+    person_name text,
+    manager_name text,
+    department text,
+    cost_center text,
+    extra jsonb DEFAULT '{}'::jsonb NOT NULL
+);
+
+
+--
 -- Name: dim_date; Type: MATERIALIZED VIEW; Schema: marts; Owner: -
 --
 
@@ -398,7 +541,9 @@ CREATE MATERIALIZED VIEW marts.dim_date AS
     (EXTRACT(week FROM d))::integer AS iso_week
    FROM generate_series((COALESCE(LEAST(( SELECT (min(metrics.ts))::date AS min
            FROM raw.metrics), ( SELECT (min(events.event_time))::date AS min
-           FROM raw.events)), CURRENT_DATE))::timestamp with time zone, (CURRENT_DATE)::timestamp with time zone, '1 day'::interval) d(d)
+           FROM raw.events), ( SELECT min(seat_roster_snapshot.assignment_date) AS min
+           FROM ref.seat_roster_snapshot), ( SELECT min(roster_drop.as_of_date) AS min
+           FROM ref.roster_drop)), CURRENT_DATE))::timestamp with time zone, (CURRENT_DATE)::timestamp with time zone, '1 day'::interval) d(d)
   WITH NO DATA;
 
 
@@ -427,6 +572,161 @@ CREATE MATERIALIZED VIEW marts.dim_model AS
     regexp_replace(regexp_replace(model, '\[1m\]$'::text, ''::text), '^claude-(opus|sonnet|haiku|fable)-'::text, ''::text) AS version,
     (model ~~ '%[1m]%'::text) AS is_long_context
    FROM ids
+  WITH NO DATA;
+
+
+--
+-- Name: stg_seat_interval; Type: VIEW; Schema: staging; Owner: -
+--
+
+CREATE VIEW staging.stg_seat_interval AS
+ WITH drop_of_date AS (
+         SELECT DISTINCT ON (roster_drop.as_of_date) roster_drop.drop_id,
+            roster_drop.as_of_date
+           FROM ref.roster_drop
+          ORDER BY roster_drop.as_of_date, roster_drop.drop_id DESC
+        ), drop_seq AS (
+         SELECT drop_of_date.as_of_date,
+            lag(drop_of_date.as_of_date) OVER (ORDER BY drop_of_date.as_of_date) AS prev_as_of,
+            lead(drop_of_date.as_of_date) OVER (ORDER BY drop_of_date.as_of_date) AS next_as_of
+           FROM drop_of_date
+        ), observation AS (
+         SELECT d.as_of_date,
+            s.user_email,
+            (array_agg(s.seat_tier ORDER BY s.subscription_seq))[1] AS seat_tier,
+            (array_agg(s.anthropic_org_name ORDER BY s.subscription_seq))[1] AS anthropic_org_name,
+            (array_agg(s.assignment_date ORDER BY s.subscription_seq))[1] AS assignment_date
+           FROM (ref.seat_roster_snapshot s
+             JOIN drop_of_date d ON ((s.drop_id = d.drop_id)))
+          GROUP BY d.as_of_date, s.user_email
+        ), sighting AS (
+         SELECT o.as_of_date,
+            o.user_email,
+            o.seat_tier,
+            o.anthropic_org_name,
+            o.assignment_date,
+            q.prev_as_of,
+            q.next_as_of,
+            lag(o.as_of_date) OVER (PARTITION BY o.user_email ORDER BY o.as_of_date) AS prev_seen_on,
+            lag(o.seat_tier) OVER (PARTITION BY o.user_email ORDER BY o.as_of_date) AS prev_tier,
+            lag(o.anthropic_org_name) OVER (PARTITION BY o.user_email ORDER BY o.as_of_date) AS prev_org,
+            lag(o.assignment_date) OVER (PARTITION BY o.user_email ORDER BY o.as_of_date) AS prev_assignment_date
+           FROM (observation o
+             JOIN drop_seq q ON ((o.as_of_date = q.as_of_date)))
+        ), boundary AS (
+         SELECT sighting.as_of_date,
+            sighting.user_email,
+            sighting.seat_tier,
+            sighting.anthropic_org_name,
+            sighting.assignment_date,
+            sighting.next_as_of,
+            ((sighting.prev_seen_on IS NULL) OR (sighting.prev_seen_on IS DISTINCT FROM sighting.prev_as_of) OR (sighting.seat_tier IS DISTINCT FROM sighting.prev_tier) OR (sighting.anthropic_org_name IS DISTINCT FROM sighting.prev_org)) AS starts_interval,
+            ((sighting.assignment_date IS NOT NULL) AND ((sighting.prev_seen_on IS NULL) OR (sighting.assignment_date IS DISTINCT FROM sighting.prev_assignment_date))) AS is_source_dated
+           FROM sighting
+        ), dated AS (
+         SELECT boundary.as_of_date,
+            boundary.user_email,
+            boundary.seat_tier,
+            boundary.anthropic_org_name,
+            boundary.next_as_of,
+            boundary.starts_interval,
+                CASE
+                    WHEN boundary.is_source_dated THEN boundary.assignment_date
+                    ELSE boundary.as_of_date
+                END AS valid_from,
+                CASE
+                    WHEN boundary.is_source_dated THEN 'source-dated'::text
+                    ELSE 'observation-dated'::text
+                END AS valid_from_basis
+           FROM boundary
+        ), numbered AS (
+         SELECT dated.as_of_date,
+            dated.user_email,
+            dated.seat_tier,
+            dated.anthropic_org_name,
+            dated.next_as_of,
+            dated.valid_from,
+            dated.valid_from_basis,
+            sum(
+                CASE
+                    WHEN dated.starts_interval THEN 1
+                    ELSE 0
+                END) OVER (PARTITION BY dated.user_email ORDER BY dated.as_of_date) AS interval_seq
+           FROM dated
+        ), interval_run AS (
+         SELECT numbered.user_email,
+            numbered.interval_seq,
+            min(numbered.as_of_date) AS first_seen_on,
+            max(numbered.as_of_date) AS last_seen_on,
+            (array_agg(numbered.seat_tier ORDER BY numbered.as_of_date))[1] AS seat_tier,
+            (array_agg(numbered.anthropic_org_name ORDER BY numbered.as_of_date))[1] AS anthropic_org_name,
+            (array_agg(numbered.valid_from ORDER BY numbered.as_of_date))[1] AS valid_from,
+            (array_agg(numbered.valid_from_basis ORDER BY numbered.as_of_date))[1] AS valid_from_basis,
+            (array_agg(numbered.next_as_of ORDER BY numbered.as_of_date DESC))[1] AS next_as_of_after_last_seen
+           FROM numbered
+          GROUP BY numbered.user_email, numbered.interval_seq
+        ), bounded AS (
+         SELECT x.user_email,
+            x.seat_tier,
+            x.anthropic_org_name,
+            x.valid_from,
+            x.valid_from_basis,
+            x.first_seen_on,
+            x.last_seen_on,
+                CASE
+                    WHEN (LEAST(x.next_as_of_after_last_seen, x.next_valid_from) IS NULL) THEN NULL::date
+                    ELSE GREATEST(x.valid_from, LEAST(x.next_as_of_after_last_seen, x.next_valid_from))
+                END AS valid_to
+           FROM ( SELECT r.user_email,
+                    r.interval_seq,
+                    r.first_seen_on,
+                    r.last_seen_on,
+                    r.seat_tier,
+                    r.anthropic_org_name,
+                    r.valid_from,
+                    r.valid_from_basis,
+                    r.next_as_of_after_last_seen,
+                    lead(r.valid_from) OVER (PARTITION BY r.user_email ORDER BY r.interval_seq) AS next_valid_from
+                   FROM interval_run r) x
+        )
+ SELECT user_email,
+    seat_tier,
+    anthropic_org_name,
+    valid_from,
+    valid_to,
+    valid_from_basis,
+    first_seen_on,
+    last_seen_on
+   FROM bounded
+  WHERE ((valid_to IS NULL) OR (valid_to > valid_from));
+
+
+--
+-- Name: dim_seat; Type: MATERIALIZED VIEW; Schema: marts; Owner: -
+--
+
+CREATE MATERIALIZED VIEW marts.dim_seat AS
+ SELECT user_email,
+    seat_tier,
+    anthropic_org_name,
+    valid_from,
+    valid_to,
+    valid_from_basis
+   FROM staging.stg_seat_interval
+  WITH NO DATA;
+
+
+--
+-- Name: dim_seat_current; Type: MATERIALIZED VIEW; Schema: marts; Owner: -
+--
+
+CREATE MATERIALIZED VIEW marts.dim_seat_current AS
+ SELECT user_email,
+    seat_tier,
+    anthropic_org_name,
+    valid_from
+   FROM staging.stg_seat_interval
+  WHERE (valid_to IS NULL)
   WITH NO DATA;
 
 
@@ -598,6 +898,20 @@ CREATE MATERIALIZED VIEW marts.fact_edit_decision AS
    FROM staging.stg_counter_delta
   WHERE ((metric_name = 'claude_code.code_edit_tool.decision'::text) AND (session_id IS NOT NULL))
   GROUP BY session_id, ((ts)::date), tool_name, language, decision, source
+  WITH NO DATA;
+
+
+--
+-- Name: fact_seat_day; Type: MATERIALIZED VIEW; Schema: marts; Owner: -
+--
+
+CREATE MATERIALIZED VIEW marts.fact_seat_day AS
+ SELECT (d.day)::date AS date_day,
+    i.user_email,
+    i.seat_tier,
+    i.anthropic_org_name
+   FROM (staging.stg_seat_interval i
+     CROSS JOIN LATERAL generate_series((i.valid_from)::timestamp without time zone, ((COALESCE(i.valid_to, (CURRENT_DATE + 1)) - 1))::timestamp without time zone, '1 day'::interval) d(day))
   WITH NO DATA;
 
 
@@ -861,22 +1175,6 @@ CREATE TABLE public.schema_migrations (
 
 
 --
--- Name: roster_drop; Type: TABLE; Schema: ref; Owner: -
---
-
-CREATE TABLE ref.roster_drop (
-    drop_id bigint NOT NULL,
-    as_of_date date NOT NULL,
-    source_filename text NOT NULL,
-    file_sha256 text NOT NULL,
-    row_count integer NOT NULL,
-    ingested_at timestamp with time zone DEFAULT now() NOT NULL,
-    ingested_by text NOT NULL,
-    notes text
-);
-
-
---
 -- Name: roster_drop_drop_id_seq; Type: SEQUENCE; Schema: ref; Owner: -
 --
 
@@ -891,23 +1189,35 @@ ALTER TABLE ref.roster_drop ALTER COLUMN drop_id ADD GENERATED ALWAYS AS IDENTIT
 
 
 --
--- Name: seat_roster_snapshot; Type: TABLE; Schema: ref; Owner: -
+-- Name: stg_telemetry_day; Type: VIEW; Schema: staging; Owner: -
 --
 
-CREATE TABLE ref.seat_roster_snapshot (
-    drop_id bigint NOT NULL,
-    user_email text NOT NULL,
-    subscription_seq smallint NOT NULL,
-    subscription_raw text,
-    seat_tier text,
-    assignment_date date,
-    anthropic_org_name text,
-    person_name text,
-    manager_name text,
-    department text,
-    cost_center text,
-    extra jsonb DEFAULT '{}'::jsonb NOT NULL
-);
+CREATE VIEW staging.stg_telemetry_day AS
+ SELECT metrics.user_email,
+    (metrics.ts)::date AS activity_date
+   FROM raw.metrics
+  WHERE (metrics.user_email IS NOT NULL)
+UNION
+ SELECT events.user_email,
+    (events.event_time)::date AS activity_date
+   FROM raw.events
+  WHERE (events.user_email IS NOT NULL);
+
+
+--
+-- Name: stg_seat_uncovered_day; Type: VIEW; Schema: staging; Owner: -
+--
+
+CREATE VIEW staging.stg_seat_uncovered_day AS
+ SELECT user_email,
+    activity_date,
+    ( SELECT max(i.valid_to) AS max
+           FROM staging.stg_seat_interval i
+          WHERE ((i.user_email = t.user_email) AND (i.valid_to <= t.activity_date))) AS closed_on
+   FROM staging.stg_telemetry_day t
+  WHERE (NOT (EXISTS ( SELECT 1
+           FROM staging.stg_seat_interval i
+          WHERE ((i.user_email = t.user_email) AND (i.valid_from <= t.activity_date) AND ((i.valid_to IS NULL) OR (i.valid_to > t.activity_date))))));
 
 
 --
@@ -1024,6 +1334,20 @@ CREATE UNIQUE INDEX dim_model_pk ON marts.dim_model USING btree (model_id);
 
 
 --
+-- Name: dim_seat_current_pk; Type: INDEX; Schema: marts; Owner: -
+--
+
+CREATE UNIQUE INDEX dim_seat_current_pk ON marts.dim_seat_current USING btree (user_email);
+
+
+--
+-- Name: dim_seat_pk; Type: INDEX; Schema: marts; Owner: -
+--
+
+CREATE UNIQUE INDEX dim_seat_pk ON marts.dim_seat USING btree (user_email, valid_from);
+
+
+--
 -- Name: dim_user_pk; Type: INDEX; Schema: marts; Owner: -
 --
 
@@ -1056,6 +1380,13 @@ CREATE UNIQUE INDEX fact_api_usage_pk ON marts.fact_api_usage USING btree (sessi
 --
 
 CREATE UNIQUE INDEX fact_edit_decision_pk ON marts.fact_edit_decision USING btree (session_id, activity_date, tool_name, language, decision, source);
+
+
+--
+-- Name: fact_seat_day_pk; Type: INDEX; Schema: marts; Owner: -
+--
+
+CREATE UNIQUE INDEX fact_seat_day_pk ON marts.fact_seat_day USING btree (date_day, user_email);
 
 
 --
@@ -1198,4 +1529,10 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260724091038'),
     ('20260724091043'),
     ('20260724091053'),
-    ('20260725092718');
+    ('20260725092718'),
+    ('20260725110500'),
+    ('20260725110845'),
+    ('20260725110850'),
+    ('20260725110856'),
+    ('20260725110902'),
+    ('20260725111500');
