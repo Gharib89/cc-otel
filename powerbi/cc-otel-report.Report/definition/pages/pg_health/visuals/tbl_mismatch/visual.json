@@ -3,10 +3,10 @@
   "name": "tbl_mismatch",
   "position": {
     "x": 28,
-    "y": 478,
+    "y": 504,
     "z": 520,
-    "height": 226,
-    "width": 800,
+    "height": 200,
+    "width": 470,
     "tabOrder": 520
   },
   "visual": {
@@ -87,7 +87,7 @@
             "value": {
               "expr": {
                 "Literal": {
-                  "Value": "340D"
+                  "Value": "185D"
                 }
               }
             }
@@ -101,7 +101,7 @@
             "value": {
               "expr": {
                 "Literal": {
-                  "Value": "160D"
+                  "Value": "130D"
                 }
               }
             }
@@ -115,7 +115,7 @@
             "value": {
               "expr": {
                 "Literal": {
-                  "Value": "180D"
+                  "Value": "140D"
                 }
               }
             }

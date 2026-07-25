@@ -74,6 +74,10 @@ An `attrs`/`resource` key observed in the raw reservoir but absent from the colu
 A licensed Claude subscription entitlement assigned to one person, at a tier, within an **Anthropic organization**. The licensed-population denominator, an order of magnitude larger than the instrumented one (the first drop: 184 seats against 17 **tracked machines**), which is exactly why seats and machines need separate names. Sourced from IS's roster, never from telemetry. See ADR-0009.
 _Avoid_: licence, user (a seat may never emit)
 
+**Untracked seat**:
+A **seat** whose holder's email has never appeared in telemetry — the complement of the instrumented population (164 of 184 at the first drop, on an all-time basis; the exec coverage card's remainder is the same count bounded on `first_seen` and so moves with the date slicer), carried as `dim_seat_current[telemetry_status]` and listed on the Data Health worklist, longest-held first, so it reads as a rollout list for IS rather than an adoption percentage. Named for the observation, never the cause: today it means the **installer** has not reached that machine, and once rollout completes the identical column will mean genuinely idle, with no code change to mark the shift. Coverage — instrumented over licensed — is the only ratio that divides by the licensed population; every ratio with a telemetry-derived numerator divides by instrumented seats instead (ADR-0009).
+_Avoid_: idle seat, unadopted seat, silent seat
+
 **Roster drop**:
 One roster file as received from IS, identified by its operator-supplied as-of date — a current-state snapshot with no status column, no revocation date, no export timestamp. Landed immutably in `ref` (`roster_drop` + `seat_roster_snapshot`, assignment grain) by `tools.roster_load`; seat history is derived from the accumulated drops, never merged at load time. Absence from a newer drop is revocation.
 _Avoid_: roster import, seat file

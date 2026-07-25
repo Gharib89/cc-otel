@@ -40,6 +40,33 @@ table dim_seat_current
 
 		annotation SummarizationSetBy = Automatic
 
+	/// Telemetry-observation bucket for the untracked-seat worklist (#295), model-side calc column, no migration.
+	/// Named for what it observes, never for what it implies: "Never emitted" today means the installer has not
+	/// reached that machine (17 tracked machines against 184 seats), and once rollout completes the identical
+	/// column will mean genuinely idle, with no code change and nothing to alert anyone — which is why the
+	/// install beacon is the real fix and this bucket only ever claims an observation.
+	/// Evaluated against dim_user (telemetry-only) and never vw_UserBasicInfo, so the worklist needs no
+	/// relationship traversal to the HR view and stays off the OrgScope security-filter chain.
+	/// Deliberately all-time, not window-aware: a calculated column evaluates under empty filter context, so this
+	/// is the ever-emitted set. [Instrumented Seats] is bounded on first_seen instead, so the exec card's remainder
+	/// moves with the date slicer while this worklist does not — they agree only while the window spans every
+	/// first_seen. Current-state is the right basis for a rollout list; the measure's is right for a windowed KPI.
+	/// Depends on the *base* column dim_user[user_email], which is what keeps the dependency graph acyclic:
+	/// dim_user['Roster Status'] reaches back here through RELATED ( dim_seat_current[user_email] ), also a base
+	/// column. Repointing either at the other's *calculated* column closes the loop, and it fails at refresh
+	/// rather than at edit time — neither TMDL parse nor Desktop load catches it.
+	column telemetry_status =
+			IF (
+			    dim_seat_current[user_email] IN VALUES ( dim_user[user_email] ),
+			    "Instrumented",
+			    "Never emitted"
+			)
+		dataType: string
+		lineageTag: d2950105-0000-4000-8000-000000000295
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
 	partition dim_seat_current = m
 		mode: import
 		source =

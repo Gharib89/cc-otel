@@ -1,20 +1,35 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
-  "name": "cht_intensity",
+  "name": "tbl_untracked",
   "position": {
-    "x": 504,
-    "y": 262,
-    "z": 400,
-    "height": 208,
-    "width": 366,
-    "tabOrder": 400
+    "x": 514,
+    "y": 504,
+    "z": 540,
+    "height": 200,
+    "width": 738,
+    "tabOrder": 540
   },
   "visual": {
-    "visualType": "clusteredBarChart",
+    "visualType": "tableEx",
     "query": {
       "queryState": {
-        "Category": {
+        "Values": {
           "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_seat_current"
+                    }
+                  },
+                  "Property": "user_email"
+                }
+              },
+              "queryRef": "dim_seat_current.user_email",
+              "nativeQueryRef": "user_email",
+              "displayName": "User"
+            },
             {
               "field": {
                 "Column": {
@@ -28,25 +43,37 @@
               },
               "queryRef": "dim_seat_current.seat_tier",
               "nativeQueryRef": "seat_tier",
-              "active": true
-            }
-          ]
-        },
-        "Y": {
-          "projections": [
+              "displayName": "Tier"
+            },
             {
               "field": {
-                "Measure": {
+                "Column": {
                   "Expression": {
                     "SourceRef": {
-                      "Entity": "_Measures"
+                      "Entity": "dim_seat_current"
                     }
                   },
-                  "Property": "Avg Active User Hours per Day"
+                  "Property": "anthropic_org_name"
                 }
               },
-              "queryRef": "_Measures.Avg Active User Hours per Day",
-              "nativeQueryRef": "Avg Active User Hours per Day"
+              "queryRef": "dim_seat_current.anthropic_org_name",
+              "nativeQueryRef": "anthropic_org_name",
+              "displayName": "Organization"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_seat_current"
+                    }
+                  },
+                  "Property": "valid_from"
+                }
+              },
+              "queryRef": "dim_seat_current.valid_from",
+              "nativeQueryRef": "valid_from",
+              "displayName": "Assigned"
             },
             {
               "field": {
@@ -56,110 +83,118 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Avg Active CLI Hours per Day"
+                  "Property": "Days Since Assignment"
                 }
               },
-              "queryRef": "_Measures.Avg Active CLI Hours per Day",
-              "nativeQueryRef": "Avg Active CLI Hours per Day"
+              "queryRef": "_Measures.Days Since Assignment",
+              "nativeQueryRef": "Days Since Assignment"
             }
           ]
         }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Column": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "dim_seat_current"
+                  }
+                },
+                "Property": "valid_from"
+              }
+            },
+            "direction": "Ascending"
+          }
+        ]
       }
     },
     "objects": {
-      "categoryAxis": [
+      "columnWidth": [
         {
           "properties": {
-            "showAxisTitle": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "240D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "dim_seat_current.user_email"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "85D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "dim_seat_current.seat_tier"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "115D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "dim_seat_current.anthropic_org_name"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "110D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "dim_seat_current.valid_from"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "165D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "_Measures.Days Since Assignment"
+          }
+        }
+      ],
+      "columnHeaders": [
+        {
+          "properties": {}
+        }
+      ],
+      "total": [
+        {
+          "properties": {
+            "totals": {
               "expr": {
                 "Literal": {
                   "Value": "false"
-                }
-              }
-            },
-            "labelColor": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#44566B'"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      ],
-      "valueAxis": [
-        {
-          "properties": {
-            "showAxisTitle": {
-              "expr": {
-                "Literal": {
-                  "Value": "false"
-                }
-              }
-            },
-            "labelColor": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#7E8CA0'"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      ],
-      "legend": [
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "true"
-                }
-              }
-            },
-            "position": {
-              "expr": {
-                "Literal": {
-                  "Value": "'Bottom'"
-                }
-              }
-            }
-          }
-        }
-      ],
-      "labels": [
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "true"
-                }
-              }
-            },
-            "color": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "Literal": {
-                      "Value": "'#7E8CA0'"
-                    }
-                  }
-                }
-              }
-            },
-            "fontSize": {
-              "expr": {
-                "Literal": {
-                  "Value": "9D"
                 }
               }
             }
@@ -174,7 +209,7 @@
             "altText": {
               "expr": {
                 "Literal": {
-                  "Value": "'Horizontal bars comparing average daily engagement-intensity metrics across seat tiers.'"
+                  "Value": "'Rollout worklist: licensed seats that have never emitted telemetry, longest-held first, with tier, organization and assignment date.'"
                 }
               }
             }
@@ -194,7 +229,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'ENGAGEMENT INTENSITY BY TIER'"
+                  "Value": "'UNTRACKED SEATS (NO TELEMETRY EVER RECEIVED)'"
                 }
               }
             },
@@ -243,71 +278,6 @@
             }
           }
         }
-      ],
-      "background": [
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "false"
-                }
-              }
-            }
-          }
-        }
-      ],
-      "border": [
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "false"
-                }
-              }
-            }
-          }
-        }
-      ],
-      "visualHeader": [
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "false"
-                }
-              }
-            }
-          }
-        }
-      ],
-      "dropShadow": [
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "false"
-                }
-              }
-            }
-          }
-        }
-      ],
-      "subTitle": [
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "false"
-                }
-              }
-            }
-          }
-        }
       ]
     },
     "drillFilterOtherVisuals": true
@@ -315,7 +285,7 @@
   "filterConfig": {
     "filters": [
       {
-        "name": "flt_tier_notblank_intensity",
+        "name": "flt_untracked_status",
         "field": {
           "Column": {
             "Expression": {
@@ -323,7 +293,7 @@
                 "Entity": "dim_seat_current"
               }
             },
-            "Property": "seat_tier"
+            "Property": "telemetry_status"
           }
         },
         "type": "Categorical",
@@ -339,27 +309,28 @@
           "Where": [
             {
               "Condition": {
-                "Not": {
-                  "Expression": {
-                    "Comparison": {
-                      "ComparisonKind": 0,
-                      "Left": {
-                        "Column": {
-                          "Expression": {
-                            "SourceRef": {
-                              "Source": "s"
-                            }
-                          },
-                          "Property": "seat_tier"
-                        }
-                      },
-                      "Right": {
-                        "Literal": {
-                          "Value": "null"
-                        }
+                "In": {
+                  "Expressions": [
+                    {
+                      "Column": {
+                        "Expression": {
+                          "SourceRef": {
+                            "Source": "s"
+                          }
+                        },
+                        "Property": "telemetry_status"
                       }
                     }
-                  }
+                  ],
+                  "Values": [
+                    [
+                      {
+                        "Literal": {
+                          "Value": "'Never emitted'"
+                        }
+                      }
+                    ]
+                  ]
                 }
               }
             }

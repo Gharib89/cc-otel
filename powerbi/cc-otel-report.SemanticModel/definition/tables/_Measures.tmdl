@@ -252,7 +252,7 @@ table _Measures
 	/// responds to the date slicer — the seats open in the selected window (184 today), not the observed-user
 	/// count the fabricated roster returned by construction.
 	/// The bridge exists because fact_seat_day has no relationship to dim_seat_current, so a selection made on the
-	/// dimension — the sl_tier slicers, the cht_tier category — reaches the fact only through TREATAS. It carries
+	/// dimension — the sl_tier slicers, the seat-trend and worklist visuals — reaches the fact only through TREATAS. It carries
 	/// user_email, not seat_tier, for two reasons: every dimension column then propagates (tier, org, the seat's own
 	/// email) rather than only the one an ISFILTERED guard happened to name; and both series of a per-tier visual end
 	/// up on the same tier basis. [Active Roster Users] receives the tier through the dim_user relationship, i.e.
@@ -279,7 +279,7 @@ table _Measures
 	/// behaviour. ADR-0009 makes the rule explicit: these measures must stay on tracked members.
 	/// Composed over [Paid Seats] so the seat bridge is not duplicated; the extra TREATAS is needed because
 	/// fact_seat_day is deliberately unrelated to dim_user — most licensed seats have no dim_user row at all.
-	/// The licensed-versus-instrumented share itself is #295's coverage card, not this measure.
+	/// The licensed-versus-instrumented share itself is [Instrumented Seat Share], not this measure (#295).
 	/// The first_seen bound makes the count date-aware, which the emitter side is not otherwise: dim_user has no
 	/// relationship to dim_date, so a bare VALUES( dim_user[user_email] ) is the all-time emitter set in every
 	/// window, and a shifted window (the PP measures) would credit machines the installer had not yet reached.
@@ -300,6 +300,56 @@ table _Measures
 		formatString: #,##0
 		displayFolder: Seat ROI
 		lineageTag: d2940301-0000-4000-8000-000000000294
+
+	/// Coverage: the share of the licensed population telemetry has reached (#295). The one ratio in Seat ROI that
+	/// divides by [Paid Seats] rather than [Instrumented Seats] — measuring the instrumentation gap is the whole
+	/// point of it, where every other Seat ROI ratio exists to keep that gap out of a behavioural number.
+	measure 'Instrumented Seat Share' = DIVIDE ( [Instrumented Seats], [Paid Seats] )
+		formatString: 0.0%
+		displayFolder: Seat ROI
+		lineageTag: d2950101-0000-4000-8000-000000000295
+
+	/// Report-display helper: the coverage card's detail line, carrying the denominator the headline count omits.
+	/// Blank when the window holds no seat-days, rather than rendering "of  licensed seats".
+	measure 'Seat Coverage Detail' =
+			IF (
+			    NOT ISBLANK ( [Paid Seats] ),
+			    "of " & FORMAT ( [Paid Seats], "#,##0" ) & " licensed seats · "
+			        & FORMAT ( [Instrumented Seat Share], "0.0%" ) & " coverage"
+			)
+		displayFolder: Seat ROI
+		lineageTag: d2950102-0000-4000-8000-000000000295
+
+	/// Report-display helper: the coverage card's subtitle, and the reason the card is titled coverage and not
+	/// adoption (#295). A seat with no telemetry has not been observed idle — it has not been observed at all, and
+	/// the installer demonstrably has not reached every machine. Without this line 20 of 184 reads as developers
+	/// ignoring the tool, and that reading leads to the opposite action from the true one (finish the rollout).
+	/// Retire it once the install beacon lands and "never emitted" genuinely means idle.
+	measure 'Seat Coverage Note' =
+			IF (
+			    NOT ISBLANK ( [Paid Seats] ),
+			    "Install status is unknown for the remaining "
+			        & FORMAT ( [Paid Seats] - [Instrumented Seats], "#,##0" ) & " seats"
+			)
+		displayFolder: Seat ROI
+		lineageTag: d2950103-0000-4000-8000-000000000295
+
+	/// How long the seat has been held, for the untracked-seat worklist (#295). Measured against the query clock
+	/// (TODAY() resolves server-side, in the capacity timezone — not the viewer's) rather than the imported
+	/// dim_date ceiling, because the question it answers — how long has IS been paying for a machine the installer
+	/// never reached — is asked in real time and a stale snapshot must not shrink it. Note the model therefore
+	/// carries two clocks: this one, and dim_user['Roster Status']'s refresh-frozen MAX ( dim_date[date_day] ).
+	/// MIN, not MAX: identical at the one-seat grain the worklist renders, but at any coarser grain MAX would
+	/// silently answer the opposite question — the newest assignment, i.e. the *shortest* tenure — so a totals row
+	/// or a tier rollup would report the least urgent seat as the headline. MIN keeps "the longest-held untracked
+	/// seat has been paid for N days" true at every grain, which is the number the worklist exists to surface.
+	measure 'Days Since Assignment' =
+			VAR Oldest = MIN ( dim_seat_current[valid_from] )
+			RETURN
+			    IF ( NOT ISBLANK ( Oldest ), INT ( TODAY () - Oldest ) )
+		formatString: #,##0
+		displayFolder: Seat ROI
+		lineageTag: d2950104-0000-4000-8000-000000000295
 
 	/// Roster-matched distinct actives; the window comes from the report's relative-date slicer (#165),
 	/// not DAX (#117: off-roster identities excluded from the headline, surfaced on Data Health instead).
