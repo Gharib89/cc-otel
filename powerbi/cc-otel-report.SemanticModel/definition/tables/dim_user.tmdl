@@ -65,8 +65,8 @@ table dim_user
 	/// resolvable seat, so folding them into off-roster would hide an ingest defect behind a licensing state.
 	/// Recency is a fixed 28 days against the imported dim_date ceiling, matching the report's default relative-date window:
 	/// a calculated column materialises at refresh and cannot read the date slicer.
-	/// "Silent seat" (a seat that has never emitted) is unreachable here by construction — dim_user is telemetry-only, so a
-	/// never-emitting seat has no row. It belongs to the untracked-seat worklist read off dim_seat_current (#295).
+	/// An untracked seat (one that has never emitted) is unreachable here by construction — dim_user is telemetry-only, so a
+	/// never-emitting seat has no row. It belongs to the untracked-seat worklist read off dim_seat_current[telemetry_status] (#295).
 	column 'Roster Status' =
 			VAR Cutoff = MAX ( dim_date[date_day] ) - 27
 			RETURN
