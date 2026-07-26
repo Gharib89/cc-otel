@@ -44,10 +44,10 @@ table fact_session
 
 	column duration_s
 		dataType: int64
+		isHidden
 		formatString: 0
 		lineageTag: 8d17ae72-05c0-4967-9c79-474b50c987d5
 		summarizeBy: none
-		isHidden
 		sourceColumn: duration_s
 
 		annotation SummarizationSetBy = Automatic
@@ -65,9 +65,9 @@ table fact_session
 	/// [Users Using *] Ecosystem counts, the only people-counting measures over this grain.
 	column rls_email = RELATED ( dim_user[rls_email] )
 		dataType: string
+		isHidden
 		lineageTag: d3210003-0000-4000-8000-000000000321
 		summarizeBy: none
-		isHidden
 
 		annotation SummarizationSetBy = Automatic
 

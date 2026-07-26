@@ -101,55 +101,6 @@ table _Measures
 		displayFolder: Utilization
 		lineageTag: 81068fa0-8934-4b90-aa99-797baea5d229
 
-	/// Mean hourly utilization for the hour-of-day heatmap. fact_utilization_hourly[avg_pct] is the
-	/// per user x window_type x hour mean closing utilization, stored 0-100 (percent points); average it
-	/// across the hour-of-day bucket in context and divide by 100 for the 0.0% format. Split by window_type.
-	measure 'Hourly Utilization Intensity' = DIVIDE ( AVERAGE ( fact_utilization_hourly[avg_pct] ), 100 )
-		formatString: 0.0%;-0.0%;0.0%
-		displayFolder: Utilization
-		lineageTag: b2c3d4e5-0175-4f6a-9b0c-1d2e3f4a5b6c
-
-	/// How close to the ceiling a typical dev gets (#323) — the mean, across users, of each user's own
-	/// worst window in the period. Plotted weekly and split by window_type: 5h is the rate-limit window
-	/// that actually bites, 7d the subscription envelope. peak_pct is stored 0-100, so divide for 0.0%.
-	///
-	/// Unlike [Utilization Intensity] this needs no explicit window-instance collapse. That collapse
-	/// exists because reset-split segments are cumulative snapshots, so summing or averaging them
-	/// overstates — but MAX is idempotent over the split (max of per-window maxima is the max), so
-	/// grouping straight to user × window_type gives the identical number with half the DAX.
-	///
-	/// Rejected alternatives, recorded so they are not re-tried: the org-wide MAX(peak_pct) saturates
-	/// near 100% every week once ~50 seats are in play and renders as a flat line; P95 of window peaks
-	/// is viable but answers a different question than the page asks.
-	measure 'Peak Utilization %' =
-			VAR PerUser =
-			    ADDCOLUMNS (
-			        SUMMARIZE (
-			            fact_usage_window,
-			            fact_usage_window[user_email],
-			            fact_usage_window[window_type]
-			        ),
-			        "@UserPeak", CALCULATE ( MAX ( fact_usage_window[peak_pct] ) )
-			    )
-			RETURN
-			    DIVIDE ( AVERAGEX ( PerUser, [@UserPeak] ), 100 )
-		formatString: 0.0%;-0.0%;0.0%
-		displayFolder: Utilization
-		lineageTag: b3230001-0000-4000-8000-000000000323
-
-	/// The two window_type series for cht_peak_util (#323), split as explicit measures rather than a
-	/// Series/legend projection — the report has no Series role anywhere and states its series this way
-	/// (see [Input Tokens (Weekly)] / [Output Tokens (Weekly)]), which also gives the legend real names.
-	measure 'Peak Utilization % (5h)' = CALCULATE ( [Peak Utilization %], fact_usage_window[window_type] = "5h" )
-		formatString: 0.0%;-0.0%;0.0%
-		displayFolder: Utilization
-		lineageTag: b3230002-0000-4000-8000-000000000323
-
-	measure 'Peak Utilization % (7d)' = CALCULATE ( [Peak Utilization %], fact_usage_window[window_type] = "7d" )
-		formatString: 0.0%;-0.0%;0.0%
-		displayFolder: Utilization
-		lineageTag: b3230003-0000-4000-8000-000000000323
-
 	measure 'Tool Acceptance Rate' =
 			DIVIDE (
 			    CALCULATE ( SUM ( fact_edit_decision[decision_count] ), fact_edit_decision[decision] = "accept" ),
@@ -158,32 +109,6 @@ table _Measures
 		formatString: 0.0%;-0.0%;0.0%
 		displayFolder: Tool Quality
 		lineageTag: d2bb363b-cd63-4aa4-84eb-169753d92097
-
-	/// Share of tool_result events that succeeded (#174, fact_tool_outcome P2). Pair with p95 latency — reliability failures kill adoption.
-	measure 'Tool Success Rate' =
-			DIVIDE (
-			    SUM ( fact_tool_outcome[success_count] ),
-			    SUM ( fact_tool_outcome[tool_call_count] )
-			)
-		formatString: 0.0%;-0.0%;0.0%
-		displayFolder: Tool Quality
-		lineageTag: d60a6272-71f2-4cbf-a7e7-ef12be7cbed1
-
-	/// Mean of the per-session/day p95 tool latency (ms). True cross-session p95 is unrecoverable from the pre-aggregated mart, so this averages the per-grain p95 — read as a tail-latency trend, not an exact percentile (#174).
-	measure 'Tool p95 Latency (ms)' = AVERAGE ( fact_tool_outcome[duration_p95_ms] )
-		formatString: #,##0
-		displayFolder: Tool Quality
-		lineageTag: 76fdd088-f0fd-4122-8082-1a74ea07084f
-
-	/// api_error events over api_request events (#174, fact_api_error_rate P3). Ops signal on Data Health, not exec. Recomputed from counts, not an average of daily rates.
-	measure 'API Error Rate' =
-			DIVIDE (
-			    SUM ( fact_api_error_rate[api_error_count] ),
-			    SUM ( fact_api_error_rate[api_request_count] ) + SUM ( fact_api_error_rate[api_error_count] )
-			)
-		formatString: 0.00%;-0.00%;0.00%
-		displayFolder: Ingest Health
-		lineageTag: d69888b0-c91f-48a5-a793-bf620d5fe29b
 
 	/// Import-mode caveat: staleness includes the daily report-refresh lag, not just pipeline silence.
 	measure 'Hours Since Last Signal' =
@@ -213,49 +138,6 @@ table _Measures
 		displayFolder: Ingest Health
 		lineageTag: 833b49f9-2225-4543-aaa6-a8a2b971b811
 
-	/// #197 snapshot-calendar lag: calendar days the imported dim_date snapshot trails the viewer clock.
-	/// Import-mode datasets snapshot dim_date (dense to CURRENT_DATE) at refresh; a weekend/holiday refresh
-	/// gap leaves MAX(dim_date) behind TODAY(), shrinking the Now()-anchored relative-date slicer window
-	/// (#165). Isolates snapshot lag from telemetry quiet, which [Hours Since Last Signal] conflates; 0 on a
-	/// healthy same-day refresh. Consumed by [Data Freshness Badge] to surface the >= 2-day case.
-	measure 'Snapshot Calendar Lag' = INT ( TODAY () - MAX ( dim_date[date_day] ) )
-		formatString: #,##0
-		displayFolder: Ingest Health
-		lineageTag: a1970001-0000-4000-8000-000000000197
-
-	/// #305 tooltip payload: the finding's JSON detail, lifted out of the tbl_dq grid so the table keeps
-	/// only scannable columns. SELECTEDVALUE, not CONCATENATEX — a tooltip page evaluates under the hovered
-	/// row's filter context, so exactly one finding is ever in scope. Guarded on finding_type rather than on
-	/// details itself, so a finding that genuinely recorded no payload still says so instead of rendering an
-	/// empty card indistinguishable from a failed hover.
-	measure 'DQ Detail Payload' =
-			IF (
-			    NOT ISBLANK ( SELECTEDVALUE ( dq_finding[finding_type] ) ),
-			    COALESCE ( SELECTEDVALUE ( dq_finding[details] ), "(no payload recorded)" )
-			)
-		displayFolder: Ingest Health
-		lineageTag: d3050001-0000-4000-8000-000000000305
-
-	/// #305 tooltip header: the finding's identity in one line, so the tooltip names what it is showing
-	/// without a second visual competing for a 320px canvas.
-	measure 'DQ Finding Header' =
-			VAR FindingType = SELECTEDVALUE ( dq_finding[finding_type] )
-			VAR Detected = SELECTEDVALUE ( dq_finding[detected_at] )
-			VAR Affected = SUM ( dq_finding[row_count] )
-			VAR AffectedClause =
-			    IF (
-			        ISBLANK ( Affected ),
-			        "",
-			        "  ·  " & FORMAT ( Affected, "#,##0" ) & IF ( Affected = 1, " row", " rows" )
-			    )
-			RETURN
-			    IF (
-			        NOT ISBLANK ( FindingType ),
-			        FindingType & "  ·  detected " & FORMAT ( Detected, "dd MMM HH:mm" ) & AffectedClause
-			    )
-		displayFolder: Ingest Health
-		lineageTag: d3050002-0000-4000-8000-000000000305
-
 	/// Report-data-contract user-page fields (#28). commits/prs are doubles in the daily mart.
 	measure 'Total Commits' = SUM(fact_session_daily[commits])
 		formatString: #,##0
@@ -272,28 +154,6 @@ table _Measures
 		formatString: #,##0
 		displayFolder: Productivity
 		lineageTag: a1c00003-0000-4000-8000-000000000028
-
-	/// Per-active-user output ratio (#176): normalizes throughput by the active population so the trend reflects intensity, not headcount.
-	measure 'Commits per Active User' = DIVIDE ( [Total Commits], [Active Users] )
-		formatString: #,##0.0
-		displayFolder: Productivity
-		lineageTag: a1c00005-0000-4000-8000-000000000176
-
-	measure 'PRs per Active User' = DIVIDE ( [Total PRs], [Active Users] )
-		formatString: #,##0.0
-		displayFolder: Productivity
-		lineageTag: a1c00006-0000-4000-8000-000000000176
-
-	/// Weekly-gated ratio for the trend: divides the partial-week-suppressed numerator so the line matches the Commits/PRs and LoC trends (no spurious final partial week).
-	measure 'Commits per Active User (Weekly)' = DIVIDE ( [Commits (Weekly)], [Active Users] )
-		formatString: #,##0.0
-		displayFolder: Trends
-		lineageTag: a1c00007-0000-4000-8000-000000000176
-
-	measure 'PRs per Active User (Weekly)' = DIVIDE ( [PRs (Weekly)], [Active Users] )
-		formatString: #,##0.0
-		displayFolder: Trends
-		lineageTag: a1c00008-0000-4000-8000-000000000176
 
 	/// Mean session length (contract "Avg session duration"), in minutes.
 	measure 'Avg Session Duration' = AVERAGE(fact_session[duration_s]) / 60
@@ -361,97 +221,6 @@ table _Measures
 		formatString: #,##0
 		displayFolder: Seat ROI
 		lineageTag: b9365732-93a2-497e-b49d-0215e0fe0d5e
-
-	/// Licensed seats telemetry has actually reached: the open seats in the window whose email also appears in
-	/// dim_user (telemetry-only). Not the licensed population (184) and not the window's actives (19) — a seat
-	/// instrumented but quiet in the window still counts, because the install did reach that machine.
-	/// #294: the honest denominator for every ratio with a telemetry-derived numerator. [Value Consumed] and
-	/// [Active Roster Users] can only be observed on instrumented seats, so dividing either by [Paid Seats] would
-	/// measure the instrumentation gap (17 tracked machines against 184 seats) and report it as developer
-	/// behaviour. ADR-0009 makes the rule explicit: these measures must stay on tracked members.
-	/// Composed over [Paid Seats] so the seat bridge is not duplicated; the extra TREATAS is needed because
-	/// fact_seat_day is deliberately unrelated to dim_user — most licensed seats have no dim_user row at all.
-	/// The licensed-versus-instrumented share itself is [Instrumented Seat Share], not this measure (#295).
-	/// The first_seen bound makes the count date-aware, which the emitter side is not otherwise: dim_user has no
-	/// relationship to dim_date, so a bare VALUES( dim_user[user_email] ) is the all-time emitter set in every
-	/// window, and a shifted window (the PP measures) would credit machines the installer had not yet reached.
-	/// Unguarded it reported the prior 28 days as 20 instrumented seats when 13 of those machines had never emitted
-	/// by then, turning a flat ~-5 pp into a +60 pp jump on the exec hero.
-	/// #321: deliberately NOT guarded on dim_user[is_linked_identity], and that was measured rather than assumed.
-	/// The bridge to fact_seat_day is TREATAS on the *base* column dim_user[user_email], not the re-pointed
-	/// relationship, so a linked identity's personal address matches no seat-day and contributes nothing —
-	/// 20 seats before and after the re-point unfiltered, 1 before and after for a scoped manager. ADR-0011's
-	/// "stays out of [Instrumented Seats]" holds by construction here, not by a ninth guard.
-	/// #341: the bound is < WindowEnd + 1, not <= WindowEnd. first_seen carries a time of day and date_day is
-	/// midnight, so <= dropped every seat first reached *during* the window's last day — on the default relative
-	/// window, every install completed today. Half-closed, not closed: the connector renders first_seen in the
-	/// refreshing machine's zone while date_day imports naive, so a sliver the width of that offset is still
-	/// dropped — measured, accepted, not tracked (#342 closed not-planned).
-	measure 'Instrumented Seats' =
-			VAR WindowEnd = MAX ( dim_date[date_day] )
-			VAR Reached =
-			    CALCULATETABLE (
-			        VALUES ( dim_user[user_email] ),
-			        KEEPFILTERS ( dim_user[first_seen] < WindowEnd + 1 )
-			    )
-			RETURN
-			    CALCULATE (
-			        [Paid Seats],
-			        KEEPFILTERS ( TREATAS ( Reached, fact_seat_day[user_email] ) )
-			    )
-		formatString: #,##0
-		displayFolder: Seat ROI
-		lineageTag: d2940301-0000-4000-8000-000000000294
-
-	/// Coverage: the share of the licensed population telemetry has reached (#295). The one ratio in Seat ROI that
-	/// divides by [Paid Seats] rather than [Instrumented Seats] — measuring the instrumentation gap is the whole
-	/// point of it, where every other Seat ROI ratio exists to keep that gap out of a behavioural number.
-	measure 'Instrumented Seat Share' = DIVIDE ( [Instrumented Seats], [Paid Seats] )
-		formatString: 0.0%
-		displayFolder: Seat ROI
-		lineageTag: d2950101-0000-4000-8000-000000000295
-
-	/// Report-display helper: the coverage card's detail line, carrying the denominator the headline count omits.
-	/// Blank when the window holds no seat-days, rather than rendering "of  licensed seats".
-	measure 'Seat Coverage Detail' =
-			IF (
-			    NOT ISBLANK ( [Paid Seats] ),
-			    "of " & FORMAT ( [Paid Seats], "#,##0" ) & " licensed seats · "
-			        & FORMAT ( [Instrumented Seat Share], "0.0%" ) & " coverage"
-			)
-		displayFolder: Seat ROI
-		lineageTag: d2950102-0000-4000-8000-000000000295
-
-	/// Report-display helper: the coverage card's subtitle, and the reason the card is titled coverage and not
-	/// adoption (#295). A seat with no telemetry has not been observed idle — it has not been observed at all, and
-	/// the installer demonstrably has not reached every machine. Without this line 20 of 184 reads as developers
-	/// ignoring the tool, and that reading leads to the opposite action from the true one (finish the rollout).
-	/// Retire it once the install beacon lands and "never emitted" genuinely means idle.
-	measure 'Seat Coverage Note' =
-			IF (
-			    NOT ISBLANK ( [Paid Seats] ),
-			    "Install status is unknown for the remaining "
-			        & FORMAT ( [Paid Seats] - [Instrumented Seats], "#,##0" ) & " seats"
-			)
-		displayFolder: Seat ROI
-		lineageTag: d2950103-0000-4000-8000-000000000295
-
-	/// How long the seat has been held, for the untracked-seat worklist (#295). Measured against the query clock
-	/// (TODAY() resolves server-side, in the capacity timezone — not the viewer's) rather than the imported
-	/// dim_date ceiling, because the question it answers — how long has IS been paying for a machine the installer
-	/// never reached — is asked in real time and a stale snapshot must not shrink it. Note the model therefore
-	/// carries two clocks: this one, and dim_user['Roster Status']'s refresh-frozen MAX ( dim_date[date_day] ).
-	/// MIN, not MAX: identical at the one-seat grain the worklist renders, but at any coarser grain MAX would
-	/// silently answer the opposite question — the newest assignment, i.e. the *shortest* tenure — so a totals row
-	/// or a tier rollup would report the least urgent seat as the headline. MIN keeps "the longest-held untracked
-	/// seat has been paid for N days" true at every grain, which is the number the worklist exists to surface.
-	measure 'Days Since Assignment' =
-			VAR Oldest = MIN ( dim_seat_current[valid_from] )
-			RETURN
-			    IF ( NOT ISBLANK ( Oldest ), INT ( TODAY () - Oldest ) )
-		formatString: #,##0
-		displayFolder: Seat ROI
-		lineageTag: d2950104-0000-4000-8000-000000000295
 
 	/// Roster-matched distinct actives; the window comes from the report's relative-date slicer (#165),
 	/// not DAX (#117: off-roster identities excluded from the headline, surfaced on Data Health instead).
@@ -530,84 +299,6 @@ table _Measures
 		displayFolder: Seat ROI
 		lineageTag: bd969746-a64b-4bec-a015-c34ffbc8417c
 
-	/// #173 (map #153, adopt-findings #158 Q1/Q2/Q15; ADR-0007). Flat per-seat plan list price,
-	/// USD/seat/month, confirmed by Ahmed at PR #201 review (issue #173).
-	measure 'Standard Seat Price' = 25
-		formatString: \$#,##0
-		displayFolder: Seat ROI\Cost
-		lineageTag: a1730001-0000-4000-8000-000000000173
-
-	measure 'Premium Seat Price' = 125
-		formatString: \$#,##0
-		displayFolder: Seat ROI\Cost
-		lineageTag: a1730002-0000-4000-8000-000000000173
-
-	/// API-equivalent value consumed = SUM of the promoted fact_api_usage[cost_usd] (#170, ADR-0007).
-	/// Filter-context aware (selected relative-date window + slicers). ITWorx pays a flat per-seat plan,
-	/// so this is value consumed at metered-API rates, never marginal spend.
-	measure 'Value Consumed' = SUM ( fact_api_usage[cost_usd] )
-		formatString: \$#,##0.00
-		displayFolder: Seat ROI\Cost
-		lineageTag: a1730003-0000-4000-8000-000000000173
-
-	/// Monthly cost of the *instrumented* seats: Premium seats × Premium price + the rest at Standard price.
-	/// A monthly rate, but no longer period-independent — [Instrumented Seats] is now counted over the daily seat
-	/// fact, so the rate follows the window's seat population; [Value vs Seat Ratio] prorates it by Days/30.
-	/// #294: renamed from 'Monthly Seat Cost' and rebased onto [Instrumented Seats]. It exists only as the ROI
-	/// denominator (no visual binds it), and its numerator [Value Consumed] is observable on instrumented seats
-	/// alone — costing all 184 against value from 20 would divide by the rollout gap and read as a 9x collapse in
-	/// the tool's worth. Total licensed spend, if a card ever needs it, is this formula over [Paid Seats].
-	/// The Premium split filters the dimension, matching the tier basis [Paid Seats] bridges on, so it follows IS's
-	/// real tier mix instead of the two tiers the fabricated roster hardcoded. KEEPFILTERS so an outer tier
-	/// selection intersects: without it, sl_tier = Standard would be overwritten and every seat priced at Premium.
-	measure 'Instrumented Seat Cost' =
-			VAR Premium = CALCULATE ( [Instrumented Seats], KEEPFILTERS ( dim_seat_current[seat_tier] = "Premium" ) )
-			VAR Standard = [Instrumented Seats] - Premium
-			RETURN Premium * [Premium Seat Price] + Standard * [Standard Seat Price]
-		formatString: \$#,##0
-		displayFolder: Seat ROI\Cost
-		lineageTag: a1730004-0000-4000-8000-000000000173
-
-	/// Value-vs-seat ROI (#173, research item 7): value consumed in the window over the seat cost for the
-	/// SAME window. Monthly seat cost is prorated by Days/30 (nominal month) so the multiple stays
-	/// period-consistent when the relative-date window changes (#165).
-	/// #294: both sides are now scoped to instrumented seats — see [Instrumented Seat Cost].
-	measure 'Value vs Seat Ratio' =
-			VAR Days = COUNTROWS ( dim_date )
-			VAR WindowSeatCost = [Instrumented Seat Cost] * DIVIDE ( Days, 30 )
-			RETURN DIVIDE ( [Value Consumed], WindowSeatCost )
-		formatString: 0.0"×"
-		displayFolder: Seat ROI\Cost
-		lineageTag: a1730005-0000-4000-8000-000000000173
-
-	/// ROI-tile delta triplet (mirrors the Overview KPI pattern): hidden prior-window ratio / Δ (% change) /
-	/// label. The prior window is equal-length, so the Days/30 proration cancels and the delta compares two
-	/// like-for-like ratios.
-	/// #294: seat cost is no longer date-independent — [Instrumented Seats] moves with the window — so the delta is
-	/// a genuine ROI change (value per seat-dollar), not just the value-consumed change it reduced to before.
-	measure 'Value vs Seat Ratio PP' =
-			VAR Days = COUNTROWS ( dim_date )
-			VAR FirstDay = MIN ( dim_date[date_day] )
-			RETURN
-			    CALCULATE ( [Value vs Seat Ratio], DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 ) )
-		formatString: 0.0"×"
-		isHidden
-		displayFolder: Seat ROI\Cost\Support
-		lineageTag: a1730007-0000-4000-8000-000000000173
-
-	measure 'Value vs Seat Ratio Δ' = DIVIDE ( [Value vs Seat Ratio] - [Value vs Seat Ratio PP], [Value vs Seat Ratio PP] )
-		formatString: +0.0%;-0.0%;0.0%
-		displayFolder: Seat ROI\Cost
-		lineageTag: a1730008-0000-4000-8000-000000000173
-
-	measure 'Value vs Seat Ratio Δ Label' =
-			VAR D = [Value vs Seat Ratio Δ]
-			VAR N = COUNTROWS ( dim_date )
-			RETURN
-			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" )
-		displayFolder: Seat ROI\Cost
-		lineageTag: a1730009-0000-4000-8000-000000000173
-
 	/// Distinct actives per calendar ISO week (all telemetry, #117 decision 5); the incomplete
 	/// current week returns BLANK so the trend never ends in a fake dip.
 	measure 'Weekly Active Users' =
@@ -618,35 +309,6 @@ table _Measures
 		formatString: #,##0
 		displayFolder: Seat ROI
 		lineageTag: a233816c-5328-45ad-8f54-a9d9399761fe
-
-	/// Distinct actives per calendar month (all telemetry, mirrors [Weekly Active Users], #177); the
-	/// incomplete current month returns BLANK — guarded by month-end vs the latest data date, no fake dip.
-	measure 'Monthly Active Users' =
-			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
-			VAR MonthEnd = EOMONTH ( MAX ( dim_date[month_start] ), 0 )
-			RETURN
-			    IF ( MonthEnd <= Anchor, DISTINCTCOUNT ( fact_session_daily[rls_email] ) )
-		formatString: #,##0
-		displayFolder: Seat ROI
-		lineageTag: b7c4f1a8-2e93-45d6-8a01-6f3d9c2e7b15
-
-	/// Month-over-month change in [Monthly Active Users] for the per-column trend label (#177). Prior month
-	/// via REMOVEFILTERS + month_start (clears the month_label axis filter — a bare month_start filter would
-	/// intersect empty against it); BLANK when either month is guarded so the first column carries no fake Δ.
-	measure 'MAU MoM Δ' =
-			VAR PriorMonth = EDATE ( MAX ( dim_date[month_start] ), -1 )
-			VAR Cur = [Monthly Active Users]
-			VAR Prior =
-			    CALCULATE (
-			        [Monthly Active Users],
-			        REMOVEFILTERS ( dim_date ),
-			        dim_date[month_start] = PriorMonth
-			    )
-			RETURN
-			    IF ( NOT ISBLANK ( Cur ) && NOT ISBLANK ( Prior ) && Prior <> 0, DIVIDE ( Cur - Prior, Prior ) )
-		formatString: +0.0%;-0.0%;0.0%
-		displayFolder: Seat ROI
-		lineageTag: c9e2a7d4-5b81-42f0-9c36-8a1e4f7b2d63
 
 	/// Cohorts (#117): growth-accounting semantics, leadership labels, roster-scoped, exhaustive
 	/// with [Idle Seats]: New + Retained + Reactivated + Idle = Instrumented Seats. Window = selection (#165).
@@ -942,18 +604,6 @@ table _Measures
 		displayFolder: Data Health
 		lineageTag: 62b922f3-1e40-4a6a-8f0e-cabed5dbf026
 
-	/// Third tier for the DQ FINDINGS card (#330) — the only card in pg_health's six-card band
-	/// that left the slot empty, so the band's bottom edge read ragged under that column.
-	/// A delta is not available here: dq_finding carries detected_at but has no dim_date
-	/// relationship, so [DQ Findings] is an all-time count and a "vs Nd" delta over it would
-	/// render a permanent +0.0%. Mirrors [Last Mart Refresh]'s treatment on the band's first
-	/// card instead — a freshness stamp, not a delta. The prefix rides in the formatString,
-	/// same as that measure.
-	measure 'Last DQ Finding' = MAX ( dq_finding[detected_at] )
-		formatString: "Latest " dd MMM HH:mm
-		displayFolder: Data Health
-		lineageTag: b3300001-0000-4000-8000-000000000330
-
 	/// Report-display helper: Executive Overview hero card sub-line.
 	/// #294: says "instrumented", not "paid seats" — it explains a utilization headline now denominated on the seats
 	/// telemetry reaches, so quoting the licensed count here would leave the ratio looking wrong.
@@ -1038,6 +688,371 @@ table _Measures
 			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0;-0.0" ) & " pp vs " & N & "d" )
 		displayFolder: Overview KPIs
 		lineageTag: b1190005-0000-4000-8000-000000000119
+
+	/// Mean per active day of time the user was actively prompting (active_time.user), in hours.
+	measure 'Avg Active User Hours per Day' = DIVIDE(SUM(fact_session_daily[active_time_user_s]), [Active Days]) / 3600
+		formatString: #,##0.0 "h"
+		displayFolder: Adoption
+		lineageTag: a1c00030-0000-4000-8000-000000000028
+
+	/// Mean per active day of time the CLI was running (active_time.cli), in hours. Distinct from user-active time.
+	measure 'Avg Active CLI Hours per Day' = DIVIDE(SUM(fact_session_daily[active_time_cli_s]), [Active Days]) / 3600
+		formatString: #,##0.0 "h"
+		displayFolder: Adoption
+		lineageTag: a1c00031-0000-4000-8000-000000000028
+
+	/// Total edit-decision events (accept/reject/...) from fact_edit_decision; powers the Impact decision-mix (#121).
+	measure 'Edit Decisions' = SUM ( fact_edit_decision[decision_count] )
+		formatString: #,##0
+		displayFolder: Tool Quality
+		lineageTag: 46f2bd60-c99d-4f35-a572-db29e80cb5e4
+
+	/// Rejected-edit volume; replaces the two-bar decision-mix chart with a KPI on Impact (#152).
+	measure 'Rejected Edits' = CALCULATE ( [Edit Decisions], fact_edit_decision[decision] = "reject" )
+		formatString: #,##0
+		displayFolder: Tool Quality
+		lineageTag: 8d4f2a61-5b3c-47e9-a1d2-90c8e7b5f426
+
+	/// Ecosystem depth-bar values (#123): raw usage intensity per bridge entity, summed over the session-x-name grain.
+	measure 'Skill Activations' = SUM ( bridge_session_skill[activations] )
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: e1c2a3b4-0001-4a11-9c01-aa0000000001
+
+	measure 'MCP Calls' = SUM ( bridge_session_mcp[tool_calls] )
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: e1c2a3b4-0002-4a11-9c01-aa0000000002
+
+	measure 'Subagent Invocations' = SUM ( bridge_session_agent[invocations] )
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: e1c2a3b4-0003-4a11-9c01-aa0000000003
+
+	measure 'Hook Executions' = SUM ( bridge_session_hook[executions] )
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: e1c2a3b4-0004-4a11-9c01-aa0000000004
+
+	measure 'Plugin Loads' = SUM ( bridge_session_plugin[load_count] )
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: e1c2a3b4-0005-4a11-9c01-aa0000000005
+
+	/// User-detail drillthrough header (#125): the drilled user's identity, shown as cards.
+	measure 'Selected User' = SELECTEDVALUE ( dim_user[user_email], "All users" )
+		displayFolder: User Detail
+		lineageTag: d1250001-0000-4000-8000-000000000125
+
+	/// RELATED walks dim_user (many) -> dim_seat_current (one); blank means the identity holds no open seat.
+	/// #294: the fallback carries the taxonomy's state name so the User Detail card and the Data Health
+	/// reconciliation column say the same word for the same state.
+	/// HASONEVALUE because MAXX over many users returns the alphabetical max, which is "Standard" — a plausible
+	/// wrong tier rather than a visible fallback if the drillthrough filter ever fails to land.
+	/// #321: the MAXX scan skips linked identities, so a personal address on the User Detail card keeps reading
+	/// "Off-roster identity" rather than the corporate seat's tier it now reaches (ADR-0011).
+	measure 'Selected User Tier' =
+			IF (
+			    HASONEVALUE ( dim_user[user_email] ),
+			    COALESCE (
+			        MAXX (
+			            FILTER ( dim_user, NOT dim_user[is_linked_identity] ),
+			            RELATED ( dim_seat_current[seat_tier] )
+			        ),
+			        "Off-roster identity"
+			    ),
+			    "All users"
+			)
+		displayFolder: User Detail
+		lineageTag: d1250002-0000-4000-8000-000000000125
+
+	measure 'User First Seen' = FORMAT ( MIN ( dim_user[first_seen] ), "d MMM yyyy" )
+		displayFolder: User Detail
+		lineageTag: d1250003-0000-4000-8000-000000000125
+
+	measure 'User Last Seen' = FORMAT ( MAX ( dim_user[last_seen] ), "d MMM yyyy" )
+		displayFolder: User Detail
+		lineageTag: d1250004-0000-4000-8000-000000000125
+
+	/// Session-detail measures (#125). fact_api_usage / fact_edit_decision / fact_session_daily relate to
+	/// fact_session[session_id] via INACTIVE relationships; USERELATIONSHIP routes the drillthrough filter
+	/// (which lands on fact_session) into each fact. Without it these would ignore the drilled session.
+	measure 'Session User' = SELECTEDVALUE ( fact_session[user_email], "—" )
+		displayFolder: Session Detail
+		lineageTag: d1250005-0000-4000-8000-000000000125
+
+	measure 'Session Started' = FORMAT ( MIN ( fact_session[started_at] ), "d MMM yyyy HH:mm" )
+		displayFolder: Session Detail
+		lineageTag: d1250006-0000-4000-8000-000000000125
+
+	measure 'Session Start Type' = SELECTEDVALUE ( fact_session[start_type], "—" )
+		displayFolder: Session Detail
+		lineageTag: d1250007-0000-4000-8000-000000000125
+
+	measure 'Session CC Version' = SELECTEDVALUE ( fact_session[cc_version], "—" )
+		displayFolder: Session Detail
+		lineageTag: d1250008-0000-4000-8000-000000000125
+
+	measure 'Session Duration' =
+			VAR S = SUM ( fact_session[duration_s] )
+			RETURN
+			    IF ( ISBLANK ( S ), BLANK (), INT ( S / 3600 ) & "h " & INT ( MOD ( S, 3600 ) / 60 ) & "m" )
+		displayFolder: Session Detail
+		lineageTag: d1250009-0000-4000-8000-000000000125
+
+	measure 'Session Tokens' = CALCULATE ( [Total Tokens], USERELATIONSHIP ( fact_api_usage[session_id], fact_session[session_id] ) )
+		formatString: #,##0
+		displayFolder: Session Detail
+		lineageTag: d125000a-0000-4000-8000-000000000125
+
+	measure 'Session Requests' = CALCULATE ( [Total Requests], USERELATIONSHIP ( fact_api_usage[session_id], fact_session[session_id] ) )
+		formatString: #,##0
+		displayFolder: Session Detail
+		lineageTag: d125000b-0000-4000-8000-000000000125
+
+	measure 'Session Cache Hit Ratio' = CALCULATE ( [Cache Hit Ratio], USERELATIONSHIP ( fact_api_usage[session_id], fact_session[session_id] ) )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Session Detail
+		lineageTag: d125000c-0000-4000-8000-000000000125
+
+	measure 'Session Prompts' = CALCULATE ( [Total Prompts], USERELATIONSHIP ( fact_session_daily[session_id], fact_session[session_id] ) )
+		formatString: #,##0
+		displayFolder: Session Detail
+		lineageTag: d125000d-0000-4000-8000-000000000125
+
+	measure 'Session Tool Acceptance Rate' = CALCULATE ( [Tool Acceptance Rate], USERELATIONSHIP ( fact_edit_decision[session_id], fact_session[session_id] ) )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Session Detail
+		lineageTag: d125000e-0000-4000-8000-000000000125
+
+	measure 'Session Edit Decisions' = CALCULATE ( [Edit Decisions], USERELATIONSHIP ( fact_edit_decision[session_id], fact_session[session_id] ) )
+		formatString: #,##0
+		displayFolder: Session Detail
+		lineageTag: d125000f-0000-4000-8000-000000000125
+
+	/// Axis measure for the 'Ecosystem Bridge' disconnected table (#125): one bar per bridge.
+	measure 'Ecosystem Intensity' =
+			SWITCH (
+			    SELECTEDVALUE ( 'Ecosystem Bridge'[Bridge] ),
+			    "Skills", [Skill Activations],
+			    "MCP", [MCP Calls],
+			    "Subagents", [Subagent Invocations],
+			    "Hooks", [Hook Executions],
+			    "Plugins", [Plugin Loads]
+			)
+		formatString: #,##0
+		displayFolder: Ecosystem
+		lineageTag: d1250010-0000-4000-8000-000000000125
+
+	/// Weekly-trend guards (#165): blank the incomplete current ISO week so the by-week lines never end
+	/// in a fake dip (copies the [Weekly Active Users] pattern). Bound only by the by-week trend charts.
+	measure 'Commits (Weekly)' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			VAR WeekEnd = MAX ( dim_date[week_start] ) + 6
+			RETURN
+			    IF ( WeekEnd <= Anchor, [Total Commits] )
+		formatString: #,##0
+		displayFolder: Trends
+		lineageTag: a1650001-0000-4000-8000-000000000165
+
+	measure 'PRs (Weekly)' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			VAR WeekEnd = MAX ( dim_date[week_start] ) + 6
+			RETURN
+			    IF ( WeekEnd <= Anchor, [Total PRs] )
+		formatString: #,##0
+		displayFolder: Trends
+		lineageTag: a1650002-0000-4000-8000-000000000165
+
+	measure 'Lines of Code (Weekly)' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			VAR WeekEnd = MAX ( dim_date[week_start] ) + 6
+			RETURN
+			    IF ( WeekEnd <= Anchor, [Total Lines of Code] )
+		formatString: #,##0
+		displayFolder: Trends
+		lineageTag: a1650003-0000-4000-8000-000000000165
+
+	measure 'Input Tokens (Weekly)' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			VAR WeekEnd = MAX ( dim_date[week_start] ) + 6
+			RETURN
+			    IF ( WeekEnd <= Anchor, [Total Input Tokens] )
+		formatString: #,##0
+		displayFolder: Trends
+		lineageTag: a1650004-0000-4000-8000-000000000165
+
+	measure 'Output Tokens (Weekly)' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			VAR WeekEnd = MAX ( dim_date[week_start] ) + 6
+			RETURN
+			    IF ( WeekEnd <= Anchor, [Total Output Tokens] )
+		formatString: #,##0
+		displayFolder: Trends
+		lineageTag: a1650005-0000-4000-8000-000000000165
+
+	/// Mean hourly utilization for the hour-of-day heatmap. fact_utilization_hourly[avg_pct] is the
+	/// per user x window_type x hour mean closing utilization, stored 0-100 (percent points); average it
+	/// across the hour-of-day bucket in context and divide by 100 for the 0.0% format. Split by window_type.
+	measure 'Hourly Utilization Intensity' = DIVIDE ( AVERAGE ( fact_utilization_hourly[avg_pct] ), 100 )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Utilization
+		lineageTag: b2c3d4e5-0175-4f6a-9b0c-1d2e3f4a5b6c
+
+	/// Share of tool_result events that succeeded (#174, fact_tool_outcome P2). Pair with p95 latency — reliability failures kill adoption.
+	measure 'Tool Success Rate' =
+			DIVIDE (
+			    SUM ( fact_tool_outcome[success_count] ),
+			    SUM ( fact_tool_outcome[tool_call_count] )
+			)
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Tool Quality
+		lineageTag: d60a6272-71f2-4cbf-a7e7-ef12be7cbed1
+
+	/// Mean of the per-session/day p95 tool latency (ms). True cross-session p95 is unrecoverable from the pre-aggregated mart, so this averages the per-grain p95 — read as a tail-latency trend, not an exact percentile (#174).
+	measure 'Tool p95 Latency (ms)' = AVERAGE ( fact_tool_outcome[duration_p95_ms] )
+		formatString: #,##0
+		displayFolder: Tool Quality
+		lineageTag: 76fdd088-f0fd-4122-8082-1a74ea07084f
+
+	/// api_error events over api_request events (#174, fact_api_error_rate P3). Ops signal on Data Health, not exec. Recomputed from counts, not an average of daily rates.
+	measure 'API Error Rate' =
+			DIVIDE (
+			    SUM ( fact_api_error_rate[api_error_count] ),
+			    SUM ( fact_api_error_rate[api_request_count] ) + SUM ( fact_api_error_rate[api_error_count] )
+			)
+		formatString: 0.00%;-0.00%;0.00%
+		displayFolder: Ingest Health
+		lineageTag: d69888b0-c91f-48a5-a793-bf620d5fe29b
+
+	/// Per-active-user output ratio (#176): normalizes throughput by the active population so the trend reflects intensity, not headcount.
+	measure 'Commits per Active User' = DIVIDE ( [Total Commits], [Active Users] )
+		formatString: #,##0.0
+		displayFolder: Productivity
+		lineageTag: a1c00005-0000-4000-8000-000000000176
+
+	measure 'PRs per Active User' = DIVIDE ( [Total PRs], [Active Users] )
+		formatString: #,##0.0
+		displayFolder: Productivity
+		lineageTag: a1c00006-0000-4000-8000-000000000176
+
+	/// Weekly-gated ratio for the trend: divides the partial-week-suppressed numerator so the line matches the Commits/PRs and LoC trends (no spurious final partial week).
+	measure 'Commits per Active User (Weekly)' = DIVIDE ( [Commits (Weekly)], [Active Users] )
+		formatString: #,##0.0
+		displayFolder: Trends
+		lineageTag: a1c00007-0000-4000-8000-000000000176
+
+	measure 'PRs per Active User (Weekly)' = DIVIDE ( [PRs (Weekly)], [Active Users] )
+		formatString: #,##0.0
+		displayFolder: Trends
+		lineageTag: a1c00008-0000-4000-8000-000000000176
+
+	/// #173 (map #153, adopt-findings #158 Q1/Q2/Q15; ADR-0007). Flat per-seat plan list price,
+	/// USD/seat/month, confirmed by Ahmed at PR #201 review (issue #173).
+	measure 'Standard Seat Price' = 25
+		formatString: \$#,##0
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730001-0000-4000-8000-000000000173
+
+	measure 'Premium Seat Price' = 125
+		formatString: \$#,##0
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730002-0000-4000-8000-000000000173
+
+	/// API-equivalent value consumed = SUM of the promoted fact_api_usage[cost_usd] (#170, ADR-0007).
+	/// Filter-context aware (selected relative-date window + slicers). ITWorx pays a flat per-seat plan,
+	/// so this is value consumed at metered-API rates, never marginal spend.
+	measure 'Value Consumed' = SUM ( fact_api_usage[cost_usd] )
+		formatString: \$#,##0.00
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730003-0000-4000-8000-000000000173
+
+	/// Monthly cost of the *instrumented* seats: Premium seats × Premium price + the rest at Standard price.
+	/// A monthly rate, but no longer period-independent — [Instrumented Seats] is now counted over the daily seat
+	/// fact, so the rate follows the window's seat population; [Value vs Seat Ratio] prorates it by Days/30.
+	/// #294: renamed from 'Monthly Seat Cost' and rebased onto [Instrumented Seats]. It exists only as the ROI
+	/// denominator (no visual binds it), and its numerator [Value Consumed] is observable on instrumented seats
+	/// alone — costing all 184 against value from 20 would divide by the rollout gap and read as a 9x collapse in
+	/// the tool's worth. Total licensed spend, if a card ever needs it, is this formula over [Paid Seats].
+	/// The Premium split filters the dimension, matching the tier basis [Paid Seats] bridges on, so it follows IS's
+	/// real tier mix instead of the two tiers the fabricated roster hardcoded. KEEPFILTERS so an outer tier
+	/// selection intersects: without it, sl_tier = Standard would be overwritten and every seat priced at Premium.
+	measure 'Instrumented Seat Cost' =
+			VAR Premium = CALCULATE ( [Instrumented Seats], KEEPFILTERS ( dim_seat_current[seat_tier] = "Premium" ) )
+			VAR Standard = [Instrumented Seats] - Premium
+			RETURN Premium * [Premium Seat Price] + Standard * [Standard Seat Price]
+		formatString: \$#,##0
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730004-0000-4000-8000-000000000173
+
+	/// Value-vs-seat ROI (#173, research item 7): value consumed in the window over the seat cost for the
+	/// SAME window. Monthly seat cost is prorated by Days/30 (nominal month) so the multiple stays
+	/// period-consistent when the relative-date window changes (#165).
+	/// #294: both sides are now scoped to instrumented seats — see [Instrumented Seat Cost].
+	measure 'Value vs Seat Ratio' =
+			VAR Days = COUNTROWS ( dim_date )
+			VAR WindowSeatCost = [Instrumented Seat Cost] * DIVIDE ( Days, 30 )
+			RETURN DIVIDE ( [Value Consumed], WindowSeatCost )
+		formatString: 0.0"×"
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730005-0000-4000-8000-000000000173
+
+	/// ROI-tile delta triplet (mirrors the Overview KPI pattern): hidden prior-window ratio / Δ (% change) /
+	/// label. The prior window is equal-length, so the Days/30 proration cancels and the delta compares two
+	/// like-for-like ratios.
+	/// #294: seat cost is no longer date-independent — [Instrumented Seats] moves with the window — so the delta is
+	/// a genuine ROI change (value per seat-dollar), not just the value-consumed change it reduced to before.
+	measure 'Value vs Seat Ratio PP' =
+			VAR Days = COUNTROWS ( dim_date )
+			VAR FirstDay = MIN ( dim_date[date_day] )
+			RETURN
+			    CALCULATE ( [Value vs Seat Ratio], DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 ) )
+		formatString: 0.0"×"
+		isHidden
+		displayFolder: Seat ROI\Cost\Support
+		lineageTag: a1730007-0000-4000-8000-000000000173
+
+	measure 'Value vs Seat Ratio Δ' = DIVIDE ( [Value vs Seat Ratio] - [Value vs Seat Ratio PP], [Value vs Seat Ratio PP] )
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730008-0000-4000-8000-000000000173
+
+	measure 'Value vs Seat Ratio Δ Label' =
+			VAR D = [Value vs Seat Ratio Δ]
+			VAR N = COUNTROWS ( dim_date )
+			RETURN
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" )
+		displayFolder: Seat ROI\Cost
+		lineageTag: a1730009-0000-4000-8000-000000000173
+
+	/// Distinct actives per calendar month (all telemetry, mirrors [Weekly Active Users], #177); the
+	/// incomplete current month returns BLANK — guarded by month-end vs the latest data date, no fake dip.
+	measure 'Monthly Active Users' =
+			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
+			VAR MonthEnd = EOMONTH ( MAX ( dim_date[month_start] ), 0 )
+			RETURN
+			    IF ( MonthEnd <= Anchor, DISTINCTCOUNT ( fact_session_daily[rls_email] ) )
+		formatString: #,##0
+		displayFolder: Seat ROI
+		lineageTag: b7c4f1a8-2e93-45d6-8a01-6f3d9c2e7b15
+
+	/// Month-over-month change in [Monthly Active Users] for the per-column trend label (#177). Prior month
+	/// via REMOVEFILTERS + month_start (clears the month_label axis filter — a bare month_start filter would
+	/// intersect empty against it); BLANK when either month is guarded so the first column carries no fake Δ.
+	measure 'MAU MoM Δ' =
+			VAR PriorMonth = EDATE ( MAX ( dim_date[month_start] ), -1 )
+			VAR Cur = [Monthly Active Users]
+			VAR Prior =
+			    CALCULATE (
+			        [Monthly Active Users],
+			        REMOVEFILTERS ( dim_date ),
+			        dim_date[month_start] = PriorMonth
+			    )
+			RETURN
+			    IF ( NOT ISBLANK ( Cur ) && NOT ISBLANK ( Prior ) && Prior <> 0, DIVIDE ( Cur - Prior, Prior ) )
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: Seat ROI
+		lineageTag: c9e2a7d4-5b81-42f0-9c36-8a1e4f7b2d63
 
 	/// KPI delta triplets for the non-exec pages (#178), same silhouette as the Overview KPIs
 	/// (#117/#165): hidden PP prior-window / Delta (% for counts, pp for ratios) / never-blank Label /
@@ -1621,147 +1636,6 @@ table _Measures
 		displayFolder: Ingest Health
 		lineageTag: b1780069-0000-4000-8000-000000000178
 
-	/// Mean per active day of time the user was actively prompting (active_time.user), in hours.
-	measure 'Avg Active User Hours per Day' = DIVIDE(SUM(fact_session_daily[active_time_user_s]), [Active Days]) / 3600
-		formatString: #,##0.0 "h"
-		displayFolder: Adoption
-		lineageTag: a1c00030-0000-4000-8000-000000000028
-
-	/// Mean per active day of time the CLI was running (active_time.cli), in hours. Distinct from user-active time.
-	measure 'Avg Active CLI Hours per Day' = DIVIDE(SUM(fact_session_daily[active_time_cli_s]), [Active Days]) / 3600
-		formatString: #,##0.0 "h"
-		displayFolder: Adoption
-		lineageTag: a1c00031-0000-4000-8000-000000000028
-
-	/// Total edit-decision events (accept/reject/...) from fact_edit_decision; powers the Impact decision-mix (#121).
-	measure 'Edit Decisions' = SUM ( fact_edit_decision[decision_count] )
-		formatString: #,##0
-		displayFolder: Tool Quality
-		lineageTag: 46f2bd60-c99d-4f35-a572-db29e80cb5e4
-
-	/// Rejected-edit volume; replaces the two-bar decision-mix chart with a KPI on Impact (#152).
-	measure 'Rejected Edits' = CALCULATE ( [Edit Decisions], fact_edit_decision[decision] = "reject" )
-		formatString: #,##0
-		displayFolder: Tool Quality
-		lineageTag: 8d4f2a61-5b3c-47e9-a1d2-90c8e7b5f426
-
-	/// Ecosystem depth-bar values (#123): raw usage intensity per bridge entity, summed over the session-x-name grain.
-	measure 'Skill Activations' = SUM ( bridge_session_skill[activations] )
-		formatString: #,##0
-		displayFolder: Ecosystem
-		lineageTag: e1c2a3b4-0001-4a11-9c01-aa0000000001
-
-	measure 'MCP Calls' = SUM ( bridge_session_mcp[tool_calls] )
-		formatString: #,##0
-		displayFolder: Ecosystem
-		lineageTag: e1c2a3b4-0002-4a11-9c01-aa0000000002
-
-	measure 'Subagent Invocations' = SUM ( bridge_session_agent[invocations] )
-		formatString: #,##0
-		displayFolder: Ecosystem
-		lineageTag: e1c2a3b4-0003-4a11-9c01-aa0000000003
-
-	measure 'Hook Executions' = SUM ( bridge_session_hook[executions] )
-		formatString: #,##0
-		displayFolder: Ecosystem
-		lineageTag: e1c2a3b4-0004-4a11-9c01-aa0000000004
-
-	measure 'Plugin Loads' = SUM ( bridge_session_plugin[load_count] )
-		formatString: #,##0
-		displayFolder: Ecosystem
-		lineageTag: e1c2a3b4-0005-4a11-9c01-aa0000000005
-
-	/// User-detail drillthrough header (#125): the drilled user's identity, shown as cards.
-	measure 'Selected User' = SELECTEDVALUE ( dim_user[user_email], "All users" )
-		displayFolder: User Detail
-		lineageTag: d1250001-0000-4000-8000-000000000125
-
-	/// RELATED walks dim_user (many) -> dim_seat_current (one); blank means the identity holds no open seat.
-	/// #294: the fallback carries the taxonomy's state name so the User Detail card and the Data Health
-	/// reconciliation column say the same word for the same state.
-	/// HASONEVALUE because MAXX over many users returns the alphabetical max, which is "Standard" — a plausible
-	/// wrong tier rather than a visible fallback if the drillthrough filter ever fails to land.
-	/// #321: the MAXX scan skips linked identities, so a personal address on the User Detail card keeps reading
-	/// "Off-roster identity" rather than the corporate seat's tier it now reaches (ADR-0011).
-	measure 'Selected User Tier' =
-			IF (
-			    HASONEVALUE ( dim_user[user_email] ),
-			    COALESCE (
-			        MAXX (
-			            FILTER ( dim_user, NOT dim_user[is_linked_identity] ),
-			            RELATED ( dim_seat_current[seat_tier] )
-			        ),
-			        "Off-roster identity"
-			    ),
-			    "All users"
-			)
-		displayFolder: User Detail
-		lineageTag: d1250002-0000-4000-8000-000000000125
-
-	measure 'User First Seen' = FORMAT ( MIN ( dim_user[first_seen] ), "d MMM yyyy" )
-		displayFolder: User Detail
-		lineageTag: d1250003-0000-4000-8000-000000000125
-
-	measure 'User Last Seen' = FORMAT ( MAX ( dim_user[last_seen] ), "d MMM yyyy" )
-		displayFolder: User Detail
-		lineageTag: d1250004-0000-4000-8000-000000000125
-
-	/// Session-detail measures (#125). fact_api_usage / fact_edit_decision / fact_session_daily relate to
-	/// fact_session[session_id] via INACTIVE relationships; USERELATIONSHIP routes the drillthrough filter
-	/// (which lands on fact_session) into each fact. Without it these would ignore the drilled session.
-	measure 'Session User' = SELECTEDVALUE ( fact_session[user_email], "—" )
-		displayFolder: Session Detail
-		lineageTag: d1250005-0000-4000-8000-000000000125
-
-	measure 'Session Started' = FORMAT ( MIN ( fact_session[started_at] ), "d MMM yyyy HH:mm" )
-		displayFolder: Session Detail
-		lineageTag: d1250006-0000-4000-8000-000000000125
-
-	measure 'Session Start Type' = SELECTEDVALUE ( fact_session[start_type], "—" )
-		displayFolder: Session Detail
-		lineageTag: d1250007-0000-4000-8000-000000000125
-
-	measure 'Session CC Version' = SELECTEDVALUE ( fact_session[cc_version], "—" )
-		displayFolder: Session Detail
-		lineageTag: d1250008-0000-4000-8000-000000000125
-
-	measure 'Session Duration' =
-			VAR S = SUM ( fact_session[duration_s] )
-			RETURN
-			    IF ( ISBLANK ( S ), BLANK (), INT ( S / 3600 ) & "h " & INT ( MOD ( S, 3600 ) / 60 ) & "m" )
-		displayFolder: Session Detail
-		lineageTag: d1250009-0000-4000-8000-000000000125
-
-	measure 'Session Tokens' = CALCULATE ( [Total Tokens], USERELATIONSHIP ( fact_api_usage[session_id], fact_session[session_id] ) )
-		formatString: #,##0
-		displayFolder: Session Detail
-		lineageTag: d125000a-0000-4000-8000-000000000125
-
-	measure 'Session Requests' = CALCULATE ( [Total Requests], USERELATIONSHIP ( fact_api_usage[session_id], fact_session[session_id] ) )
-		formatString: #,##0
-		displayFolder: Session Detail
-		lineageTag: d125000b-0000-4000-8000-000000000125
-
-	measure 'Session Cache Hit Ratio' = CALCULATE ( [Cache Hit Ratio], USERELATIONSHIP ( fact_api_usage[session_id], fact_session[session_id] ) )
-		formatString: 0.0%;-0.0%;0.0%
-		displayFolder: Session Detail
-		lineageTag: d125000c-0000-4000-8000-000000000125
-
-	measure 'Session Prompts' = CALCULATE ( [Total Prompts], USERELATIONSHIP ( fact_session_daily[session_id], fact_session[session_id] ) )
-		formatString: #,##0
-		displayFolder: Session Detail
-		lineageTag: d125000d-0000-4000-8000-000000000125
-
-	measure 'Session Tool Acceptance Rate' = CALCULATE ( [Tool Acceptance Rate], USERELATIONSHIP ( fact_edit_decision[session_id], fact_session[session_id] ) )
-		formatString: 0.0%;-0.0%;0.0%
-		displayFolder: Session Detail
-		lineageTag: d125000e-0000-4000-8000-000000000125
-
-	measure 'Session Edit Decisions' = CALCULATE ( [Edit Decisions], USERELATIONSHIP ( fact_edit_decision[session_id], fact_session[session_id] ) )
-		formatString: #,##0
-		displayFolder: Session Detail
-		lineageTag: d125000f-0000-4000-8000-000000000125
-
 	/// Per-session API-equivalent value consumed for the user-detail sessions table (#173). fact_api_usage
 	/// relates to fact_session via an INACTIVE relationship; USERELATIONSHIP routes the drillthrough filter
 	/// into the fact (mirrors [Session Tokens]).
@@ -1770,66 +1644,192 @@ table _Measures
 		displayFolder: Session Detail
 		lineageTag: a1730006-0000-4000-8000-000000000173
 
-	/// Axis measure for the 'Ecosystem Bridge' disconnected table (#125): one bar per bridge.
-	measure 'Ecosystem Intensity' =
-			SWITCH (
-			    SELECTEDVALUE ( 'Ecosystem Bridge'[Bridge] ),
-			    "Skills", [Skill Activations],
-			    "MCP", [MCP Calls],
-			    "Subagents", [Subagent Invocations],
-			    "Hooks", [Hook Executions],
-			    "Plugins", [Plugin Loads]
+	/// #197 snapshot-calendar lag: calendar days the imported dim_date snapshot trails the viewer clock.
+	/// Import-mode datasets snapshot dim_date (dense to CURRENT_DATE) at refresh; a weekend/holiday refresh
+	/// gap leaves MAX(dim_date) behind TODAY(), shrinking the Now()-anchored relative-date slicer window
+	/// (#165). Isolates snapshot lag from telemetry quiet, which [Hours Since Last Signal] conflates; 0 on a
+	/// healthy same-day refresh. Consumed by [Data Freshness Badge] to surface the >= 2-day case.
+	measure 'Snapshot Calendar Lag' = INT ( TODAY () - MAX ( dim_date[date_day] ) )
+		formatString: #,##0
+		displayFolder: Ingest Health
+		lineageTag: a1970001-0000-4000-8000-000000000197
+
+	/// Licensed seats telemetry has actually reached: the open seats in the window whose email also appears in
+	/// dim_user (telemetry-only). Not the licensed population (184) and not the window's actives (19) — a seat
+	/// instrumented but quiet in the window still counts, because the install did reach that machine.
+	/// #294: the honest denominator for every ratio with a telemetry-derived numerator. [Value Consumed] and
+	/// [Active Roster Users] can only be observed on instrumented seats, so dividing either by [Paid Seats] would
+	/// measure the instrumentation gap (17 tracked machines against 184 seats) and report it as developer
+	/// behaviour. ADR-0009 makes the rule explicit: these measures must stay on tracked members.
+	/// Composed over [Paid Seats] so the seat bridge is not duplicated; the extra TREATAS is needed because
+	/// fact_seat_day is deliberately unrelated to dim_user — most licensed seats have no dim_user row at all.
+	/// The licensed-versus-instrumented share itself is [Instrumented Seat Share], not this measure (#295).
+	/// The first_seen bound makes the count date-aware, which the emitter side is not otherwise: dim_user has no
+	/// relationship to dim_date, so a bare VALUES( dim_user[user_email] ) is the all-time emitter set in every
+	/// window, and a shifted window (the PP measures) would credit machines the installer had not yet reached.
+	/// Unguarded it reported the prior 28 days as 20 instrumented seats when 13 of those machines had never emitted
+	/// by then, turning a flat ~-5 pp into a +60 pp jump on the exec hero.
+	/// #321: deliberately NOT guarded on dim_user[is_linked_identity], and that was measured rather than assumed.
+	/// The bridge to fact_seat_day is TREATAS on the *base* column dim_user[user_email], not the re-pointed
+	/// relationship, so a linked identity's personal address matches no seat-day and contributes nothing —
+	/// 20 seats before and after the re-point unfiltered, 1 before and after for a scoped manager. ADR-0011's
+	/// "stays out of [Instrumented Seats]" holds by construction here, not by a ninth guard.
+	/// #341: the bound is < WindowEnd + 1, not <= WindowEnd. first_seen carries a time of day and date_day is
+	/// midnight, so <= dropped every seat first reached *during* the window's last day — on the default relative
+	/// window, every install completed today. Half-closed, not closed: the connector renders first_seen in the
+	/// refreshing machine's zone while date_day imports naive, so a sliver the width of that offset is still
+	/// dropped — measured, accepted, not tracked (#342 closed not-planned).
+	measure 'Instrumented Seats' =
+			VAR WindowEnd = MAX ( dim_date[date_day] )
+			VAR Reached =
+			    CALCULATETABLE (
+			        VALUES ( dim_user[user_email] ),
+			        KEEPFILTERS ( dim_user[first_seen] < WindowEnd + 1 )
+			    )
+			RETURN
+			    CALCULATE (
+			        [Paid Seats],
+			        KEEPFILTERS ( TREATAS ( Reached, fact_seat_day[user_email] ) )
+			    )
+		formatString: #,##0
+		displayFolder: Seat ROI
+		lineageTag: d2940301-0000-4000-8000-000000000294
+
+	/// How close to the ceiling a typical dev gets (#323) — the mean, across users, of each user's own
+	/// worst window in the period. Plotted weekly and split by window_type: 5h is the rate-limit window
+	/// that actually bites, 7d the subscription envelope. peak_pct is stored 0-100, so divide for 0.0%.
+	/// 
+	/// Unlike [Utilization Intensity] this needs no explicit window-instance collapse. That collapse
+	/// exists because reset-split segments are cumulative snapshots, so summing or averaging them
+	/// overstates — but MAX is idempotent over the split (max of per-window maxima is the max), so
+	/// grouping straight to user × window_type gives the identical number with half the DAX.
+	/// 
+	/// Rejected alternatives, recorded so they are not re-tried: the org-wide MAX(peak_pct) saturates
+	/// near 100% every week once ~50 seats are in play and renders as a flat line; P95 of window peaks
+	/// is viable but answers a different question than the page asks.
+	measure 'Peak Utilization %' =
+			VAR PerUser =
+			    ADDCOLUMNS (
+			        SUMMARIZE (
+			            fact_usage_window,
+			            fact_usage_window[user_email],
+			            fact_usage_window[window_type]
+			        ),
+			        "@UserPeak", CALCULATE ( MAX ( fact_usage_window[peak_pct] ) )
+			    )
+			RETURN
+			    DIVIDE ( AVERAGEX ( PerUser, [@UserPeak] ), 100 )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Utilization
+		lineageTag: b3230001-0000-4000-8000-000000000323
+
+	/// The two window_type series for cht_peak_util (#323), split as explicit measures rather than a
+	/// Series/legend projection — the report has no Series role anywhere and states its series this way
+	/// (see [Input Tokens (Weekly)] / [Output Tokens (Weekly)]), which also gives the legend real names.
+	measure 'Peak Utilization % (5h)' = CALCULATE ( [Peak Utilization %], fact_usage_window[window_type] = "5h" )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Utilization
+		lineageTag: b3230002-0000-4000-8000-000000000323
+
+	measure 'Peak Utilization % (7d)' = CALCULATE ( [Peak Utilization %], fact_usage_window[window_type] = "7d" )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Utilization
+		lineageTag: b3230003-0000-4000-8000-000000000323
+
+	/// #305 tooltip payload: the finding's JSON detail, lifted out of the tbl_dq grid so the table keeps
+	/// only scannable columns. SELECTEDVALUE, not CONCATENATEX — a tooltip page evaluates under the hovered
+	/// row's filter context, so exactly one finding is ever in scope. Guarded on finding_type rather than on
+	/// details itself, so a finding that genuinely recorded no payload still says so instead of rendering an
+	/// empty card indistinguishable from a failed hover.
+	measure 'DQ Detail Payload' =
+			IF (
+			    NOT ISBLANK ( SELECTEDVALUE ( dq_finding[finding_type] ) ),
+			    COALESCE ( SELECTEDVALUE ( dq_finding[details] ), "(no payload recorded)" )
 			)
-		formatString: #,##0
-		displayFolder: Ecosystem
-		lineageTag: d1250010-0000-4000-8000-000000000125
+		displayFolder: Ingest Health
+		lineageTag: d3050001-0000-4000-8000-000000000305
 
-	/// Weekly-trend guards (#165): blank the incomplete current ISO week so the by-week lines never end
-	/// in a fake dip (copies the [Weekly Active Users] pattern). Bound only by the by-week trend charts.
-	measure 'Commits (Weekly)' =
-			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
-			VAR WeekEnd = MAX ( dim_date[week_start] ) + 6
+	/// #305 tooltip header: the finding's identity in one line, so the tooltip names what it is showing
+	/// without a second visual competing for a 320px canvas.
+	measure 'DQ Finding Header' =
+			VAR FindingType = SELECTEDVALUE ( dq_finding[finding_type] )
+			VAR Detected = SELECTEDVALUE ( dq_finding[detected_at] )
+			VAR Affected = SUM ( dq_finding[row_count] )
+			VAR AffectedClause =
+			    IF (
+			        ISBLANK ( Affected ),
+			        "",
+			        "  ·  " & FORMAT ( Affected, "#,##0" ) & IF ( Affected = 1, " row", " rows" )
+			    )
 			RETURN
-			    IF ( WeekEnd <= Anchor, [Total Commits] )
-		formatString: #,##0
-		displayFolder: Trends
-		lineageTag: a1650001-0000-4000-8000-000000000165
+			    IF (
+			        NOT ISBLANK ( FindingType ),
+			        FindingType & "  ·  detected " & FORMAT ( Detected, "dd MMM HH:mm" ) & AffectedClause
+			    )
+		displayFolder: Ingest Health
+		lineageTag: d3050002-0000-4000-8000-000000000305
 
-	measure 'PRs (Weekly)' =
-			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
-			VAR WeekEnd = MAX ( dim_date[week_start] ) + 6
-			RETURN
-			    IF ( WeekEnd <= Anchor, [Total PRs] )
-		formatString: #,##0
-		displayFolder: Trends
-		lineageTag: a1650002-0000-4000-8000-000000000165
+	/// Coverage: the share of the licensed population telemetry has reached (#295). The one ratio in Seat ROI that
+	/// divides by [Paid Seats] rather than [Instrumented Seats] — measuring the instrumentation gap is the whole
+	/// point of it, where every other Seat ROI ratio exists to keep that gap out of a behavioural number.
+	measure 'Instrumented Seat Share' = DIVIDE ( [Instrumented Seats], [Paid Seats] )
+		formatString: 0.0%
+		displayFolder: Seat ROI
+		lineageTag: d2950101-0000-4000-8000-000000000295
 
-	measure 'Lines of Code (Weekly)' =
-			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
-			VAR WeekEnd = MAX ( dim_date[week_start] ) + 6
-			RETURN
-			    IF ( WeekEnd <= Anchor, [Total Lines of Code] )
-		formatString: #,##0
-		displayFolder: Trends
-		lineageTag: a1650003-0000-4000-8000-000000000165
+	/// Report-display helper: the coverage card's detail line, carrying the denominator the headline count omits.
+	/// Blank when the window holds no seat-days, rather than rendering "of  licensed seats".
+	measure 'Seat Coverage Detail' =
+			IF (
+			    NOT ISBLANK ( [Paid Seats] ),
+			    "of " & FORMAT ( [Paid Seats], "#,##0" ) & " licensed seats · "
+			        & FORMAT ( [Instrumented Seat Share], "0.0%" ) & " coverage"
+			)
+		displayFolder: Seat ROI
+		lineageTag: d2950102-0000-4000-8000-000000000295
 
-	measure 'Input Tokens (Weekly)' =
-			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
-			VAR WeekEnd = MAX ( dim_date[week_start] ) + 6
-			RETURN
-			    IF ( WeekEnd <= Anchor, [Total Input Tokens] )
-		formatString: #,##0
-		displayFolder: Trends
-		lineageTag: a1650004-0000-4000-8000-000000000165
+	/// Report-display helper: the coverage card's subtitle, and the reason the card is titled coverage and not
+	/// adoption (#295). A seat with no telemetry has not been observed idle — it has not been observed at all, and
+	/// the installer demonstrably has not reached every machine. Without this line 20 of 184 reads as developers
+	/// ignoring the tool, and that reading leads to the opposite action from the true one (finish the rollout).
+	/// Retire it once the install beacon lands and "never emitted" genuinely means idle.
+	measure 'Seat Coverage Note' =
+			IF (
+			    NOT ISBLANK ( [Paid Seats] ),
+			    "Install status is unknown for the remaining "
+			        & FORMAT ( [Paid Seats] - [Instrumented Seats], "#,##0" ) & " seats"
+			)
+		displayFolder: Seat ROI
+		lineageTag: d2950103-0000-4000-8000-000000000295
 
-	measure 'Output Tokens (Weekly)' =
-			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
-			VAR WeekEnd = MAX ( dim_date[week_start] ) + 6
+	/// How long the seat has been held, for the untracked-seat worklist (#295). Measured against the query clock
+	/// (TODAY() resolves server-side, in the capacity timezone — not the viewer's) rather than the imported
+	/// dim_date ceiling, because the question it answers — how long has IS been paying for a machine the installer
+	/// never reached — is asked in real time and a stale snapshot must not shrink it. Note the model therefore
+	/// carries two clocks: this one, and dim_user['Roster Status']'s refresh-frozen MAX ( dim_date[date_day] ).
+	/// MIN, not MAX: identical at the one-seat grain the worklist renders, but at any coarser grain MAX would
+	/// silently answer the opposite question — the newest assignment, i.e. the *shortest* tenure — so a totals row
+	/// or a tier rollup would report the least urgent seat as the headline. MIN keeps "the longest-held untracked
+	/// seat has been paid for N days" true at every grain, which is the number the worklist exists to surface.
+	measure 'Days Since Assignment' =
+			VAR Oldest = MIN ( dim_seat_current[valid_from] )
 			RETURN
-			    IF ( WeekEnd <= Anchor, [Total Output Tokens] )
+			    IF ( NOT ISBLANK ( Oldest ), INT ( TODAY () - Oldest ) )
 		formatString: #,##0
-		displayFolder: Trends
-		lineageTag: a1650005-0000-4000-8000-000000000165
+		displayFolder: Seat ROI
+		lineageTag: d2950104-0000-4000-8000-000000000295
+
+	/// Third tier for the DQ FINDINGS card (#330) — the only card in pg_health's six-card band
+	/// that left the slot empty, so the band's bottom edge read ragged under that column.
+	/// A delta is not available here: dq_finding carries detected_at but has no dim_date
+	/// relationship, so [DQ Findings] is an all-time count and a "vs Nd" delta over it would
+	/// render a permanent +0.0%. Mirrors [Last Mart Refresh]'s treatment on the band's first
+	/// card instead — a freshness stamp, not a delta. The prefix rides in the formatString,
+	/// same as that measure.
+	measure 'Last DQ Finding' = MAX ( dq_finding[detected_at] )
+		formatString: "Latest " dd MMM HH:mm
+		displayFolder: Data Health
+		lineageTag: b3300001-0000-4000-8000-000000000330
 
 	column Value
 		dataType: int64

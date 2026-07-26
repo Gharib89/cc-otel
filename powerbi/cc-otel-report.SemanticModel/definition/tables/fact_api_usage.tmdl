@@ -52,56 +52,46 @@ table fact_api_usage
 
 	column input_tokens
 		dataType: double
+		isHidden
 		lineageTag: c711cd8c-a099-47f8-917a-ff6f4b0e970f
 		summarizeBy: none
-		isHidden
 		sourceColumn: input_tokens
 
 		annotation SummarizationSetBy = Automatic
 
 	column output_tokens
 		dataType: double
+		isHidden
 		lineageTag: 2e465ae6-16ee-4845-99d8-0060b6036ac6
 		summarizeBy: none
-		isHidden
 		sourceColumn: output_tokens
 
 		annotation SummarizationSetBy = Automatic
 
 	column cache_creation_tokens
 		dataType: double
+		isHidden
 		lineageTag: 116522c7-17c2-47a6-99e8-1551fe46314f
 		summarizeBy: none
-		isHidden
 		sourceColumn: cache_creation_tokens
 
 		annotation SummarizationSetBy = Automatic
 
 	column cache_read_tokens
 		dataType: double
+		isHidden
 		lineageTag: ef36523c-fc1a-4b88-a063-591f895ca69b
 		summarizeBy: none
-		isHidden
 		sourceColumn: cache_read_tokens
-
-		annotation SummarizationSetBy = Automatic
-
-	/// API-equivalent value consumed, USD (#170, ADR-0007) — SUM(cost_usd) at the api-usage grain.
-	column cost_usd
-		dataType: double
-		lineageTag: a1730100-0000-4000-8000-000000000173
-		summarizeBy: none
-		isHidden
-		sourceColumn: cost_usd
 
 		annotation SummarizationSetBy = Automatic
 
 	column request_count
 		dataType: int64
+		isHidden
 		formatString: 0
 		lineageTag: 240a774a-0fe9-44a4-a190-f6f29d3c8bcd
 		summarizeBy: none
-		isHidden
 		sourceColumn: request_count
 
 		annotation SummarizationSetBy = Automatic
@@ -112,6 +102,16 @@ table fact_api_usage
 		lineageTag: ffb61fad-223a-411a-8eb5-426889b2a9af
 		summarizeBy: none
 		sourceColumn: last_event_ts
+
+		annotation SummarizationSetBy = Automatic
+
+	/// API-equivalent value consumed, USD (#170, ADR-0007) — SUM(cost_usd) at the api-usage grain.
+	column cost_usd
+		dataType: double
+		isHidden
+		lineageTag: a1730100-0000-4000-8000-000000000173
+		summarizeBy: none
+		sourceColumn: cost_usd
 
 		annotation SummarizationSetBy = Automatic
 

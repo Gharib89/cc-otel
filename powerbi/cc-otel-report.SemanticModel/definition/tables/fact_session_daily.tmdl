@@ -28,73 +28,73 @@ table fact_session_daily
 
 	column prompts
 		dataType: int64
+		isHidden
 		formatString: 0
 		lineageTag: 270bd216-137b-4ea6-82a4-e20f0d5feb95
 		summarizeBy: none
-		isHidden
 		sourceColumn: prompts
 
 		annotation SummarizationSetBy = Automatic
 
 	column commits
 		dataType: double
+		isHidden
 		lineageTag: 38193402-6d6d-4cc2-a796-f660cba2ef4a
 		summarizeBy: none
-		isHidden
 		sourceColumn: commits
 
 		annotation SummarizationSetBy = Automatic
 
 	column prs
 		dataType: double
+		isHidden
 		lineageTag: f381e39d-bc84-4437-bca9-4cbe3ac3eeb6
 		summarizeBy: none
-		isHidden
 		sourceColumn: prs
 
 		annotation SummarizationSetBy = Automatic
 
 	column loc_added
 		dataType: double
+		isHidden
 		lineageTag: 2b0353d0-b448-402d-b764-c49193c60b7f
 		summarizeBy: none
-		isHidden
 		sourceColumn: loc_added
 
 		annotation SummarizationSetBy = Automatic
 
 	column loc_removed
 		dataType: double
+		isHidden
 		lineageTag: af78c6fb-92bc-4b84-b411-54d522fe8e94
 		summarizeBy: none
-		isHidden
 		sourceColumn: loc_removed
 
 		annotation SummarizationSetBy = Automatic
 
 	column active_time_user_s
 		dataType: double
+		isHidden
 		lineageTag: ea3b1101-80d8-470a-b149-f7148d29fd4f
 		summarizeBy: none
-		isHidden
 		sourceColumn: active_time_user_s
 
 		annotation SummarizationSetBy = Automatic
 
 	column active_time_cli_s
 		dataType: double
+		isHidden
 		lineageTag: 2ae659e7-7e31-44c6-9824-e97ef5fe4f39
 		summarizeBy: none
-		isHidden
 		sourceColumn: active_time_cli_s
 
 		annotation SummarizationSetBy = Automatic
 
 	column active_time_total_s
 		dataType: double
+		isHidden
 		lineageTag: 86af78b4-15f8-45c5-bc3b-5813e4994686
 		summarizeBy: none
-		isHidden
 		sourceColumn: active_time_total_s
 
 		annotation SummarizationSetBy = Automatic
@@ -105,9 +105,9 @@ table fact_session_daily
 	/// rejects. Per-email visuals keep projecting [user_email] and keep showing both addresses.
 	column rls_email = RELATED ( dim_user[rls_email] )
 		dataType: string
+		isHidden
 		lineageTag: d3210002-0000-4000-8000-000000000321
 		summarizeBy: none
-		isHidden
 
 		annotation SummarizationSetBy = Automatic
 

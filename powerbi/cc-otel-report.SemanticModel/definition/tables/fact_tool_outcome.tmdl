@@ -28,40 +28,40 @@ table fact_tool_outcome
 
 	column tool_call_count
 		dataType: int64
+		isHidden
 		formatString: 0
 		lineageTag: b0120435-1b8b-466d-b8e4-5941d3d27310
 		summarizeBy: none
-		isHidden
 		sourceColumn: tool_call_count
 
 		annotation SummarizationSetBy = Automatic
 
 	column success_count
 		dataType: int64
+		isHidden
 		formatString: 0
 		lineageTag: 4bd94384-76f8-4da5-bf53-8d44617efb55
 		summarizeBy: none
-		isHidden
 		sourceColumn: success_count
 
 		annotation SummarizationSetBy = Automatic
 
 	column duration_p50_ms
 		dataType: int64
+		isHidden
 		formatString: 0
 		lineageTag: cc16e3f4-a5b2-46a5-ba74-0c4cf54c73a9
 		summarizeBy: none
-		isHidden
 		sourceColumn: duration_p50_ms
 
 		annotation SummarizationSetBy = Automatic
 
 	column duration_p95_ms
 		dataType: int64
+		isHidden
 		formatString: 0
 		lineageTag: a5a9e6c0-23cf-4c38-9aa9-ec1992d693ba
 		summarizeBy: none
-		isHidden
 		sourceColumn: duration_p95_ms
 
 		annotation SummarizationSetBy = Automatic
@@ -75,3 +75,4 @@ table fact_tool_outcome
 				  Source
 
 	annotation PBI_ResultType = Table
+

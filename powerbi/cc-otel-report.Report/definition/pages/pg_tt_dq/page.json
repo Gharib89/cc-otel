@@ -5,11 +5,10 @@
   "displayOption": "FitToPage",
   "height": 240,
   "width": 320,
-  "type": "Tooltip",
-  "visibility": "HiddenInViewMode",
   "pageBinding": {
     "name": "pb_tt_dq",
-    "type": "Tooltip"
+    "type": "Tooltip",
+    "parameters": []
   },
   "objects": {
     "background": [
@@ -36,5 +35,7 @@
         }
       }
     ]
-  }
+  },
+  "visibility": "HiddenInViewMode",
+  "type": "Tooltip"
 }

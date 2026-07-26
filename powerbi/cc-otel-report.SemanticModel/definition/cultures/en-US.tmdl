@@ -201,19 +201,7 @@ cultureInfo en-US
 			          "ConceptualProperty": "details"
 			        }
 			      },
-			      "State": "Generated",
-			      "Terms": [
-			        {
-			          "Details": {
-			            "State": "Suggested",
-			            "Source": {
-			              "Type": "External",
-			              "Agent": "PowerBI.VisualColumnRename"
-			            },
-			            "Weight": 0.9
-			          }
-			        }
-			      ]
+			      "State": "Generated"
 			    },
 			    "mart_refresh_log.mart": {
 			      "Definition": {
@@ -331,6 +319,132 @@ cultureInfo en-US
 			      "Terms": [
 			        {
 			          "Start Type": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "dim_seat_current.user_email": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "dim_seat_current",
+			          "ConceptualProperty": "user_email"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "User": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "dim_seat_current.anthropic_org_name": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "dim_seat_current",
+			          "ConceptualProperty": "anthropic_org_name"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Organization": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "dim_seat_current.valid_from": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "dim_seat_current",
+			          "ConceptualProperty": "valid_from"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Assigned": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_measures.total_prompts": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_Measures",
+			          "ConceptualProperty": "Total Prompts"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Prompts": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_measures.total_sessions": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_Measures",
+			          "ConceptualProperty": "Total Sessions"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Sessions": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_measures.days_since_assignment": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_Measures",
+			          "ConceptualProperty": "Days Since Assignment"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Days Assigned": {
 			            "State": "Suggested",
 			            "Source": {
 			              "Type": "External",

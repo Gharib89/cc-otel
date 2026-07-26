@@ -12,30 +12,30 @@ table fact_api_error_rate
 
 	column api_request_count
 		dataType: int64
+		isHidden
 		formatString: 0
 		lineageTag: fbcde01a-27d7-4819-9981-3880a33829e3
 		summarizeBy: none
-		isHidden
 		sourceColumn: api_request_count
 
 		annotation SummarizationSetBy = Automatic
 
 	column api_error_count
 		dataType: int64
+		isHidden
 		formatString: 0
 		lineageTag: 2cb59ea6-ad9c-4e85-8b7f-5caae2e08f4a
 		summarizeBy: none
-		isHidden
 		sourceColumn: api_error_count
 
 		annotation SummarizationSetBy = Automatic
 
 	column error_rate_pct
 		dataType: double
+		isHidden
 		formatString: 0.00
 		lineageTag: 9a60bc60-c8e8-48a9-a623-2027dab0ad92
 		summarizeBy: none
-		isHidden
 		sourceColumn: error_rate_pct
 
 		annotation SummarizationSetBy = Automatic
@@ -49,3 +49,4 @@ table fact_api_error_rate
 				  Source
 
 	annotation PBI_ResultType = Table
+

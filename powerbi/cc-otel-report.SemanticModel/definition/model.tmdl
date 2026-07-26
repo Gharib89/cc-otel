@@ -22,8 +22,6 @@ ref table fact_api_usage
 ref table fact_edit_decision
 ref table fact_usage_window
 ref table fact_utilization_hourly
-ref table fact_tool_outcome
-ref table fact_api_error_rate
 ref table bridge_session_agent
 ref table bridge_session_hook
 ref table bridge_session_mcp
@@ -32,10 +30,12 @@ ref table bridge_session_skill
 ref table mart_refresh_log
 ref table dq_finding
 ref table _Measures
+ref table 'Ecosystem Bridge'
+ref table fact_tool_outcome
+ref table fact_api_error_rate
 ref table dim_seat
 ref table dim_seat_current
 ref table fact_seat_day
-ref table 'Ecosystem Bridge'
 
 ref role OrgScope
 

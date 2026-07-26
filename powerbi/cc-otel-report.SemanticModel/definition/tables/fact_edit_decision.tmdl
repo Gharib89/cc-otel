@@ -60,9 +60,9 @@ table fact_edit_decision
 
 	column decision_count
 		dataType: double
+		isHidden
 		lineageTag: 0e38563a-117b-4ad6-85a0-8ea112918e32
 		summarizeBy: none
-		isHidden
 		sourceColumn: decision_count
 
 		annotation SummarizationSetBy = Automatic

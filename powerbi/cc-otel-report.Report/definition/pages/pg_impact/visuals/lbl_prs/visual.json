@@ -1,7 +1,14 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "lbl_prs",
-  "position": { "x": 272, "y": 148, "z": 301, "height": 34, "width": 232, "tabOrder": -1 },
+  "position": {
+    "x": 272,
+    "y": 148,
+    "z": 301,
+    "height": 34,
+    "width": 232,
+    "tabOrder": -1
+  },
   "visual": {
     "visualType": "textbox",
     "objects": {
@@ -11,7 +18,14 @@
             "paragraphs": [
               {
                 "textRuns": [
-                  { "value": "PRS CREATED", "textStyle": { "fontWeight": "bold", "fontSize": "12pt", "color": "#5a6473" } }
+                  {
+                    "value": "PRS CREATED",
+                    "textStyle": {
+                      "fontWeight": "bold",
+                      "fontSize": "12pt",
+                      "color": "#5a6473"
+                    }
+                  }
                 ],
                 "horizontalTextAlignment": "center"
               }
@@ -21,11 +35,71 @@
       ]
     },
     "visualContainerObjects": {
-      "title": [ { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } } ],
-      "background": [ { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } } ],
-      "border": [ { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } } ],
-      "visualHeader": [ { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } } ],
-      "dropShadow": [ { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } } ]
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "background": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "border": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "visualHeader": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "dropShadow": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

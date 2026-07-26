@@ -18,7 +18,11 @@
             {
               "field": {
                 "Column": {
-                  "Expression": { "SourceRef": { "Entity": "dim_date" } },
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_date"
+                    }
+                  },
                   "Property": "week_label"
                 }
               },
@@ -33,7 +37,11 @@
             {
               "field": {
                 "Measure": {
-                  "Expression": { "SourceRef": { "Entity": "_Measures" } },
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
                   "Property": "Commits per Active User (Weekly)"
                 }
               },
@@ -48,38 +56,94 @@
       "categoryAxis": [
         {
           "properties": {
-            "showAxisTitle": { "expr": { "Literal": { "Value": "false" } } },
-            "labelColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#7E8CA0'" } } } } }
+            "showAxisTitle": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            },
+            "labelColor": {
+              "solid": {
+                "color": {
+                  "expr": {
+                    "Literal": {
+                      "Value": "'#7E8CA0'"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       ],
       "valueAxis": [
         {
           "properties": {
-            "showAxisTitle": { "expr": { "Literal": { "Value": "false" } } },
-            "labelColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#7E8CA0'" } } } } },
-            "start": { "expr": { "Literal": { "Value": "0D" } } }
+            "showAxisTitle": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            },
+            "labelColor": {
+              "solid": {
+                "color": {
+                  "expr": {
+                    "Literal": {
+                      "Value": "'#7E8CA0'"
+                    }
+                  }
+                }
+              }
+            },
+            "start": {
+              "expr": {
+                "Literal": {
+                  "Value": "0D"
+                }
+              }
+            }
           }
         }
       ],
       "legend": [
         {
           "properties": {
-            "show": { "expr": { "Literal": { "Value": "false" } } }
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
           }
         }
       ],
       "lineStyles": [
         {
           "properties": {
-            "showMarker": { "expr": { "Literal": { "Value": "true" } } }
+            "showMarker": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            }
           }
         }
       ],
       "labels": [
         {
           "properties": {
-            "show": { "expr": { "Literal": { "Value": "false" } } }
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
           }
         }
       ]
@@ -101,30 +165,130 @@
       "title": [
         {
           "properties": {
-            "show": { "expr": { "Literal": { "Value": "true" } } },
-            "text": { "expr": { "Literal": { "Value": "'COMMITS PER ACTIVE USER BY WEEK'" } } },
-            "alignment": { "expr": { "Literal": { "Value": "'center'" } } },
-            "background": { "solid": { "color": { "expr": { "Literal": { "Value": "'#00197F'" } } } } },
-            "fontColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#FFFFFF'" } } } } },
-            "fontSize": { "expr": { "Literal": { "Value": "12D" } } },
-            "fontFamily": { "expr": { "Literal": { "Value": "'Segoe UI Semibold'" } } }
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'COMMITS PER ACTIVE USER BY WEEK'"
+                }
+              }
+            },
+            "alignment": {
+              "expr": {
+                "Literal": {
+                  "Value": "'center'"
+                }
+              }
+            },
+            "background": {
+              "solid": {
+                "color": {
+                  "expr": {
+                    "Literal": {
+                      "Value": "'#00197F'"
+                    }
+                  }
+                }
+              }
+            },
+            "fontColor": {
+              "solid": {
+                "color": {
+                  "expr": {
+                    "Literal": {
+                      "Value": "'#FFFFFF'"
+                    }
+                  }
+                }
+              }
+            },
+            "fontSize": {
+              "expr": {
+                "Literal": {
+                  "Value": "12D"
+                }
+              }
+            },
+            "fontFamily": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Segoe UI Semibold'"
+                }
+              }
+            }
           }
         }
       ],
       "background": [
-        { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
       ],
       "border": [
-        { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
       ],
       "visualHeader": [
-        { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
       ],
       "dropShadow": [
-        { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
       ],
       "subTitle": [
-        { "properties": { "show": { "expr": { "Literal": { "Value": "false" } } } } }
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
       ]
     },
     "drillFilterOtherVisuals": true
