@@ -382,9 +382,11 @@ table _Measures
 	/// relationship, so a linked identity's personal address matches no seat-day and contributes nothing —
 	/// 20 seats before and after the re-point unfiltered, 1 before and after for a scoped manager. ADR-0011's
 	/// "stays out of [Instrumented Seats]" holds by construction here, not by a ninth guard.
-	/// #341: the bound is < WindowEnd + 1, not <= WindowEnd. first_seen is a dateTime carrying a time of day and
-	/// date_day is midnight, so <= dropped every seat first reached *during* the window's last day — on the
-	/// default relative window, every install completed today.
+	/// #341: the bound is < WindowEnd + 1, not <= WindowEnd. first_seen carries a time of day and date_day is
+	/// midnight, so <= dropped every seat first reached *during* the window's last day — on the default relative
+	/// window, every install completed today. Half-closed, not closed: the connector renders first_seen in the
+	/// refreshing machine's zone while date_day imports naive, so a sliver the width of that offset is still
+	/// dropped (#342).
 	measure 'Instrumented Seats' =
 			VAR WindowEnd = MAX ( dim_date[date_day] )
 			VAR Reached =

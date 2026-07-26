@@ -278,15 +278,25 @@ Findings from driving semantic-model edits through Desktop headlessly:
   clamps to the nearest stored date instead of returning empty** — a "prior 28d"
   window before first ingest silently leaks current-window rows. Use
   `DATESBETWEEN` with explicit bounds for fixed rolling windows.
-- **DAX trap: a `dateTime` column compared against a `dim_date` boundary needs
-  `< Boundary + 1`, never `<= Boundary`.** `dim_date[date_day]` is a Postgres
-  `date` imported at midnight, while `dim_user[first_seen]`-style columns carry a
-  real time of day, so `<=` silently drops every row falling *during* the boundary
-  day. `marts.dim_date` has no future padding, so on the report's default relative
-  window that boundary is today at 00:00 and the whole of today goes missing — the
-  symptom is a KPI that lags a day, never an error. Bit `[Instrumented Seats]`,
-  `[New Users]` and `[Roster Mismatch Count]` (#336, #341). The `>=` *lower* bound
-  needs no such treatment: midnight is the start of the first day.
+- **DAX trap: a column carrying a *time of day*, compared against a `dim_date`
+  boundary, needs `< Boundary + 1` — never `<= Boundary`.** The discriminator is
+  the time component, not the TMDL `dataType`: every date column in this model is
+  `dataType: dateTime`, `dim_date[date_day]` included. Where both operands are
+  midnights (`week_start`, `month_start`, `date_day` against each other) `<=` is
+  correct and is left alone. But `marts.dim_date` is a Postgres `date` imported at
+  midnight while `dim_user[first_seen]`-style columns come from a real timestamp,
+  so `<=` silently drops every row falling *during* the boundary day. `dim_date`
+  has no future padding, so on the report's default relative window that boundary
+  is today at 00:00 and the whole of today goes missing — the symptom is a KPI
+  that lags a day, never an error. Bit `[Roster Mismatch Count]` (#336 / PR #340)
+  and `[Instrumented Seats]` + `[New Users]` (#341). The `>=` *lower* bound needs
+  no such treatment: midnight is the start of the first day.
+  **This half-closes it, not closes it.** The PostgreSQL connector renders a
+  `timestamptz` in the *refreshing machine's* local zone while a `date` imports as
+  a naive midnight, so the two are offset by whatever the operator's UTC offset is
+  (+3 on the Cairo fleet) and a row landing in that last-N-hours sliver is still
+  dropped. Tracked in #342 — until it lands, treat `< Boundary + 1` as the
+  best-available bound rather than an exact one.
 - **Every `reload` (and fresh open) re-raises the "calculated objects need to be
   manually refreshed" banner**, which overlays the top ~60px of the canvas in
   screenshots and blanks roster/calc-column visuals. Clear it headlessly:
