@@ -853,7 +853,9 @@ CREATE MATERIALIZED VIEW marts.dim_user AS
          SELECT marts.email_bucket(seen.user_email) AS user_email,
             (seen.user_email IS NULL) AS is_unknown,
             min(seen.seen_at) AS first_seen,
+            (min(seen.seen_at))::date AS first_seen_date,
             max(seen.seen_at) AS last_seen,
+            (max(seen.seen_at))::date AS last_seen_date,
             (array_agg(seen.user_account_id) FILTER (WHERE (seen.user_account_id IS NOT NULL)))[1] AS user_account_id,
             (array_agg(seen.organization_id) FILTER (WHERE (seen.organization_id IS NOT NULL)))[1] AS organization_id,
             (array_agg(seen.cc_version ORDER BY seen.seen_at DESC) FILTER (WHERE (seen.cc_version IS NOT NULL)))[1] AS last_cc_version
@@ -863,7 +865,9 @@ CREATE MATERIALIZED VIEW marts.dim_user AS
  SELECT i.user_email,
     i.is_unknown,
     i.first_seen,
+    i.first_seen_date,
     i.last_seen,
+    i.last_seen_date,
     i.user_account_id,
     i.organization_id,
     i.last_cc_version,
@@ -1669,4 +1673,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260725111500'),
     ('20260726041817'),
     ('20260726041900'),
-    ('20260726042056');
+    ('20260726042056'),
+    ('20260726142533');

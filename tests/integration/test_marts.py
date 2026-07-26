@@ -66,6 +66,40 @@ def test_dim_user_first_last_seen_and_unknown_member(conn):
     )
 
 
+def test_dim_user_seen_date_columns_are_dates_matching_the_timestamps(conn):
+    """#345: date-typed twins of first_seen/last_seen so seat boundaries can
+    compare date-to-date against dim_date, with no timezone skew."""
+    ins_metric(
+        conn,
+        ts="2026-07-01T23:30:00Z",
+        metric_name="claude_code.session.count",
+        metric_type="sum",
+        value=1,
+        value_kind="sum_delta",
+        user_email="a@x.com",
+    )
+    ins_event(
+        conn,
+        event_time="2026-07-03T00:30:00Z",
+        event_name="api_request",
+        user_email="a@x.com",
+    )
+    refresh(conn)
+    assert one(
+        conn,
+        "SELECT first_seen_date::text, last_seen_date::text, "
+        "first_seen_date = first_seen::date, last_seen_date = last_seen::date "
+        "FROM marts.dim_user WHERE user_email = 'a@x.com'",
+    ) == ("2026-07-01", "2026-07-03", True, True)
+    # dim_user is a matview, so pg_attribute — not information_schema.columns.
+    assert all_(
+        conn,
+        "SELECT attname, format_type(atttypid, atttypmod) FROM pg_attribute "
+        "WHERE attrelid = 'marts.dim_user'::regclass "
+        "AND attname IN ('first_seen_date','last_seen_date') ORDER BY attname",
+    ) == [("first_seen_date", "date"), ("last_seen_date", "date")]
+
+
 def test_dim_model_family_version_long_context(conn):
     for mdl in ("claude-opus-4-8[1m]", "claude-sonnet-5", "claude-haiku-4-5"):
         ins_event(conn, event_time="2026-07-01T10:00:00Z", event_name="api_request", model=mdl)
