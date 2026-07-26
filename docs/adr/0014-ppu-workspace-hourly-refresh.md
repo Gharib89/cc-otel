@@ -28,8 +28,12 @@ which staleness stays below two hours and the card measures what it claims to me
 
 ## Decisions
 
-- **Workspace license mode is PPU.** Every consumer needs a PPU seat; 39 of 100 were spare as
-  of 2026-07-26, so the manager audience fits without a purchase.
+- **Workspace license mode is PPU.** The workspace is **AIWorx**. Every consumer needs a PPU
+  seat; 39 of 100 were spare as of 2026-07-26, so the manager audience fits without a purchase.
+- **Neither source needs a gateway.** Confirmed at the first publish (2026-07-26): the service
+  reaches both the public Postgres endpoint and the IS-owned `itxdatainteg-prod` Azure SQL HR
+  view over cloud connections. The Postgres side was expected (`AllowAllAzureServices` in
+  `postgresFirewallRules`, ADR-0004); the Azure SQL side was the open risk and is now retired.
 - **Scheduled refresh is hourly at `:30`** — 24 of the 48 available slots. The offset clears the
   hourly `marts.refresh_all()` (`pg_cron '0 * * * *'`) so the model never reads mid-refresh.
   This keeps `Data Freshness Status` inside its 24h amber threshold by a wide margin, making

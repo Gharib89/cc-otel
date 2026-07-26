@@ -81,20 +81,26 @@ cards colour themselves from the `Freshness Color` measure on all six pages. Wha
 
 1. **Fixed per-model-family colours** — pin each `dim_model[family]` series in
    `pg_capacity/cht_tokens_model` to a stable colour so families read consistently report-wide.
-2. **Publish** — manual from Desktop to the **PPU** workspace `cc-otel`. Public Postgres, no
-   gateway. Scheduled refresh runs **hourly at `:30`** (24 of PPU's 48 daily slots). Both
+2. **Publish** — manual from Desktop to the **PPU** workspace **AIWorx**. Public Postgres, no
+   gateway; the Power BI service also reaches the HR view on `itxdatainteg-prod` Azure SQL
+   directly (first refresh, 2026-07-26), so neither source needs a gateway or an IS firewall
+   change. Scheduled refresh runs **hourly at `:30`** (24 of PPU's 48 daily slots). Both
    halves of that matter (ADR-0014): the `:30` offset clears the hourly `marts.refresh_all()`,
    and hourly rather than daily is what makes the freshness cards honest — `Hours Since Last
    Signal` measures query-time `NOW()` against an imported `last_event_ts` frozen at refresh,
    so a sparse schedule reports the report's own refresh lag instead of pipeline silence.
    Every consumer needs a PPU seat; the tenant has no Pro SKU, so that is the only paid seat
    available and a Pro workspace would reach nobody extra.
-3. **Name it for consumers** — the app is **Claude Code Adoption**; both `.platform` files carry
-   the same `displayName` so the workspace items read that way too if Desktop honours it (the
-   `.pbip` and folder names stay `cc-otel-report`, since every doc, CI path, and lint default
-   references them). Never rename the published items **in the Service**: republish matches by
-   name, so the next publish would create a duplicate pair and leave the app bound to the old
-   report while fresh data landed in the new one.
+3. **Name it for consumers** — the app is **Claude Code Adoption**. That name, not the item
+   names, is what consumers meet: they reach the report through the app and hold no workspace
+   role. Both `.platform` files carry the same `displayName`, but the first publish (2026-07-26)
+   landed the items as **`cc-otel-report`** anyway — Desktop appears to name published items
+   from the `.pbip`/folder name, so treat `.platform` `displayName` as Fabric-git metadata that
+   Desktop publishing ignores. The `.pbip` and folder names stay `cc-otel-report` regardless:
+   every CI path, lint default, skill and doc references them, and no consumer sees them.
+   Never rename the published items **in the Service**: republish matches by name, so the next
+   publish would create a duplicate pair and leave the app bound to the old report while fresh
+   data landed in the new one.
 
 ### Audiences — Data Health is owner + IS only
 
