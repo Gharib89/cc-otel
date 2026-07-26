@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Unattributed Session Rate Δ Label"
+                  "Property": "Unattributed Events Δ Label"
                 }
               },
-              "queryRef": "_Measures.Unattributed Session Rate Δ Label",
-              "nativeQueryRef": "Unattributed Session Rate Δ Label"
+              "queryRef": "_Measures.Unattributed Events Δ Label",
+              "nativeQueryRef": "Unattributed Events Δ Label"
             }
           ]
         }
@@ -54,7 +54,7 @@
                           "Entity": "_Measures"
                         }
                       },
-                      "Property": "Unattributed Session Rate Δ Color"
+                      "Property": "Unattributed Events Δ Color"
                     }
                   }
                 }

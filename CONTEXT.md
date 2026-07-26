@@ -105,7 +105,7 @@ The address an identity is **secured** as, distinct from the address it **emits*
 _Avoid_: canonical email, primary email
 
 **Unattributed telemetry**:
-A metric or event whose `user_email` is NULL, bucketed by `marts.email_bucket` into the single `'(unknown)'` identity. Unattributed rows keep their facts and their session, so volume is measurable; what is lost is the person. Because every NULL-email row collapses into one `dim_user` row, the *number of people* behind unattributed telemetry is not derivable from the marts — only its share of traffic is.
+A metric or event whose `user_email` is NULL, bucketed by `marts.email_bucket` into the single `'(unknown)'` identity. Unattributed rows keep their facts, so volume is measurable; what is lost is the person. Because every NULL-email row collapses into one `dim_user` row, the *number of people* behind unattributed telemetry is not derivable from the marts — only its volume.
 _Avoid_: unknown email users, anonymous user, orphan telemetry
 
 ### Licensing

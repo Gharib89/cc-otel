@@ -320,19 +320,20 @@ table _Measures
 		displayFolder: Ingest Health
 		lineageTag: a1c00006-0000-4000-8000-000000000028
 
-	/// Share of sessions arriving with no client-asserted email (#28 ingest-health page, #336 rewrite).
+	/// API events in the window that arrived with no client-asserted email (#28 ingest-health page, #336 rewrite).
 	/// Replaces [Unknown Email Users], which could only ever return 0 or 1: marts.email_bucket maps a NULL
 	/// email to the literal '(unknown)' and dim_user is unique on user_email, so every unattributed identity
 	/// in the estate collapses into a single row. Counting them was a flag wearing a user count.
-	/// Volume survives that collapse, so the card measures traffic instead. fact_session is one row per
-	/// session_id — "3% of sessions" is actionable where "3% of session-days" needs a footnote and would
-	/// weight a session spanning midnight twice in a data-quality ratio.
-	measure 'Unattributed Session Rate' =
-			DIVIDE (
-			    CALCULATE ( COUNTROWS ( fact_session ), dim_user[is_unknown] = TRUE ),
-			    COUNTROWS ( fact_session )
-			)
-		formatString: 0.0%;-0.0%;0.0%
+	/// The defect was counting a collapsed *dimension* row, not counting as such — a fact count carries none of
+	/// it, responds to the slicer through fact_api_usage's dim_date relationship, and moves in both directions.
+	/// A rate was the first shape tried and does not survive the data: the whole unattributed footprint is a
+	/// single api_usage row, so any share rounds to 0.0% and reproduces the frozen zero this ticket is about.
+	/// fact_api_usage is also the only fact carrying unattributed rows here — the identity emitted for nine
+	/// seconds and never produced a session — so a session-grain measure reads blank by construction.
+	/// Resolves to 0, not BLANK, when the window holds none: on a data-quality card an empty headline cannot be
+	/// told apart from a broken one, and "no unattributed events" is the answer worth rendering.
+	measure 'Unattributed Events' = COALESCE ( CALCULATE ( COUNTROWS ( fact_api_usage ), dim_user[is_unknown] = TRUE ), 0 )
+		formatString: #,##0
 		displayFolder: Ingest Health
 		lineageTag: a1c00007-0000-4000-8000-000000000028
 
@@ -906,13 +907,16 @@ table _Measures
 	measure 'Roster Mismatch Count' =
 			VAR WindowEnd = MAX ( dim_date[date_day] )
 			RETURN
-			    COUNTROWS (
-			        FILTER (
-			            ALL ( dim_user ),
-			            dim_user[first_seen] <= WindowEnd
-			                && ( dim_user[is_linked_identity]
-			                    || ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
-			        )
+			    COALESCE (
+			        COUNTROWS (
+			            FILTER (
+			                ALL ( dim_user ),
+			                dim_user[first_seen] <= WindowEnd
+			                    && ( dim_user[is_linked_identity]
+			                        || ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
+			            )
+			        ),
+			        0
 			    )
 		formatString: #,##0
 		displayFolder: Data Health
@@ -1482,11 +1486,18 @@ table _Measures
 	/// so the prior-window population is a strict subset of the current one and the delta is structurally
 	/// non-negative — a percent framing could only ever read "worse" or, on a quiet day, the very +0.0% this
 	/// measure was rewritten to remove. Read it as an additions counter.
+	/// Guards on the prior window's day count rather than ISBLANK ( PP ), so an early window whose predecessor
+	/// simply predates the first identity still reports the additions — see [Unattributed Events Δ].
 	measure 'Roster Mismatch Count Δ' =
-			VAR Cur = [Roster Mismatch Count]
-			VAR Prior = [Roster Mismatch Count PP]
+			VAR Days = COUNTROWS ( dim_date )
+			VAR FirstDay = MIN ( dim_date[date_day] )
+			VAR PriorDays =
+			    CALCULATE (
+			        COUNTROWS ( dim_date ),
+			        DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 )
+			    )
 			RETURN
-			    IF ( NOT ISBLANK ( Cur ) && NOT ISBLANK ( Prior ), Cur - Prior )
+			    IF ( PriorDays > 0, [Roster Mismatch Count] - [Roster Mismatch Count PP] )
 		formatString: +#,##0;-#,##0;0
 		displayFolder: Data Health
 		lineageTag: b1780059-0000-4000-8000-000000000178
@@ -1542,37 +1553,45 @@ table _Measures
 		displayFolder: Data Health
 		lineageTag: b1780065-0000-4000-8000-000000000178
 
-	measure 'Unattributed Session Rate PP' =
+	measure 'Unattributed Events PP' =
 			VAR Days = COUNTROWS ( dim_date )
 			VAR FirstDay = MIN ( dim_date[date_day] )
 			RETURN
-			    CALCULATE ( [Unattributed Session Rate], DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 ) )
+			    CALCULATE ( [Unattributed Events], DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 ) )
 		isHidden
 		displayFolder: Ingest Health\Support
 		lineageTag: b1780066-0000-4000-8000-000000000178
 
-	/// #336: a rate, so the delta is percentage points — same treatment as [API Error Rate Δ], not the
-	/// additions counter [Roster Mismatch Count Δ] uses.
-	measure 'Unattributed Session Rate Δ' =
-			VAR Cur = [Unattributed Session Rate]
-			VAR Prior = [Unattributed Session Rate PP]
+	/// #336: a count difference. The #117 rule reads "BLANK unless both windows have data", and for a count of
+	/// bad rows that has to mean days, not a non-blank value — a prior window holding zero unattributed events
+	/// is a measurement, so guarding on ISBLANK ( PP ) would blank the delta precisely when the card most needs
+	/// to report the first one appearing. Guard on the prior window's day count instead; the base already
+	/// resolves an empty window to 0 rather than BLANK, so no ISBLANK survives on the value path.
+	measure 'Unattributed Events Δ' =
+			VAR Days = COUNTROWS ( dim_date )
+			VAR FirstDay = MIN ( dim_date[date_day] )
+			VAR PriorDays =
+			    CALCULATE (
+			        COUNTROWS ( dim_date ),
+			        DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 )
+			    )
 			RETURN
-			    IF ( NOT ISBLANK ( Cur ) && NOT ISBLANK ( Prior ), ( Cur - Prior ) * 100 )
-		formatString: +0.0 "pp";-0.0 "pp";0.0 "pp"
+			    IF ( PriorDays > 0, [Unattributed Events] - [Unattributed Events PP] )
+		formatString: +#,##0;-#,##0;0
 		displayFolder: Ingest Health
 		lineageTag: b1780067-0000-4000-8000-000000000178
 
-	measure 'Unattributed Session Rate Δ Label' =
-			VAR D = [Unattributed Session Rate Δ]
+	measure 'Unattributed Events Δ Label' =
+			VAR D = [Unattributed Events Δ]
 			VAR N = COUNTROWS ( dim_date )
 			VAR Verdict = IF ( D > 0, " · worse", IF ( D < 0, " · better", "" ) )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0;-0.0" ) & " pp vs " & N & "d" & Verdict )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+#,##0;-#,##0;0" ) & " vs " & N & "d" & Verdict )
 		displayFolder: Ingest Health
 		lineageTag: b1780068-0000-4000-8000-000000000178
 
-	measure 'Unattributed Session Rate Δ Color' =
-			VAR D = [Unattributed Session Rate Δ]
+	measure 'Unattributed Events Δ Color' =
+			VAR D = [Unattributed Events Δ]
 			RETURN
 			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#4F6F17" ) )
 		displayFolder: Ingest Health

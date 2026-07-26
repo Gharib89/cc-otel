@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Unattributed Session Rate"
+                  "Property": "Unattributed Events"
                 }
               },
-              "queryRef": "_Measures.Unattributed Session Rate",
-              "nativeQueryRef": "Unattributed Session Rate"
+              "queryRef": "_Measures.Unattributed Events",
+              "nativeQueryRef": "Unattributed Events"
             }
           ]
         }
@@ -84,7 +84,7 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Unattributed Session Rate Δ Label"
+                  "Property": "Unattributed Events Δ Label"
                 }
               }
             }
