@@ -265,18 +265,15 @@ Findings from driving semantic-model edits through Desktop headlessly:
   mashup evaluations race and snap the engine pipe ("Pipe is broken" frown;
   bridge stuck "Host is not ready"); recovery is kill + reopen (TMDL/report on
   disk lose nothing). Wait for bridge `status: ready`, then one TOM pass.
-- **Don't `reload` an already-healthy Desktop "to be safe"** — on the
-  store-installed build, repeated reload cycles combined with TOM `SaveChanges()`
-  (the calc-banner clears above) invalidate the Mashup PackageSession and crash
-  the instance: `Could not find a PackageSession for the given sessionID`
-  (`InvalidPackageReferenceException`), bridge goes `not_connected`, and a TOM
-  connect/`SaveChanges` hangs. The visible state after the last verification
-  reload already *is* the committed state — report-layer edits are on disk before
-  launch — so a confirmation reload buys nothing and only adds crash risk. Reach
-  the merge gate on the last-verified session. Recovery: `Stop-Process
-  PBIDesktop,msmdsrv -Force`, relaunch fresh (a fresh open loads committed HEAD
-  directly), clear the calc banner **once**, present. Fresh-open + single
-  banner-clear is stable; reload-looping is not.
+- **Reach the merge gate on the last-verified session** — the canvas you verified
+  already *is* the committed state (report-layer edits hit disk before launch), so
+  a confirmation `reload` shows nothing new and can cost the instance. On the
+  store-installed build, repeated reload cycles combined with the TOM
+  `SaveChanges()` above invalidate the Mashup PackageSession: `Could not find a
+  PackageSession for the given sessionID` (`InvalidPackageReferenceException`),
+  bridge `not_connected`, TOM connect hangs. Recovery is a fresh open, never
+  another reload — `Stop-Process PBIDesktop,msmdsrv -Force`, relaunch (loads
+  committed HEAD directly), clear the calc banner **once**, present.
 - **DAX trap: `DATESINPERIOD` with an anchor outside the date column's range
   clamps to the nearest stored date instead of returning empty** — a "prior 28d"
   window before first ingest silently leaks current-window rows. Use
