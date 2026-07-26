@@ -229,6 +229,14 @@ Findings from driving semantic-model edits through Desktop headlessly:
   the TMDL edit as the on-disk source of truth. Note a Desktop **save** then
   re-serializes the whole pbip (CRLF, property reorder) — expect wide but
   content-neutral git churn.
+- **`reload` re-reads the report layer but NOT a changed registered theme.** An
+  edit to `StaticResources/RegisteredResources/AIWorx.json` applies only at
+  `.pbip` **open**; after a `reload` the canvas keeps rendering the previously
+  applied palette while the file on disk says otherwise. This one lies in the
+  worst direction — the screenshot looks like a successful verification of the
+  old value, so a reverted or corrected token reads as "the edit didn't land"
+  (#315 chased this for two reload cycles). Any theme edit gets a close + reopen
+  before its screenshot counts as evidence.
 - **Unattended data gate for new tables:** a table-scoped TOM refresh against
   Desktop's embedded AS instance works —
   `Model.Tables["x"].RequestRefresh(RefreshType.Full)` + `SaveChanges()` on

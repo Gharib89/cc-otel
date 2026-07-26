@@ -86,6 +86,14 @@ _Avoid_: labels, static text
 Report text that *is* the data, where shortening the string would mean changing the data — category and axis tick labels, data labels, grid cell values, matrix headers bound to a data column. Carries a lower hard floor than **chrome tier**, deliberately: where size and information collide, information wins. See ADR-0012.
 _Avoid_: small text, data text
 
+**Semantic text token**:
+A theme colour whose job is to tint *text* that states a verdict — `good` / `neutral` / `bad` on a **delta sub-line** or a freshness pill. Held to the 4.5:1 text contrast floor, and free of any colour-separation duty because every use spells the verdict out in words. Deliberately distinct from a **categorical slot**. See ADR-0013.
+_Avoid_: status colour, sentiment colour, semantic colour
+
+**Categorical slot**:
+One fixed position in the six-entry chart palette (`dataColors`, `categoricalLight`), assigned to a series by order and never cycled. Held to the 3:1 graphical floor plus colourblind separation from its neighbours — a different, partly conflicting standard from a **semantic text token**, which is why the green and amber of each may differ. See ADR-0013.
+_Avoid_: data colour, series colour, palette entry
+
 ### Identity
 
 **Linked identity**:
