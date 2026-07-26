@@ -89,6 +89,12 @@ cards colour themselves from the `Freshness Color` measure on all six pages. Wha
    so a sparse schedule reports the report's own refresh lag instead of pipeline silence.
    Every consumer needs a PPU seat; the tenant has no Pro SKU, so that is the only paid seat
    available and a Pro workspace would reach nobody extra.
+3. **Name it for consumers** — the app is **Claude Code Adoption**; both `.platform` files carry
+   the same `displayName` so the workspace items read that way too if Desktop honours it (the
+   `.pbip` and folder names stay `cc-otel-report`, since every doc, CI path, and lint default
+   references them). Never rename the published items **in the Service**: republish matches by
+   name, so the next publish would create a duplicate pair and leave the app bound to the old
+   report while fresh data landed in the new one.
 
 ### Audiences — Data Health is owner + IS only
 
