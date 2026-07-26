@@ -75,16 +75,23 @@ verbatim, but deliberately departs on two: Segoe UI rather than the brand's Cent
 
 ### Finish in Desktop before publishing (pbi-cli gaps — see research §2/§4)
 
-These four steps are **not** authorable offline and are done once in Desktop at publish:
+Drillthrough (Users → Session drill) and the freshness-card colours both landed on disk since
+this list was written — drillthrough is configured in `pg_session_detail/page.json`, and the
+cards colour themselves from the `Freshness Color` measure on all six pages. What remains:
 
-1. **Drillthrough** — wire Users → Session drill on `dim_user[user_email]` (PBIR drillthrough config is a v3.11.1 CLI gap).
-2. **Conditional formatting** — the freshness cards' green/amber/red background via the `Freshness Color` measure (Overview `ov_fresh`, Ingest `ih_fresh`), and the heatmap gradient on `uc_heat`. The `pbi format` verbs need pywin32 + a live Desktop, so they can't run in the offline build.
-3. **Fixed per-model-family colours** — pin each `dim_model[family]` series to a stable colour so families read consistently report-wide.
-4. **Publish** — manual from Desktop to the PPU workspace; configure the daily scheduled refresh at 07:00 (public Postgres, no gateway).
+1. **Fixed per-model-family colours** — pin each `dim_model[family]` series in
+   `pg_capacity/cht_tokens_model` to a stable colour so families read consistently report-wide.
+2. **Publish** — manual from Desktop to the **Pro** workspace `cc-otel` (ADR-0014: PPU would
+   block every Pro-licensed manager and buys nothing this report uses). Public Postgres, no
+   gateway. Scheduled refresh runs **twice** daily, 07:30 and 19:30 Cairo: `Hours Since Last
+   Signal` measures against query-time `NOW()` while the imported `last_event_ts` freezes at
+   refresh, so a single daily slot drives the freshness cards to Amber (24h threshold) every
+   evening on a healthy pipeline. The `:30` offset clears the hourly `marts.refresh_all()`.
 
 ### Audiences — Data Health is owner + IS only
 
-If the report is published as a **Power BI App with audiences**, the **Data Health** page
+The report is distributed as a **Power BI App with audiences** (ADR-0014 — consumers get no
+workspace role at all, so `OrgScope` always applies). The **Data Health** page
 (`pg_health`) goes to the owner/IS audience only — never a manager audience. The reason is product,
 not security: `OrgScope` (ADR-0010) makes the page *safe* for a manager, but not *truthful*. Its
 off-roster-active-users and identity-mismatch visuals key on identities with no HR row, so under the
