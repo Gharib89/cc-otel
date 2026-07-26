@@ -17,8 +17,9 @@ Pipeline: Claude Code OTel exporter → OTel Collector (bearer auth) → FastAPI
 - **Search before creating.** Before `gh issue create`, search open AND closed issues for the concern (`gh issue list --search "<keyword>" --state all`). Deferred tickets often carry an explicit "unblock when X" — wire/unblock (`--parent`, `--add-blocked-by`) instead of cutting a dup.
 - **One issue → one branch → one PR.** Squash-merge, conventional commit title, `Closes #n` in the body.
 - **HITL**: `ready-for-human` issues and anything touching schema, scope, or architecture resolve only through live exchange with Ahmed — never self-answered.
-- **Deferrals get tickets.** A "defer / revisit later" decision cuts a tracking issue carrying its re-entry condition, wired to its blocker (`--add-blocked-by`) — never a prose-only note. Decision-shaped deferrals get `ready-for-human`.
-- **Ad-hoc exemption**: small fixes spotted along the way (typos, one-liners, doc nits) ride along in the current PR or get a plain commit — no issue ceremony.
+- **Fix first; file only forks.** An adjacent find is not automatically a ticket. Rank it before reaching for `gh issue create`: **(1) mechanical, one obviously-right value** — a wrong number, a stale doc figure, a misaligned coordinate — fix it in the current PR; **(2) two or more defensible answers, or it touches schema, scope, or an ADR** — cut a ticket; **(3) re-litigates a decision locked in the last week** — PR comment, not a ticket; **(4) valid but nobody would ever act on it** — one disposition line in the merge summary, nothing durable. The failure mode is filing at the *observation* level instead of the *decision* level: a review agent's job is to produce findings, so findings are not evidence that tickets are owed. More new tickets than the PR has commits means the reviewer is being obeyed rather than triaged.
+- **Deferrals get tickets.** A "defer / revisit later" decision that reaches rung 2 cuts a tracking issue carrying its re-entry condition, wired to its blocker (`--add-blocked-by`) — never a prose-only note. Decision-shaped deferrals get `ready-for-human`.
+- **Ad-hoc exemption**: small fixes spotted along the way (typos, one-liners, doc nits, any rung-1 find) ride along in the current PR — named in its body — or get a plain commit; no issue ceremony.
 
 ## Branch & worktree discipline
 
