@@ -70,7 +70,7 @@
                 "color": "#FFFFFF"
               }
             },
-            "fontSize": 10,
+            "fontSize": 12,
             "fontFamily": "Segoe UI Semibold"
           }
         ]
@@ -92,7 +92,7 @@
                 "color": "#FFFFFF"
               }
             },
-            "fontSize": 10,
+            "fontSize": 12,
             "fontFamily": "Segoe UI Semibold"
           }
         ]
@@ -114,7 +114,7 @@
                 "color": "#FFFFFF"
               }
             },
-            "fontSize": 10,
+            "fontSize": 12,
             "fontFamily": "Segoe UI Semibold"
           }
         ]
@@ -136,7 +136,7 @@
                 "color": "#FFFFFF"
               }
             },
-            "fontSize": 10,
+            "fontSize": 12,
             "fontFamily": "Segoe UI Semibold"
           }
         ]
@@ -158,8 +158,22 @@
                 "color": "#FFFFFF"
               }
             },
-            "fontSize": 10,
+            "fontSize": 12,
             "fontFamily": "Segoe UI Semibold"
+          }
+        ]
+      }
+    },
+    "tableEx": {
+      "*": {
+        "columnHeaders": [
+          {
+            "fontSize": 12
+          }
+        ],
+        "values": [
+          {
+            "fontSize": 10
           }
         ]
       }

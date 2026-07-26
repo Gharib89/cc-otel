@@ -18,6 +18,18 @@ const SUBTYPE_OF = {
   pivotTable: 'matrix',
 };
 
+// ADR-0012: two-tier text floor. Chrome (text that frames the data) meets 12pt;
+// dense (text that *is* the data) has a 10pt hard floor. Membership is by string
+// provenance, not widget type — a tableEx column header is a caption we wrote
+// (chrome) while a pivotTable header bound to a data column is dense. Subsumes
+// #309's deferred card `labels.fontSize >= 12` rule.
+const CHROME = 12;
+const DENSE = 10;
+// pg_capacity/cht_util_heatmap cannot meet the *dense* floor at any legible size —
+// 24 data-derived columns in 410 units. It is being replaced, not resized (#323);
+// drop this entry with the visual. Its chrome text stays enforced.
+const DENSE_FLOOR_EXEMPT = new Set(['cht_util_heatmap']);
+
 const violations = [];
 const flag = (file, rule, msg) => violations.push({ file, rule, msg });
 
@@ -100,6 +112,49 @@ function checkImplicitMeasure(file, node, catalog) {
   for (const value of Object.values(node)) checkImplicitMeasure(file, value, catalog);
 }
 
+// ADR12: the floor a fontSize at this property path has to clear, or null when
+// the path carries no text the reader reads (nothing in the report today).
+function fontFloor(vtype, path) {
+  if (path.endsWith('visualContainerObjects.title.properties')) return CHROME;
+  if (path === 'objects.legend.properties') return CHROME;
+  if (path === 'objects.labels.properties') return vtype === 'card' ? CHROME : DENSE;
+  if (path.endsWith('textRuns.textStyle')) return CHROME;
+  const card = path.startsWith('objects.') ? path.split('.')[1] : null;
+  if (card === 'columnHeaders') return vtype === 'tableEx' ? CHROME : DENSE;
+  if (['categoryAxis', 'valueAxis', 'values', 'rowHeaders'].includes(card)) return DENSE;
+  return null;
+}
+
+// fontSize is authored three ways: a typed literal ("10D") on formatting cards, a
+// bare CSS-ish string ("9pt") on textbox text runs, and a plain number in a theme.
+const fontPt = (v) => {
+  const raw = typeof v === 'number' ? v
+    : typeof v === 'string' ? v.replace(/pt$/, '')
+      : literalOf(v)?.replace(/D$/, '');
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+};
+
+function checkFontFloor(file, node, vtype, denseExempt, path = '') {
+  if (Array.isArray(node)) {
+    for (const item of node) checkFontFloor(file, item, vtype, denseExempt, path);
+    return;
+  }
+  if (!node || typeof node !== 'object') return;
+  for (const [k, v] of Object.entries(node)) {
+    if (k !== 'fontSize') {
+      checkFontFloor(file, v, vtype, denseExempt, path ? `${path}.${k}` : k);
+      continue;
+    }
+    const floor = fontFloor(vtype, path);
+    const pt = fontPt(v);
+    if (floor === null || pt === null || pt >= floor) continue;
+    if (floor === DENSE && denseExempt) continue;
+    const tier = floor === CHROME ? 'chrome' : 'dense';
+    flag(file, 'ADR12', `${path}.fontSize is ${pt}pt — ${tier} text floors at ${floor}pt (ADR-0012)`);
+  }
+}
+
 // G1: "Drillthrough" is a pageBinding type, never a filter type.
 function checkFilters(file, data) {
   for (const f of data?.filterConfig?.filters ?? []) {
@@ -118,6 +173,7 @@ function checkVisual(file, data, catalog) {
 
   checkFilters(file, data);
   if (catalog) checkImplicitMeasure(file, v.query, catalog);
+  checkFontFloor(file, v, type, DENSE_FLOOR_EXEMPT.has(basename(dirname(file))));
 
   // G4/G16: visualLink placement — only actionButton/pageNavigator carry it,
   // and only under visualContainerObjects.
@@ -209,6 +265,18 @@ function checkTheme(file, data, usedTypes) {
             // G18: fontFace is textClasses-only; visualStyles cards use fontFamily.
             if (prop === 'fontFace') {
               flag(file, 'G18', `visualStyles.${type} ${cardName}.fontFace — use fontFamily (fontFace is only valid in textClasses)`);
+            }
+            // ADR12: a theme default below its tier's floor re-drifts every new visual.
+            if (prop === 'fontSize') {
+              const path = cardName === 'title'
+                ? 'visualContainerObjects.title.properties'
+                : `objects.${cardName}.properties`;
+              const floor = fontFloor(type, path);
+              const pt = fontPt(value);
+              if (floor !== null && pt !== null && pt < floor) {
+                const tier = floor === CHROME ? 'chrome' : 'dense';
+                flag(file, 'ADR12', `visualStyles.${type} ${cardName}.fontSize is ${pt}pt — ${tier} text floors at ${floor}pt (ADR-0012)`);
+              }
             }
           }
         }

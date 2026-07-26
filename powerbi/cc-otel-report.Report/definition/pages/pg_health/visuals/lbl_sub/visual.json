@@ -22,7 +22,7 @@
                     "value": "Pipeline freshness, data-quality findings, and roster vs telemetry mismatches. Operations view.",
                     "textStyle": {
                       "fontWeight": "normal",
-                      "fontSize": "9pt",
+                      "fontSize": "12pt",
                       "color": "#5A6473"
                     }
                   }
