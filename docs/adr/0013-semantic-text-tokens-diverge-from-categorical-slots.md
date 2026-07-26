@@ -12,9 +12,19 @@ grounds that two greens with no visible role distinction is worse than the shift
 Verification during implementation showed that plan is not available for amber. Darkening
 a colour to 4.5:1 against a near-white surface pins its lightness, and `bad` red already
 sits at that lightness; under deuteranopia the two then collapse to OKLab deltaE **1.0**
-against a floor of 6.0, so an amber and a red series become the same colour. A sweep of
-every hex in the gold-to-olive band clearing both contrast >= 4.5 and CVD deltaE >= 8 vs
-red *and* purple returned **zero** candidates. The conflict is structural, not a bad pick.
+against a floor of 6.0, so an amber and a red series become the same colour. The chosen
+`#7D6100` is not a bad pick — an exhaustive sweep of all 16,777,216 sRGB colours found
+**zero** in the gold-to-olive band clearing both contrast >= 4.5 and the CVD deltaE
+**target of 8** against red *and* purple.
+
+Relaxing to the CVD **floor of 6** admits 140 colours, so a single-token solution is not
+strictly impossible — it is merely worse than diverging, on three counts. Every one of the
+140 sits at contrast 4.51-4.53, i.e. 0.01 of headroom above the floor on a background this
+report varies slightly by card; the decision round had already rejected a candidate for
+leaving only 0.32. They all land at hue 72-75 rather than the brand amber's 89, a visible
+shift toward brown-orange — and orange is red-adjacent, the wrong direction for a colour
+whose whole problem is being mistaken for red. And 6-8 is the band the validator permits
+"ONLY with secondary encoding", which a bare chart series does not have.
 
 ## Decisions
 
