@@ -295,8 +295,9 @@ Findings from driving semantic-model edits through Desktop headlessly:
   `timestamptz` in the *refreshing machine's* local zone while a `date` imports as
   a naive midnight, so the two are offset by whatever the operator's UTC offset is
   (+3 on the Cairo fleet) and a row landing in that last-N-hours sliver is still
-  dropped. Tracked in #342 — until it lands, treat `< Boundary + 1` as the
-  best-available bound rather than an exact one.
+  dropped. Measured and deliberately not tracked as work (#342, closed
+  not-planned; the measurements are there and in PR #344). Treat
+  `< Boundary + 1` as the best-available bound, not an exact one.
 - **Every `reload` (and fresh open) re-raises the "calculated objects need to be
   manually refreshed" banner**, which overlays the top ~60px of the canvas in
   screenshots and blanks roster/calc-column visuals. Clear it headlessly:

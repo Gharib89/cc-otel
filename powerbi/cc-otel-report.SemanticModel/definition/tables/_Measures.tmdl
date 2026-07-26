@@ -386,7 +386,7 @@ table _Measures
 	/// midnight, so <= dropped every seat first reached *during* the window's last day — on the default relative
 	/// window, every install completed today. Half-closed, not closed: the connector renders first_seen in the
 	/// refreshing machine's zone while date_day imports naive, so a sliver the width of that offset is still
-	/// dropped (#342).
+	/// dropped — measured, accepted, not tracked (#342 closed not-planned).
 	measure 'Instrumented Seats' =
 			VAR WindowEnd = MAX ( dim_date[date_day] )
 			VAR Reached =
