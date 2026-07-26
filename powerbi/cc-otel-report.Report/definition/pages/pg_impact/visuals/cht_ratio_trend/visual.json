@@ -106,7 +106,7 @@
             "alignment": { "expr": { "Literal": { "Value": "'center'" } } },
             "background": { "solid": { "color": { "expr": { "Literal": { "Value": "'#00197F'" } } } } },
             "fontColor": { "solid": { "color": { "expr": { "Literal": { "Value": "'#FFFFFF'" } } } } },
-            "fontSize": { "expr": { "Literal": { "Value": "10D" } } },
+            "fontSize": { "expr": { "Literal": { "Value": "12D" } } },
             "fontFamily": { "expr": { "Literal": { "Value": "'Segoe UI Semibold'" } } }
           }
         }

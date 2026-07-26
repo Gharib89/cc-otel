@@ -19,10 +19,10 @@
               {
                 "textRuns": [
                   {
-                    "value": "Development output and tool-acceptance quality across the selected window (cards). Per-active-user throughput trend (charts).",
+                    "value": "Output and tool-acceptance quality (cards). Per-active-user throughput trend (charts).",
                     "textStyle": {
                       "fontWeight": "normal",
-                      "fontSize": "9pt",
+                      "fontSize": "12pt",
                       "color": "#5A6473"
                     }
                   }
@@ -41,7 +41,7 @@
             "altText": {
               "expr": {
                 "Literal": {
-                  "Value": "'Development output and tool-acceptance quality across the selected window (cards). Per-active-user throughput trend (charts).'"
+                  "Value": "'Output and tool-acceptance quality (cards). Per-active-user throughput trend (charts).'"
                 }
               }
             }

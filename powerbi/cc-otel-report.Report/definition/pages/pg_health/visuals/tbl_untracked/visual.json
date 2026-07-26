@@ -87,7 +87,8 @@
                 }
               },
               "queryRef": "_Measures.Days Since Assignment",
-              "nativeQueryRef": "Days Since Assignment"
+              "nativeQueryRef": "Days Since Assignment",
+              "displayName": "Days Assigned"
             }
           ]
         }
@@ -265,7 +266,7 @@
             "fontSize": {
               "expr": {
                 "Literal": {
-                  "Value": "10D"
+                  "Value": "12D"
                 }
               }
             },

@@ -22,7 +22,7 @@
                     "value": "Share of sessions using each capability (cards). Usage intensity per entity (charts).",
                     "textStyle": {
                       "fontWeight": "normal",
-                      "fontSize": "9pt",
+                      "fontSize": "12pt",
                       "color": "#5A6473"
                     }
                   }

@@ -5,7 +5,7 @@
     "x": 300,
     "y": 114,
     "z": 95,
-    "height": 28,
+    "height": 34,
     "width": 670,
     "tabOrder": 95
   },
@@ -22,7 +22,7 @@
                     "value": "Populated by drillthrough: right-click a session row on User Detail and choose Drill through.",
                     "textStyle": {
                       "fontWeight": "normal",
-                      "fontSize": "9pt",
+                      "fontSize": "12pt",
                       "color": "#5A6473"
                     }
                   }
