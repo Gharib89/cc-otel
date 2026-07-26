@@ -92,7 +92,8 @@ BEGIN
     -- Derived identity aliases (#320, ADR-0011), materialised before the marts that read
     -- them: dim_user joins the pair set and the unresolved-identity finding below scans it,
     -- so it is derived once per cycle rather than once per consumer. Corporate means
-    -- '@itworx.com'.
+    -- '@itworx.com', inline here as it is elsewhere in this function; #278 tracks extracting
+    -- the predicate into a shared rule function across every site at once.
     TRUNCATE staging.stg_identity_alias;
 
     INSERT INTO staging.stg_identity_alias (personal_email, corporate_email, shared_sessions)
