@@ -314,8 +314,12 @@ table _Measures
 	/// with [Idle Seats]: New + Retained + Reactivated + Idle = Instrumented Seats. Window = selection (#165).
 	/// #294: the identity is against [Instrumented Seats], not [Paid Seats] — the cohorts count instrumented people
 	/// whose seat is on IS's roster, so the licensed seats the installer never reached are outside it by design.
-	/// #341: the upper bound is < WindowEnd + 1 for the dateTime-against-midnight reason in [Instrumented Seats].
-	/// The lower bound stays >= WindowStart — midnight is the start of the first day, so it already admits it.
+	/// #346: both bounds read dim_user[first_seen_date], the date-typed mart column — date-to-date against
+	/// dim_date[date_day], so the window is closed at both ends with no timezone skew. It replaces #341's
+	/// < WindowEnd + 1, which admitted the whole boundary day but still lost the sliver the connector's local-zone
+	/// rendering pushed past midnight. [Reactivated Users]' "older than the window" test bounds on the same column
+	/// deliberately: split the two across [first_seen] and [first_seen_date] and a boundary-day identity is neither
+	/// new nor old, dropping out of all four cohorts and breaking the identity with [Instrumented Seats].
 	measure 'New Users' =
 			VAR WindowStart = MIN ( dim_date[date_day] )
 			VAR WindowEnd = MAX ( dim_date[date_day] )
@@ -325,8 +329,8 @@ table _Measures
 			            dim_user,
 			            NOT dim_user[is_linked_identity]
 			                && NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
-			                && dim_user[first_seen] >= WindowStart
-			                && dim_user[first_seen] < WindowEnd + 1
+			                && dim_user[first_seen_date] >= WindowStart
+			                && dim_user[first_seen_date] <= WindowEnd
 			        )
 			    ) + 0
 		formatString: #,##0
@@ -365,8 +369,10 @@ table _Measures
 		displayFolder: Cohorts
 		lineageTag: a8c1cffb-b47a-4ce8-9b3e-345296387e63
 
-	/// Framework term "resurrected": active now, idle the prior window, first_seen older than the window.
+	/// Framework term "resurrected": active now, idle the prior window, first seen older than the window.
 	/// #343: the activity sides carry RosterRows, for the reason spelled out on [Retained Users].
+	/// #346: OldUsers bounds on [first_seen_date], the same column [New Users] bounds on — the two partition the
+	/// population between them, so a mismatched operand opens a gap on the window's first day.
 	measure 'Reactivated Users' =
 			VAR Days = COUNTROWS ( dim_date )
 			VAR FirstDay = MIN ( dim_date[date_day] )
@@ -380,7 +386,7 @@ table _Measures
 			VAR OldUsers =
 			    CALCULATETABLE (
 			        VALUES ( dim_user[rls_email] ),
-			        FILTER ( dim_user, dim_user[first_seen] < FirstDay )
+			        FILTER ( dim_user, dim_user[first_seen_date] < FirstDay )
 			    )
 			VAR Cur = CALCULATETABLE ( VALUES ( fact_session_daily[rls_email] ), RosterRows )
 			VAR Prior =
@@ -575,9 +581,9 @@ table _Measures
 	/// #336: the as-of gate replaced an all-time count. Over ALL ( dim_user ) with no date path the headline
 	/// could not respond to the slicer, so its delta was pinned and the sub-line read a permanent +0.0%.
 	/// Reuses [Instrumented Seats]' boundary-read rather than inventing a second window idiom, bound included:
-	/// < WindowEnd + 1, not <= WindowEnd, because first_seen is a dateTime carrying a time of day while date_day
-	/// is midnight, so <= drops every identity first seen *during* the window's last day — on the default
-	/// relative window, all of today. #341 brought the other two sites onto this form.
+	/// <= WindowEnd against [first_seen_date], the date-typed mart column, so the comparison is date-to-date and
+	/// exact. #346 replaced the < WindowEnd + 1 form #341 had brought all three sites onto: it admitted the
+	/// boundary day but not the part of it the connector's local-zone rendering pushed past midnight.
 	/// The roster side stays dim_seat_current, deliberately: it sits on the one-side of the dim_user
 	/// relationship so its OrgScope filter propagates, where fact_seat_day's stands alone and would make a
 	/// leaver read as a roster mismatch for role viewers (ADR-0010).
@@ -588,7 +594,7 @@ table _Measures
 			        COUNTROWS (
 			            FILTER (
 			                ALL ( dim_user ),
-			                dim_user[first_seen] < WindowEnd + 1
+			                dim_user[first_seen_date] <= WindowEnd
 			                    && ( dim_user[is_linked_identity]
 			                        || ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
 			            )
@@ -1674,17 +1680,17 @@ table _Measures
 	/// relationship, so a linked identity's personal address matches no seat-day and contributes nothing —
 	/// 20 seats before and after the re-point unfiltered, 1 before and after for a scoped manager. ADR-0011's
 	/// "stays out of [Instrumented Seats]" holds by construction here, not by a ninth guard.
-	/// #341: the bound is < WindowEnd + 1, not <= WindowEnd. first_seen carries a time of day and date_day is
-	/// midnight, so <= dropped every seat first reached *during* the window's last day — on the default relative
-	/// window, every install completed today. Half-closed, not closed: the connector renders first_seen in the
-	/// refreshing machine's zone while date_day imports naive, so a sliver the width of that offset is still
-	/// dropped — measured, accepted, not tracked (#342 closed not-planned).
+	/// #346: the bound is [first_seen_date] <= WindowEnd — both operands are naive midnights, so the seat's first
+	/// reach is compared to the window's last day as a date. It closes what #341's < WindowEnd + 1 could only
+	/// half-close: that form admitted the boundary day, but the connector renders the timestamptz [first_seen] in
+	/// the refreshing machine's zone while date_day imports naive, so a machine first reached inside the last
+	/// UTC-offset hours of the day (23:00 UTC on the Cairo fleet) rendered as the *next* day and was still dropped.
 	measure 'Instrumented Seats' =
 			VAR WindowEnd = MAX ( dim_date[date_day] )
 			VAR Reached =
 			    CALCULATETABLE (
 			        VALUES ( dim_user[user_email] ),
-			        KEEPFILTERS ( dim_user[first_seen] < WindowEnd + 1 )
+			        KEEPFILTERS ( dim_user[first_seen_date] <= WindowEnd )
 			    )
 			RETURN
 			    CALCULATE (

@@ -278,30 +278,36 @@ Findings from driving semantic-model edits through Desktop headlessly:
   clamps to the nearest stored date instead of returning empty** — a "prior 28d"
   window before first ingest silently leaks current-window rows. Use
   `DATESBETWEEN` with explicit bounds for fixed rolling windows.
-- **DAX trap: a column carrying a *time of day*, compared against a `dim_date`
-  boundary, needs `< Boundary + 1` — never `<= Boundary`.** The discriminator is
-  the time component, not the TMDL `dataType`: every date column in this model is
-  `dataType: dateTime`, `dim_date[date_day]` included. Where both operands are
-  midnights (`week_start`, `month_start`, `date_day` against each other) `<=` is
-  correct and is left alone. But `marts.dim_date` is a Postgres `date` imported at
-  midnight while `dim_user[first_seen]`-style columns come from a real timestamp,
-  so `<=` silently drops every row falling *during* the boundary day. `dim_date`
-  has no future padding, so on the report's default relative window that boundary
-  is today at 00:00 and the whole of today goes missing — the symptom is a KPI
-  that lags a day, never an error. It bit `[Roster Mismatch Count]` (#336 / PR #340)
-  and `[Instrumented Seats]` + `[New Users]` (#341). The `>=` *lower* bound needs
-  no such treatment: midnight is the start of the first day.
-  **This half-closes it, not closes it.** The PostgreSQL connector renders a
-  `timestamptz` in the *refreshing machine's* local zone while a `date` imports as
-  a naive midnight, so the two are offset by whatever the operator's UTC offset is
-  (+3 on the Cairo fleet) and a row landing in that last-N-hours sliver is still
-  dropped. Measured and deliberately not tracked as work (#342, closed
-  not-planned; the measurements are there and in PR #344). Treat
-  `< Boundary + 1` as the best-available bound, not an exact one.
-  **The real close is a date-typed source column**, not a DAX bound: `marts.dim_user`
-  now carries `first_seen_date` / `last_seen_date` (#345), which import naive on both
-  sides and compare to `dim_date[date_day]` exactly. #346 repoints the measures onto
-  them and drops the `+ 1`; until it lands, the bound above still stands.
+- **DAX rule: a `dim_date` boundary is compared against a *date-typed* mart
+  column — never against a column carrying a time of day.** The fix lives in the
+  mart, not in the DAX bound. Both operands then import as naive midnights and
+  `>= WindowStart` / `<= WindowEnd` is exact; `marts.dim_user` carries
+  `first_seen_date` / `last_seen_date` for precisely this (#345), and every seat
+  boundary reads them (#346). The TMDL `dataType` cannot tell you which kind of
+  column you have — every date column in this model is `dataType: dateTime`,
+  `dim_date[date_day]` included; the discriminator is the source SQL type.
+  Two ways it goes wrong with a timestamp operand, and the second is why a DAX
+  bound cannot close it: `<= Boundary` drops every row falling *during* the
+  boundary day (`dim_date` has no future padding, so on the report's default
+  relative window that boundary is today at 00:00 and the whole of today goes
+  missing), and the PostgreSQL connector renders a `timestamptz` in the
+  *refreshing machine's* local zone while a `date` imports naive, so the two are
+  offset by the operator's UTC offset (+3 on the Cairo fleet) and a row in that
+  last-N-hours sliver lands on the following day. The symptom of either is a KPI
+  that lags a day, never an error. History: `<=` bit `[Roster Mismatch Count]`
+  (#336 / PR #340) and `[Instrumented Seats]` + `[New Users]` (#341); the interim
+  `< Boundary + 1` workaround closed the first failure and only narrowed the
+  second (measured in PR #344) until #345/#346 made the comparison date-to-date.
+  **Reach for `< Boundary + 1` only where no date column exists** — it is the
+  best-available bound there, not an exact one, and the durable fix is to grow
+  the mart a date column. Where both operands are already midnights
+  (`week_start`, `month_start`, `date_day` against each other) `<=` is correct
+  and is left alone. The `>=` *lower* bound never needed the `+ 1` treatment:
+  midnight is the start of the first day.
+  **Keep the timestamp column for display.** The date twin is a boundary
+  operand, not a replacement: `pg_adopt`'s roster table and `pg_user_detail`'s
+  cards read `first_seen` / `last_seen`, because a person reads a timestamp in
+  their own zone while a boundary must not.
 - **Every `reload` (and fresh open) re-raises the "calculated objects need to be
   manually refreshed" banner**, which overlays the top ~60px of the canvas in
   screenshots and blanks roster/calc-column visuals. Clear it headlessly:
