@@ -674,22 +674,27 @@ table _Measures
 	/// #321: set-valued, so both sides move to the scoping address together — INTERSECT matches on value, and
 	/// a roster set of [user_email] against an activity set of [rls_email] would silently drop a linked identity's
 	/// corporate partner from the intersection.
+	/// #343: the activity sides carry RosterRows too, not just the roster set. fact_session_daily joins dim_user on
+	/// [user_email] while these sets match on [rls_email], so a bare VALUES ( fact_session_daily[rls_email] )
+	/// re-admitted the linked identity's sessions under its corporate address and credited them to a seat it does
+	/// not hold — the identity ADR-0011 exists to deny. [Active Roster Users] filters dim_user and so excluded them
+	/// all along; the two disagreed, and New + Retained + Reactivated + Idle overshot [Instrumented Seats] by one
+	/// on any window where the corporate partner was otherwise quiet. ADR-0011 wins: exclude.
 	measure 'Retained Users' =
 			VAR Days = COUNTROWS ( dim_date )
 			VAR FirstDay = MIN ( dim_date[date_day] )
-			VAR Roster =
-			    CALCULATETABLE (
-			        VALUES ( dim_user[rls_email] ),
-			        FILTER (
-			            dim_user,
-			            NOT dim_user[is_linked_identity]
-			                && NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
-			        )
+			VAR RosterRows =
+			    FILTER (
+			        dim_user,
+			        NOT dim_user[is_linked_identity]
+			            && NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
 			    )
-			VAR Cur = VALUES ( fact_session_daily[rls_email] )
+			VAR Roster = CALCULATETABLE ( VALUES ( dim_user[rls_email] ), RosterRows )
+			VAR Cur = CALCULATETABLE ( VALUES ( fact_session_daily[rls_email] ), RosterRows )
 			VAR Prior =
 			    CALCULATETABLE (
 			        VALUES ( fact_session_daily[rls_email] ),
+			        RosterRows,
 			        DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 )
 			    )
 			RETURN
@@ -699,27 +704,27 @@ table _Measures
 		lineageTag: a8c1cffb-b47a-4ce8-9b3e-345296387e63
 
 	/// Framework term "resurrected": active now, idle the prior window, first_seen older than the window.
+	/// #343: the activity sides carry RosterRows, for the reason spelled out on [Retained Users].
 	measure 'Reactivated Users' =
 			VAR Days = COUNTROWS ( dim_date )
 			VAR FirstDay = MIN ( dim_date[date_day] )
-			VAR Roster =
-			    CALCULATETABLE (
-			        VALUES ( dim_user[rls_email] ),
-			        FILTER (
-			            dim_user,
-			            NOT dim_user[is_linked_identity]
-			                && NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
-			        )
+			VAR RosterRows =
+			    FILTER (
+			        dim_user,
+			        NOT dim_user[is_linked_identity]
+			            && NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
 			    )
+			VAR Roster = CALCULATETABLE ( VALUES ( dim_user[rls_email] ), RosterRows )
 			VAR OldUsers =
 			    CALCULATETABLE (
 			        VALUES ( dim_user[rls_email] ),
 			        FILTER ( dim_user, dim_user[first_seen] < FirstDay )
 			    )
-			VAR Cur = VALUES ( fact_session_daily[rls_email] )
+			VAR Cur = CALCULATETABLE ( VALUES ( fact_session_daily[rls_email] ), RosterRows )
 			VAR Prior =
 			    CALCULATETABLE (
 			        VALUES ( fact_session_daily[rls_email] ),
+			        RosterRows,
 			        DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 )
 			    )
 			RETURN
