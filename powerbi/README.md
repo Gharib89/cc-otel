@@ -81,12 +81,14 @@ cards colour themselves from the `Freshness Color` measure on all six pages. Wha
 
 1. **Fixed per-model-family colours** — pin each `dim_model[family]` series in
    `pg_capacity/cht_tokens_model` to a stable colour so families read consistently report-wide.
-2. **Publish** — manual from Desktop to the **Pro** workspace `cc-otel` (ADR-0014: PPU would
-   block every Pro-licensed manager and buys nothing this report uses). Public Postgres, no
-   gateway. Scheduled refresh runs **twice** daily, 07:30 and 19:30 Cairo: `Hours Since Last
-   Signal` measures against query-time `NOW()` while the imported `last_event_ts` freezes at
-   refresh, so a single daily slot drives the freshness cards to Amber (24h threshold) every
-   evening on a healthy pipeline. The `:30` offset clears the hourly `marts.refresh_all()`.
+2. **Publish** — manual from Desktop to the **PPU** workspace `cc-otel`. Public Postgres, no
+   gateway. Scheduled refresh runs **hourly at `:30`** (24 of PPU's 48 daily slots). Both
+   halves of that matter (ADR-0014): the `:30` offset clears the hourly `marts.refresh_all()`,
+   and hourly rather than daily is what makes the freshness cards honest — `Hours Since Last
+   Signal` measures query-time `NOW()` against an imported `last_event_ts` frozen at refresh,
+   so a sparse schedule reports the report's own refresh lag instead of pipeline silence.
+   Every consumer needs a PPU seat; the tenant has no Pro SKU, so that is the only paid seat
+   available and a Pro workspace would reach nobody extra.
 
 ### Audiences — Data Health is owner + IS only
 
