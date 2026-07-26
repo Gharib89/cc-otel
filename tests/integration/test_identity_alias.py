@@ -9,7 +9,7 @@ keep their own dim_user row and their own emitting address throughout.
 from __future__ import annotations
 
 import psycopg
-from _helpers import ins_metric
+from _helpers import ins_event, ins_metric
 
 S1 = "11111111-1111-1111-1111-111111111111"
 S2 = "22222222-2222-2222-2222-222222222222"
@@ -30,6 +30,17 @@ def emit(conn: psycopg.Connection, session_id: str, email: str | None, day: str 
         metric_type="sum",
         value=1,
         value_kind="sum_delta",
+        user_email=email,
+        session_id=session_id,
+    )
+
+
+def emit_event(conn: psycopg.Connection, session_id: str, email: str, day: str = "13") -> None:
+    """The same evidence carried by an event row — both raw tables feed the rule."""
+    ins_event(
+        conn,
+        event_time=f"2026-07-{day}T10:00:00Z",
+        event_name="api_request",
         user_email=email,
         session_id=session_id,
     )
@@ -70,9 +81,12 @@ def manual(conn: psycopg.Connection, personal: str, corporate: str | None) -> No
 
 
 def test_two_shared_sessions_yield_a_link(conn):
-    for session in (S1, S2):
-        emit(conn, session, CORP)
-        emit(conn, session, PERSONAL)
+    emit(conn, S1, CORP)
+    emit(conn, S1, PERSONAL)
+    # The second session's evidence arrives as events, not metrics: the rule reads both raw
+    # tables, and a session split across them is the ordinary case for one process.
+    emit_event(conn, S2, CORP)
+    emit_event(conn, S2, PERSONAL)
     refresh(conn)
 
     assert derived(conn) == [(PERSONAL, CORP, 2)]

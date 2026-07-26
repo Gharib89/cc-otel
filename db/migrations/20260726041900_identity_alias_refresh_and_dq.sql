@@ -23,8 +23,13 @@ BEGIN
     INSERT INTO staging.stg_identity_alias (personal_email, corporate_email, shared_sessions)
     WITH session_email AS (
         -- A session_id is one Claude Code process, so two addresses inside one session is one
-        -- human re-authenticating. UNION (not UNION ALL): the pair counts below are per
-        -- session, so duplicate rows for the same address in the same session must collapse.
+        -- human re-authenticating. UNION (not UNION ALL) because the next CTE self-joins this
+        -- one on session_id: an address emitting thousands of rows in a session would otherwise
+        -- fan the join out by their product. The counts below are DISTINCT either way.
+        --
+        -- Deliberately unwindowed, unlike the cost finding further down: the evidence is
+        -- historical, so a window would silently unlink a person once their shared sessions
+        -- aged past it.
         SELECT session_id, user_email
         FROM raw.metrics
         WHERE session_id IS NOT NULL AND user_email IS NOT NULL
@@ -281,7 +286,9 @@ BEGIN
     -- to every OrgScope viewer, and silence is the wrong output for "a human needs to look at
     -- this". An address the operator has already ruled on is resolved either way, including a
     -- suppression, so the worklist drains. Corporate emitters are out of scope: no alias rule
-    -- can resolve one, and seat_emitter_without_seat already reports them.
+    -- can resolve one, and seat_emitter_without_seat already reports them. The roster clause
+    -- makes "off-roster" literal rather than assumed — a personal address IS listed as a seat
+    -- would be on-roster, and the finding says nothing about it.
     INSERT INTO marts.dq_finding (finding_type, row_count, details)
     SELECT 'identity_alias_unresolved', COUNT(*),
            jsonb_build_object(
