@@ -68,7 +68,10 @@ def test_dim_user_first_last_seen_and_unknown_member(conn):
 
 def test_dim_user_seen_date_columns_are_dates_matching_the_timestamps(conn):
     """#345: date-typed twins of first_seen/last_seen so seat boundaries can
-    compare date-to-date against dim_date, with no timezone skew."""
+    compare date-to-date against dim_date. A `date` imports naive on both sides,
+    so the skew the PostgreSQL connector adds to a `timestamptz` (rendered in the
+    refreshing machine's zone) never reaches the comparison. The cast itself is
+    the mart layer's usual session-TimeZone `(expr)::date`, matching dim_date."""
     ins_metric(
         conn,
         ts="2026-07-01T23:30:00Z",
