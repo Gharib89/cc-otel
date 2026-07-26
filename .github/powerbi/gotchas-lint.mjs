@@ -25,10 +25,6 @@ const SUBTYPE_OF = {
 // #309's deferred card `labels.fontSize >= 12` rule.
 const CHROME = 12;
 const DENSE = 10;
-// pg_capacity/cht_util_heatmap cannot meet the *dense* floor at any legible size —
-// 24 data-derived columns in 410 units. It is being replaced, not resized (#323);
-// drop this entry with the visual. Its chrome text stays enforced.
-const DENSE_FLOOR_EXEMPT = new Set(['cht_util_heatmap']);
 
 const violations = [];
 const flag = (file, rule, msg) => violations.push({ file, rule, msg });
@@ -135,21 +131,20 @@ const fontPt = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
-function checkFontFloor(file, node, vtype, denseExempt, path = '') {
+function checkFontFloor(file, node, vtype, path = '') {
   if (Array.isArray(node)) {
-    for (const item of node) checkFontFloor(file, item, vtype, denseExempt, path);
+    for (const item of node) checkFontFloor(file, item, vtype, path);
     return;
   }
   if (!node || typeof node !== 'object') return;
   for (const [k, v] of Object.entries(node)) {
     if (k !== 'fontSize') {
-      checkFontFloor(file, v, vtype, denseExempt, path ? `${path}.${k}` : k);
+      checkFontFloor(file, v, vtype, path ? `${path}.${k}` : k);
       continue;
     }
     const floor = fontFloor(vtype, path);
     const pt = fontPt(v);
     if (floor === null || pt === null || pt >= floor) continue;
-    if (floor === DENSE && denseExempt) continue;
     const tier = floor === CHROME ? 'chrome' : 'dense';
     flag(file, 'ADR12', `${path}.fontSize is ${pt}pt — ${tier} text floors at ${floor}pt (ADR-0012)`);
   }
@@ -173,7 +168,7 @@ function checkVisual(file, data, catalog) {
 
   checkFilters(file, data);
   if (catalog) checkImplicitMeasure(file, v.query, catalog);
-  checkFontFloor(file, v, type, DENSE_FLOOR_EXEMPT.has(basename(dirname(file))));
+  checkFontFloor(file, v, type);
 
   // G4/G16: visualLink placement — only actionButton/pageNavigator carry it,
   // and only under visualContainerObjects.
