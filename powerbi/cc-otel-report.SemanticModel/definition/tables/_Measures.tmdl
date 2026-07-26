@@ -258,11 +258,12 @@ table _Measures
 		displayFolder: Adoption
 		lineageTag: a1c00005-0000-4000-8000-000000000028
 
-	/// Drives the Overview freshness KPI card background (#28): green/amber/red per [Data Freshness Status],
-	/// grey for no data. Hex values mirror the AIWorx.json good/neutral/bad tokens (#312 retired the root
-	/// theme.json this comment used to name). #315 darkened good/neutral to clear the 4.5:1 text floor --
-	/// the pill renders these as 12pt text, not as a fill, and its chip background is #E8E8E8 rather than
-	/// the card surface, so the floor bites harder here (good was 2.72:1 on the chip, now 4.74:1). The
+	/// Drives the freshness pill's label text colour, on all six report pages (#28): green/amber/red per
+	/// [Data Freshness Status], grey for no data. Binds at objects.labels[].properties.color in every
+	/// crd_fresh -- never a fill, so the text floor is what applies. Hex values mirror the AIWorx.json
+	/// good/neutral/bad tokens (#312 retired the root theme.json this comment used to name). #315
+	/// darkened good/neutral to clear the 4.5:1 floor -- the pill's chip background is #E8E8E8 rather
+	/// than the card surface, so it bites harder here (good was 2.72:1 on the chip, now 4.74:1). The
 	/// no-data branch takes the label grey for the same reason: tertiary #9AA0AA managed only 2.15:1 on
 	/// that chip, and #5A6473 is already what the delta measures use for their no-signal state.
 	measure 'Freshness Color' =
