@@ -129,8 +129,10 @@ Run the class's verification loop (foreign-Desktop guard before the first
 launch; store-install attach workaround, calc-banner clearing, and all TMDL
 traps per `powerbi-tooling.md`). Iterate edit → render → read until every
 success criterion from phase 1 shows correct in a screenshot — data values,
-not just layout. **Stay surgical**: every changed line traces to the issue;
-adjacent finds become `needs-triage` issues. **Keep a deviations log** — every
+not just layout. **Stay surgical**: every changed line traces to the issue or to a
+rung-1 ad-hoc fix named in the PR body; adjacent finds go through the repo's
+**fix-first disposition ladder** (`CLAUDE.md`, *Way of working*) — fix the mechanical
+ones here, ticket only the genuine forks. **Keep a deviations log** — every
 forced departure from the issue's plan, resolved conservatively, logged for the
 PR body and merge summary.
 
@@ -145,7 +147,11 @@ PR body and merge summary.
   known ones).
 
 Auto-triage the findings: fix the valid, record a one-line disposition per
-finding for the merge summary. If a change altered documented behavior or
+finding for the merge summary. Run each finding down the **fix-first disposition
+ladder** and default to fixing, not filing — the design axis is a finding
+*generator*, so a long list is what it does, not a signal that the diff is
+defective. A canon divergence already settled in an ADR is answered by the ADR,
+not re-filed. If a change altered documented behavior or
 vocabulary, sync the coupled docs (`CONTEXT.md`, `docs/agents/powerbi-tooling.md`)
 in the same change.
 

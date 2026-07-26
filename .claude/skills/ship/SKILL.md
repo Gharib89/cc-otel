@@ -177,9 +177,13 @@ the phase-4 opus review is the quality backstop. Keep implementation on the main
 thread when the issue is exploratory, the spec is still settling, or the change
 touches schema / architecture — a wrong cheap build costs more rework than the
 tier saves. **Stay surgical** — implement
-only what the issue asks; every changed line should trace to it. An adjacent bug or
-cleanup you spot is **out of scope**: file a `needs-triage` issue for it and move
-on, don't fix it inline. **Keep a deviations log** from the first edit: whenever
+only what the issue asks; every changed line traces to it or to a rung-1 ad-hoc fix
+named in the PR body. An adjacent bug or cleanup you spot goes through the repo's
+**fix-first disposition ladder** (`CLAUDE.md`, *Way of working*): mechanical with one
+obviously-right value → fix it here; a genuine fork or an ADR amendment →
+`needs-triage` issue; re-litigating a recently locked decision → PR comment;
+unactionable → a disposition line. Ticket the forks, not the observations.
+**Keep a deviations log** from the first edit: whenever
 the territory forces a departure from the issue/brief/plan — an edge case the
 spec missed, a wrong assumption, a **known unknown** the brief flagged — resolve
 it by the conservative option, log what + why, and keep going; the log lands
@@ -214,7 +218,9 @@ docs-sync edits — (it runs its two axes on their own tiers — opus for code, 
 for spec). **Auto-triage** each finding (this is the canonical definition — phase 7
 reuses it): harden rather than rip out capability,
 verify nits against the **pinned** dependency versions, reject known non-issues; fix
-the valid ones; record a one-line disposition per finding for the merge summary.
+the valid ones; record a one-line disposition per finding for the merge summary. A
+finding is an observation, not a work item — run each one down the **fix-first
+disposition ladder** and default to fixing, not filing.
 
 **5 · Local gate.** *Precondition:* phase 3 passed **or** the class is `docs` — if
 neither holds, you skipped a verification; stop and go back.
