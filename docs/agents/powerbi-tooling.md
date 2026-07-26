@@ -265,6 +265,18 @@ Findings from driving semantic-model edits through Desktop headlessly:
   mashup evaluations race and snap the engine pipe ("Pipe is broken" frown;
   bridge stuck "Host is not ready"); recovery is kill + reopen (TMDL/report on
   disk lose nothing). Wait for bridge `status: ready`, then one TOM pass.
+- **Don't `reload` an already-healthy Desktop "to be safe"** — on the
+  store-installed build, repeated reload cycles combined with TOM `SaveChanges()`
+  (the calc-banner clears above) invalidate the Mashup PackageSession and crash
+  the instance: `Could not find a PackageSession for the given sessionID`
+  (`InvalidPackageReferenceException`), bridge goes `not_connected`, and a TOM
+  connect/`SaveChanges` hangs. The visible state after the last verification
+  reload already *is* the committed state — report-layer edits are on disk before
+  launch — so a confirmation reload buys nothing and only adds crash risk. Reach
+  the merge gate on the last-verified session. Recovery: `Stop-Process
+  PBIDesktop,msmdsrv -Force`, relaunch fresh (a fresh open loads committed HEAD
+  directly), clear the calc banner **once**, present. Fresh-open + single
+  banner-clear is stable; reload-looping is not.
 - **DAX trap: `DATESINPERIOD` with an anchor outside the date column's range
   clamps to the nearest stored date instead of returning empty** — a "prior 28d"
   window before first ingest silently leaks current-window rows. Use
@@ -311,6 +323,29 @@ An empty result is the silent failure mode here — a scoped view of someone wit
 reports is indistinguishable from a broken predicate — so assert a **non-empty**
 result of an **independently computed size**, for a manager *and* a no-reports
 contributor. Compute the expectation with a bypassed-RLS query in the same session.
+
+**Isolating *which* permission hides a row.** RLS filters intersect and never
+widen — a `tablePermission` can only remove rows, so it can never re-admit one
+that relationship propagation already dropped, and a filter on a one-side table
+removes many-side rows matching *no* visible one-side row (this is how a
+`dim_user` row with no seat vanishes under the `dim_seat_current` permission).
+When several paths could be hiding the row, `View as` cannot tell them apart —
+every path hides it. Simulate one permission at a time as a `CALCULATE` table
+filter and read it headlessly:
+
+```powershell
+pwsh .github/powerbi/dax-eval.ps1 'EVALUATE CALCULATETABLE (
+    VALUES ( dim_user[user_email] ),
+    FILTER ( ALL ( dim_seat_current ), dim_seat_current[user_email] = "someone@itworx.com" ) )' -Port <port>
+```
+
+`FILTER ( ALL ( <one-side table> ), … )` has the same propagation semantics as an
+RLS row filter, and `ALL()` returns only real rows — no blank member — so
+unmatched many-side rows drop exactly as they do under the role. It needs no
+`Roles=`/`EffectiveUserName` connection string, and unlike either method above it
+can answer questions about a *prospective* model shape that does not exist yet.
+Compare against the unfiltered row count, and hold it to the same non-empty
+assertion.
 
 ## Rejected / out
 

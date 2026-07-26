@@ -136,7 +136,11 @@ ones here, ticket only the genuine forks. **Keep a deviations log** — every
 forced departure from the issue's plan, resolved conservatively, logged for the
 PR body and merge summary.
 
-**3 · Self-review.** Two axes, subagents, no Copilot anywhere in this skill:
+**3 · Self-review.** Two axes, subagents. This skill never *requests* a review
+bot, but the repo auto-runs `copilot-pull-request-reviewer` on every PR — a
+`desktop-bound` PR carries Copilot comments regardless, and they get triaged at
+the merge gate like any other finding rather than skipped because this skill
+says "no Copilot":
 
 - **Spec (sonnet):** issue + full diff → confirm every ask landed; multi-part
   issues checked bullet by bullet.
@@ -160,15 +164,22 @@ loop converges, before the PR — not per iteration (the screenshot is the check
 during the loop; `validate.ps1` is the pre-commit gate). Green → open a ready
 PR: Conventional-Commit title, template filled honestly, `Closes #<issue>`,
 deviations log in its section, and a **"Pages verified"** list naming each
-page/visual confirmed by screenshot. Do not request any review bot. Then
-`reflect.sh <issue> <pr-url>`.
+page/visual confirmed by screenshot. Do not request any review bot (the
+auto-review fires on its own; see step 6). Then `reflect.sh <issue> <pr-url>`.
 
 **5 · CI.** `ci-wait.sh <pr>`. On `"conflict"`: rebase, re-run the local gate,
 push, re-run. On `"checks-failed"`: fix and push. Note: local `validate.ps1`
 runs Windows fab-inspector where CI runs the linux one — a CI-only red is
 possible; fix it like any red, don't dismiss it as environmental.
 
-**6 · Merge gate.** **Hard stop.** Launch Desktop on the **worktree's** `.pbip`
+**6 · Merge gate.** **Hard stop.** First collect the auto-review: inline threads
+come from `gh api repos/<o>/<r>/pulls/<n>/comments` and the top-level body from
+`gh pr view <n> --json reviews` — inline comments do **not** appear in `reviews`,
+so both calls are needed. Fold any finding into the gate summary with a
+disposition each rather than letting the human discover it; reply in-thread with
+`POST .../pulls/<n>/comments/<id>/replies`, passing the body via `--input
+<json-file>` (a `-f body="…"` containing quotes gets shredded into `accepts 1
+arg(s), received 5`). Then launch Desktop on the **worktree's** `.pbip`
 (store-install: `Start-Process "shell:AppsFolder\$appId" -ArgumentList $pbip`
 per `powerbi-tooling.md`), wait for `status` ready, then post the merge summary
 with the final screenshots **in chat** — format and approval mechanics in
