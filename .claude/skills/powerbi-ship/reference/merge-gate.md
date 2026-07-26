@@ -7,18 +7,38 @@ to inspect.
 
 ## Sequence
 
-1. Launch Desktop on the worktree `.pbip` (store-install attach pattern,
+1. Collect the **auto-review** and dispose of every finding (below).
+2. Launch Desktop on the worktree `.pbip` (store-install attach pattern,
    `powerbi-tooling.md`), `powerbi-desktop status --wait-seconds 120` until ready.
-2. Clear the calc banner if raised (TOM `RequestRefresh(Calculate)` — tooling doc).
-3. `screenshot-all` the affected pages at scale 2; attach the PNGs in chat.
-4. Post the summary below. **Wait.** No auto-merge.
+3. Clear the calc banner if raised (TOM `RequestRefresh(Calculate)` — tooling doc).
+4. `screenshot-all` the affected pages at scale 2; attach the PNGs in chat.
+5. Post the summary below. **Wait.** No auto-merge.
 
-**Metadata-only class:** skip steps 1–3 — pages are pixel-identical to `main`,
+**Metadata-only class:** skip steps 2–4 — pages are pixel-identical to `main`,
 so a screenshot carries no review signal. In the summary, replace "Pages
 verified" with the structural evidence: the coverage assertions, and the
 `validate.ps1` verdict vs `main`'s baseline. Offer an optional Desktop render
 sanity-check (confirm no visual errored from the edit) — don't block on it.
 The hard stop stands.
+
+## Auto-review
+
+`copilot-pull-request-reviewer` runs on every PR in this repo without being
+asked, so a `desktop-bound` PR carries its comments even though this skill
+requests no bot. Read them on merit and fold each into the summary's
+**Self-review** block with a disposition, so the human meets findings already
+triaged rather than discovering them.
+
+Two calls, both needed — inline threads never appear in `reviews`:
+
+```sh
+gh api repos/<owner>/<repo>/pulls/<n>/comments   # inline threads
+gh pr view <n> --json reviews                    # top-level review body
+```
+
+Reply in-thread at `POST .../pulls/<n>/comments/<id>/replies`, passing the body
+via `--input <json-file>`. A `-f body="…"` containing quotes gets shredded by
+the shell into `accepts 1 arg(s), received 5`.
 
 ## Post this summary, then stop
 

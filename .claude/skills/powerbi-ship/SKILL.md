@@ -136,7 +136,9 @@ ones here, ticket only the genuine forks. **Keep a deviations log** — every
 forced departure from the issue's plan, resolved conservatively, logged for the
 PR body and merge summary.
 
-**3 · Self-review.** Two axes, subagents, no Copilot anywhere in this skill:
+**3 · Self-review.** Two axes, subagents; this skill requests no review bot. The
+repo's **auto-review** (`copilot-pull-request-reviewer`) still fires on every PR,
+so its findings are triaged at the gate alongside these two (step 6):
 
 - **Spec (sonnet):** issue + full diff → confirm every ask landed; multi-part
   issues checked bullet by bullet.
@@ -168,7 +170,8 @@ push, re-run. On `"checks-failed"`: fix and push. Note: local `validate.ps1`
 runs Windows fab-inspector where CI runs the linux one — a CI-only red is
 possible; fix it like any red, don't dismiss it as environmental.
 
-**6 · Merge gate.** **Hard stop.** Launch Desktop on the **worktree's** `.pbip`
+**6 · Merge gate.** **Hard stop.** Collect and dispose of the auto-review before
+the human sees the PR, then launch Desktop on the **worktree's** `.pbip`
 (store-install: `Start-Process "shell:AppsFolder\$appId" -ArgumentList $pbip`
 per `powerbi-tooling.md`), wait for `status` ready, then post the merge summary
 with the final screenshots **in chat** — format and approval mechanics in
