@@ -305,9 +305,11 @@ Findings from driving semantic-model edits through Desktop headlessly:
   and is left alone. The `>=` *lower* bound never needed the `+ 1` treatment:
   midnight is the start of the first day.
   **Keep the timestamp column for display.** The date twin is a boundary
-  operand, not a replacement: `pg_adopt`'s roster table and `pg_user_detail`'s
-  cards read `first_seen` / `last_seen`, because a person reads a timestamp in
-  their own zone while a boundary must not.
+  operand, not a replacement: `pg_adopt/tbl_users` and `pg_health/tbl_mismatch`
+  bind `last_seen`, and `pg_user_detail`'s two cards read both through
+  `[User First Seen]` / `[User Last Seen]` — because a person reads a timestamp
+  in their own zone while a boundary must not. Those are the only report-layer
+  references to either column; neither is used as a slicer or filter anywhere.
 - **Every `reload` (and fresh open) re-raises the "calculated objects need to be
   manually refreshed" banner**, which overlays the top ~60px of the canvas in
   screenshots and blanks roster/calc-column visuals. Clear it headlessly:

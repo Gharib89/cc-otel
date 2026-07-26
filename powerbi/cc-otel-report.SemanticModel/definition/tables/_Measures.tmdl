@@ -315,7 +315,8 @@ table _Measures
 	/// #294: the identity is against [Instrumented Seats], not [Paid Seats] — the cohorts count instrumented people
 	/// whose seat is on IS's roster, so the licensed seats the installer never reached are outside it by design.
 	/// #346: both bounds read dim_user[first_seen_date], the date-typed mart column — date-to-date against
-	/// dim_date[date_day], so the window is closed at both ends with no timezone skew. It replaces #341's
+	/// dim_date[date_day], so the window is closed at both ends with no skew *between the operands* (the day
+	/// grid itself is UTC, matching activity_date). It replaces #341's
 	/// < WindowEnd + 1, which admitted the whole boundary day but still lost the sliver the connector's local-zone
 	/// rendering pushed past midnight. [Reactivated Users]' "older than the window" test bounds on the same column
 	/// deliberately: split the two across [first_seen] and [first_seen_date] and a boundary-day identity is neither
@@ -582,8 +583,9 @@ table _Measures
 	/// could not respond to the slicer, so its delta was pinned and the sub-line read a permanent +0.0%.
 	/// Reuses [Instrumented Seats]' boundary-read rather than inventing a second window idiom, bound included:
 	/// <= WindowEnd against [first_seen_date], the date-typed mart column, so the comparison is date-to-date and
-	/// exact. #346 replaced the < WindowEnd + 1 form #341 had brought all three sites onto: it admitted the
-	/// boundary day but not the part of it the connector's local-zone rendering pushed past midnight.
+	/// exact. #346 replaced the < WindowEnd + 1 form — this site got it in #336 / PR #340, #341 brought the other
+	/// two on — which admitted the boundary day but not the part of it the connector's local-zone rendering
+	/// pushed past midnight.
 	/// The roster side stays dim_seat_current, deliberately: it sits on the one-side of the dim_user
 	/// relationship so its OrgScope filter propagates, where fact_seat_day's stands alone and would make a
 	/// leaver read as a roster mismatch for role viewers (ADR-0010).
