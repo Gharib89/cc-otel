@@ -107,6 +107,47 @@ table _Measures
 		displayFolder: Utilization
 		lineageTag: b2c3d4e5-0175-4f6a-9b0c-1d2e3f4a5b6c
 
+	/// How close to the ceiling a typical dev gets (#323) — the mean, across users, of each user's own
+	/// worst window in the period. Plotted weekly and split by window_type: 5h is the rate-limit window
+	/// that actually bites, 7d the subscription envelope. peak_pct is stored 0-100, so divide for 0.0%.
+	///
+	/// Unlike [Utilization Intensity] this needs no explicit window-instance collapse. That collapse
+	/// exists because reset-split segments are cumulative snapshots, so summing or averaging them
+	/// overstates — but MAX is idempotent over the split (max of per-window maxima is the max), so
+	/// grouping straight to user × window_type gives the identical number with half the DAX.
+	///
+	/// Rejected alternatives, recorded so they are not re-tried: the org-wide MAX(peak_pct) saturates
+	/// near 100% every week once ~50 seats are in play and renders as a flat line; P95 of window peaks
+	/// is viable but answers a different question than the page asks.
+	measure 'Peak Utilization %' =
+			VAR PerUser =
+			    ADDCOLUMNS (
+			        SUMMARIZE (
+			            fact_usage_window,
+			            fact_usage_window[user_email],
+			            fact_usage_window[window_type]
+			        ),
+			        "@UserPeak", CALCULATE ( MAX ( fact_usage_window[peak_pct] ) )
+			    )
+			RETURN
+			    DIVIDE ( AVERAGEX ( PerUser, [@UserPeak] ), 100 )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Utilization
+		lineageTag: b3230001-0000-4000-8000-000000000323
+
+	/// The two window_type series for cht_peak_util (#323), split as explicit measures rather than a
+	/// Series/legend projection — the report has no Series role anywhere and states its series this way
+	/// (see [Input Tokens (Weekly)] / [Output Tokens (Weekly)]), which also gives the legend real names.
+	measure 'Peak Utilization % (5h)' = CALCULATE ( [Peak Utilization %], fact_usage_window[window_type] = "5h" )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Utilization
+		lineageTag: b3230002-0000-4000-8000-000000000323
+
+	measure 'Peak Utilization % (7d)' = CALCULATE ( [Peak Utilization %], fact_usage_window[window_type] = "7d" )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Utilization
+		lineageTag: b3230003-0000-4000-8000-000000000323
+
 	measure 'Tool Acceptance Rate' =
 			DIVIDE (
 			    CALCULATE ( SUM ( fact_edit_decision[decision_count] ), fact_edit_decision[decision] = "accept" ),
@@ -825,6 +866,18 @@ table _Measures
 		displayFolder: Data Health
 		lineageTag: 62b922f3-1e40-4a6a-8f0e-cabed5dbf026
 
+	/// Third tier for the DQ FINDINGS card (#330) — the only card in pg_health's six-card band
+	/// that left the slot empty, so the band's bottom edge read ragged under that column.
+	/// A delta is not available here: dq_finding carries detected_at but has no dim_date
+	/// relationship, so [DQ Findings] is an all-time count and a "vs Nd" delta over it would
+	/// render a permanent +0.0%. Mirrors [Last Mart Refresh]'s treatment on the band's first
+	/// card instead — a freshness stamp, not a delta. The prefix rides in the formatString,
+	/// same as that measure.
+	measure 'Last DQ Finding' = MAX ( dq_finding[detected_at] )
+		formatString: "Latest " dd MMM HH:mm
+		displayFolder: Data Health
+		lineageTag: b3300001-0000-4000-8000-000000000330
+
 	/// Report-display helper: Executive Overview hero card sub-line.
 	/// #294: says "instrumented", not "paid seats" — it explains a utilization headline now denominated on the seats
 	/// telemetry reaches, so quoting the licensed count here would leave the ratio looking wrong.
@@ -853,7 +906,7 @@ table _Measures
 			    SWITCH (
 			        [Data Freshness Status],
 			        "Fresh", "Fresh",
-			        "Amber", "Delayed",
+			        "Amber", "Late",
 			        "Red", "Stale",
 			        [Data Freshness Status]
 			    )
@@ -865,9 +918,11 @@ table _Measures
 
 	/// Report-display helpers: KPI delta sub-lines (#119 polish, #165 dynamic window). Never blank — a
 	/// first-window report shows "— vs Nd" instead of "(Blank)"; N tracks the selected window.
-	/// These six use the compact "vs Nd" suffix rather than the "vs prior N days" the other pages carry:
-	/// Executive Overview packs a hero card plus five KPIs into 1224 units, so its delta cards are 137
-	/// wide and the long form truncates at the 12pt readable minimum (#309).
+	/// The compact "vs Nd" suffix is report-wide (#318). It started as an Executive-only exception because
+	/// that page packs a hero card plus five KPIs into 1224 units, so its delta cards are only 137
+	/// wide and the long form truncates at the 12pt readable minimum (#309). It became the convention
+	/// because on pg_eco the long form was the widest element on the card, out-inking the 24pt value it
+	/// modifies and leaving tiers 3 and 4 separated by colour alone.
 	measure 'Seat Utilization Δ Label' =
 			VAR D = [Seat Utilization Δ]
 			VAR N = COUNTROWS ( dim_date )
@@ -920,7 +975,7 @@ table _Measures
 			VAR D = [Active Roster Users Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" )
 		displayFolder: Seat ROI
 		lineageTag: b1780002-0000-4000-8000-000000000178
 
@@ -949,7 +1004,7 @@ table _Measures
 			VAR D = [Idle Seats Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" )
 		displayFolder: Seat ROI
 		lineageTag: b1780006-0000-4000-8000-000000000178
 
@@ -978,7 +1033,7 @@ table _Measures
 			VAR D = [New Users Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" )
 		displayFolder: Cohorts
 		lineageTag: b1780010-0000-4000-8000-000000000178
 
@@ -1007,7 +1062,7 @@ table _Measures
 			VAR D = [Reactivated Users Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" )
 		displayFolder: Cohorts
 		lineageTag: b1780014-0000-4000-8000-000000000178
 
@@ -1036,7 +1091,7 @@ table _Measures
 			VAR D = [Retained Users Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" )
 		displayFolder: Cohorts
 		lineageTag: b1780018-0000-4000-8000-000000000178
 
@@ -1069,7 +1124,7 @@ table _Measures
 			VAR D = [Cache Hit Ratio Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0;-0.0" ) & " pp vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0;-0.0" ) & " pp vs " & N & "d" )
 		displayFolder: Usage & Capacity
 		lineageTag: b1780022-0000-4000-8000-000000000178
 
@@ -1101,8 +1156,9 @@ table _Measures
 	measure 'Limit-Hit Rate Δ Label' =
 			VAR D = [Limit-Hit Rate Δ]
 			VAR N = COUNTROWS ( dim_date )
+			VAR Verdict = IF ( D > 0, " · worse", IF ( D < 0, " · better", "" ) )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0;-0.0" ) & " pp vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0;-0.0" ) & " pp vs " & N & "d" & Verdict )
 		displayFolder: Utilization
 		lineageTag: b1780026-0000-4000-8000-000000000178
 
@@ -1131,7 +1187,7 @@ table _Measures
 			VAR D = [Total Requests Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" )
 		displayFolder: API Usage
 		lineageTag: b1780030-0000-4000-8000-000000000178
 
@@ -1153,7 +1209,7 @@ table _Measures
 			VAR D = [Total Tokens Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" )
 		displayFolder: Usage & Capacity
 		lineageTag: b1780033-0000-4000-8000-000000000178
 
@@ -1179,7 +1235,7 @@ table _Measures
 			VAR D = [Sessions Using Agents % Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0;-0.0" ) & " pp vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0;-0.0" ) & " pp vs " & N & "d" )
 		displayFolder: Ecosystem
 		lineageTag: b1780036-0000-4000-8000-000000000178
 
@@ -1212,7 +1268,7 @@ table _Measures
 			VAR D = [Sessions Using Hooks % Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0;-0.0" ) & " pp vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0;-0.0" ) & " pp vs " & N & "d" )
 		displayFolder: Ecosystem
 		lineageTag: b1780040-0000-4000-8000-000000000178
 
@@ -1245,7 +1301,7 @@ table _Measures
 			VAR D = [Sessions Using MCP % Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0;-0.0" ) & " pp vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0;-0.0" ) & " pp vs " & N & "d" )
 		displayFolder: Ecosystem
 		lineageTag: b1780044-0000-4000-8000-000000000178
 
@@ -1278,7 +1334,7 @@ table _Measures
 			VAR D = [Sessions Using Plugins % Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0;-0.0" ) & " pp vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0;-0.0" ) & " pp vs " & N & "d" )
 		displayFolder: Ecosystem
 		lineageTag: b1780048-0000-4000-8000-000000000178
 
@@ -1311,7 +1367,7 @@ table _Measures
 			VAR D = [Sessions Using Skills % Δ]
 			VAR N = COUNTROWS ( dim_date )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0;-0.0" ) & " pp vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0;-0.0" ) & " pp vs " & N & "d" )
 		displayFolder: Ecosystem
 		lineageTag: b1780052-0000-4000-8000-000000000178
 
@@ -1343,8 +1399,9 @@ table _Measures
 	measure 'API Error Rate Δ Label' =
 			VAR D = [API Error Rate Δ]
 			VAR N = COUNTROWS ( dim_date )
+			VAR Verdict = IF ( D > 0, " · worse", IF ( D < 0, " · better", "" ) )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0;-0.0" ) & " pp vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0;-0.0" ) & " pp vs " & N & "d" & Verdict )
 		displayFolder: Ingest Health
 		lineageTag: b1780056-0000-4000-8000-000000000178
 
@@ -1372,8 +1429,9 @@ table _Measures
 	measure 'Roster Mismatch Count Δ Label' =
 			VAR D = [Roster Mismatch Count Δ]
 			VAR N = COUNTROWS ( dim_date )
+			VAR Verdict = IF ( D > 0, " · worse", IF ( D < 0, " · better", "" ) )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" & Verdict )
 		displayFolder: Data Health
 		lineageTag: b1780060-0000-4000-8000-000000000178
 
@@ -1401,8 +1459,9 @@ table _Measures
 	measure 'Off-Roster Active Users Δ Label' =
 			VAR D = [Off-Roster Active Users Δ]
 			VAR N = COUNTROWS ( dim_date )
+			VAR Verdict = IF ( D > 0, " · worse", IF ( D < 0, " · better", "" ) )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" & Verdict )
 		displayFolder: Data Health
 		lineageTag: b1780064-0000-4000-8000-000000000178
 
@@ -1430,8 +1489,9 @@ table _Measures
 	measure 'Unknown Email Users Δ Label' =
 			VAR D = [Unknown Email Users Δ]
 			VAR N = COUNTROWS ( dim_date )
+			VAR Verdict = IF ( D > 0, " · worse", IF ( D < 0, " · better", "" ) )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs prior " & N & " days", FORMAT ( D, "+0.0%;-0.0%" ) & " vs prior " & N & " days" )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" & Verdict )
 		displayFolder: Ingest Health
 		lineageTag: b1780068-0000-4000-8000-000000000178
 
