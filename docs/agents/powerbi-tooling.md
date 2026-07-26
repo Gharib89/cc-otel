@@ -298,6 +298,10 @@ Findings from driving semantic-model edits through Desktop headlessly:
   dropped. Measured and deliberately not tracked as work (#342, closed
   not-planned; the measurements are there and in PR #344). Treat
   `< Boundary + 1` as the best-available bound, not an exact one.
+  **The real close is a date-typed source column**, not a DAX bound: `marts.dim_user`
+  now carries `first_seen_date` / `last_seen_date` (#345), which import naive on both
+  sides and compare to `dim_date[date_day]` exactly. #346 repoints the measures onto
+  them and drops the `+ 1`; until it lands, the bound above still stands.
 - **Every `reload` (and fresh open) re-raises the "calculated objects need to be
   manually refreshed" banner**, which overlays the top ~60px of the canvas in
   screenshots and blanks roster/calc-column visuals. Clear it headlessly:
