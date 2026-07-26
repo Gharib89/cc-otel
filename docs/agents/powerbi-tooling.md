@@ -278,6 +278,15 @@ Findings from driving semantic-model edits through Desktop headlessly:
   clamps to the nearest stored date instead of returning empty** — a "prior 28d"
   window before first ingest silently leaks current-window rows. Use
   `DATESBETWEEN` with explicit bounds for fixed rolling windows.
+- **DAX trap: a `dateTime` column compared against a `dim_date` boundary needs
+  `< Boundary + 1`, never `<= Boundary`.** `dim_date[date_day]` is a Postgres
+  `date` imported at midnight, while `dim_user[first_seen]`-style columns carry a
+  real time of day, so `<=` silently drops every row falling *during* the boundary
+  day. `marts.dim_date` has no future padding, so on the report's default relative
+  window that boundary is today at 00:00 and the whole of today goes missing — the
+  symptom is a KPI that lags a day, never an error. Bit `[Instrumented Seats]`,
+  `[New Users]` and `[Roster Mismatch Count]` (#336, #341). The `>=` *lower* bound
+  needs no such treatment: midnight is the start of the first day.
 - **Every `reload` (and fresh open) re-raises the "calculated objects need to be
   manually refreshed" banner**, which overlays the top ~60px of the canvas in
   screenshots and blanks roster/calc-column visuals. Clear it headlessly:
