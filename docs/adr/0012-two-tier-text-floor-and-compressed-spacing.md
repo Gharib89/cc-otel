@@ -55,8 +55,10 @@ divergences and the test that decides which side of the first one an element fal
   fails the dense floor at any legible size. The rule converted a vague "8pt is too small"
   into "24 data-derived columns do not fit here", and the visual is being replaced rather
   than exempted.
-- `pg_eco` is the page with no slack in either dimension. It pays its 6 units of gap from
-  chart height (238 -> 232), the same move #309 made there (210 -> 202).
+- `pg_eco` is the page with no slack in either dimension. It pays its gap from chart
+  height (238 -> 230), the same move #309 made there (210 -> 202). It pays 8, not the 6
+  the other pages pay: closing its 2-unit label/value overlap in the same pass (#316)
+  pushes its band 2 units lower, and the gap is measured from the band's new bottom.
 - A design review that re-files "text is below 12pt" against dense elements is answered by
   this ADR, not re-litigated. New elements get the provenance test.
 - `CONTEXT.md` carries *chrome tier* and *dense tier* as glossary terms so the split is
