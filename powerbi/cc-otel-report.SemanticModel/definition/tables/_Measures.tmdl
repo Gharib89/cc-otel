@@ -259,12 +259,14 @@ table _Measures
 		lineageTag: a1c00005-0000-4000-8000-000000000028
 
 	/// Drives the Overview freshness KPI card background (#28): green/amber/red per [Data Freshness Status],
-	/// grey for no data. Hex values mirror theme.json good/neutral/bad + tertiary-grey.
+	/// grey for no data. Hex values mirror the AIWorx.json good/neutral/bad tokens + tertiary-grey (#312
+	/// retired the root theme.json this comment used to name). #315 darkened good/neutral to clear the
+	/// 4.5:1 text floor -- the pill renders these as 12pt text, not as a fill.
 	measure 'Freshness Color' =
 			SWITCH (
 			    [Data Freshness Status],
-			    "Fresh", "#6E9A21",
-			    "Amber", "#A17E00",
+			    "Fresh", "#4F6F17",
+			    "Amber", "#7D6100",
 			    "Red", "#B61E24",
 			    "#9AA0AA"
 			)
@@ -921,7 +923,7 @@ table _Measures
 	measure 'Active Roster Users Δ Color' =
 			VAR D = [Active Roster Users Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#587D17", "#B61E24" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#4F6F17", "#B61E24" ) )
 		displayFolder: Seat ROI
 		lineageTag: b1780003-0000-4000-8000-000000000178
 
@@ -950,7 +952,7 @@ table _Measures
 	measure 'Idle Seats Δ Color' =
 			VAR D = [Idle Seats Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#587D17" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#4F6F17" ) )
 		displayFolder: Seat ROI
 		lineageTag: b1780007-0000-4000-8000-000000000178
 
@@ -979,7 +981,7 @@ table _Measures
 	measure 'New Users Δ Color' =
 			VAR D = [New Users Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#587D17", "#B61E24" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#4F6F17", "#B61E24" ) )
 		displayFolder: Cohorts
 		lineageTag: b1780011-0000-4000-8000-000000000178
 
@@ -1008,7 +1010,7 @@ table _Measures
 	measure 'Reactivated Users Δ Color' =
 			VAR D = [Reactivated Users Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#587D17", "#B61E24" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#4F6F17", "#B61E24" ) )
 		displayFolder: Cohorts
 		lineageTag: b1780015-0000-4000-8000-000000000178
 
@@ -1037,7 +1039,7 @@ table _Measures
 	measure 'Retained Users Δ Color' =
 			VAR D = [Retained Users Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#587D17", "#B61E24" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#4F6F17", "#B61E24" ) )
 		displayFolder: Cohorts
 		lineageTag: b1780019-0000-4000-8000-000000000178
 
@@ -1070,7 +1072,7 @@ table _Measures
 	measure 'Cache Hit Ratio Δ Color' =
 			VAR D = [Cache Hit Ratio Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#587D17", "#B61E24" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#4F6F17", "#B61E24" ) )
 		displayFolder: Usage & Capacity
 		lineageTag: b1780023-0000-4000-8000-000000000178
 
@@ -1103,7 +1105,7 @@ table _Measures
 	measure 'Limit-Hit Rate Δ Color' =
 			VAR D = [Limit-Hit Rate Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#587D17" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#4F6F17" ) )
 		displayFolder: Utilization
 		lineageTag: b1780027-0000-4000-8000-000000000178
 
@@ -1180,7 +1182,7 @@ table _Measures
 	measure 'Sessions Using Agents % Δ Color' =
 			VAR D = [Sessions Using Agents % Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#587D17", "#B61E24" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#4F6F17", "#B61E24" ) )
 		displayFolder: Ecosystem
 		lineageTag: b1780037-0000-4000-8000-000000000178
 
@@ -1213,7 +1215,7 @@ table _Measures
 	measure 'Sessions Using Hooks % Δ Color' =
 			VAR D = [Sessions Using Hooks % Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#587D17", "#B61E24" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#4F6F17", "#B61E24" ) )
 		displayFolder: Ecosystem
 		lineageTag: b1780041-0000-4000-8000-000000000178
 
@@ -1246,7 +1248,7 @@ table _Measures
 	measure 'Sessions Using MCP % Δ Color' =
 			VAR D = [Sessions Using MCP % Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#587D17", "#B61E24" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#4F6F17", "#B61E24" ) )
 		displayFolder: Ecosystem
 		lineageTag: b1780045-0000-4000-8000-000000000178
 
@@ -1279,7 +1281,7 @@ table _Measures
 	measure 'Sessions Using Plugins % Δ Color' =
 			VAR D = [Sessions Using Plugins % Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#587D17", "#B61E24" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#4F6F17", "#B61E24" ) )
 		displayFolder: Ecosystem
 		lineageTag: b1780049-0000-4000-8000-000000000178
 
@@ -1312,7 +1314,7 @@ table _Measures
 	measure 'Sessions Using Skills % Δ Color' =
 			VAR D = [Sessions Using Skills % Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#587D17", "#B61E24" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#4F6F17", "#B61E24" ) )
 		displayFolder: Ecosystem
 		lineageTag: b1780053-0000-4000-8000-000000000178
 
@@ -1345,7 +1347,7 @@ table _Measures
 	measure 'API Error Rate Δ Color' =
 			VAR D = [API Error Rate Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#587D17" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#4F6F17" ) )
 		displayFolder: Ingest Health
 		lineageTag: b1780057-0000-4000-8000-000000000178
 
@@ -1374,7 +1376,7 @@ table _Measures
 	measure 'Roster Mismatch Count Δ Color' =
 			VAR D = [Roster Mismatch Count Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#587D17" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#4F6F17" ) )
 		displayFolder: Data Health
 		lineageTag: b1780061-0000-4000-8000-000000000178
 
@@ -1403,7 +1405,7 @@ table _Measures
 	measure 'Off-Roster Active Users Δ Color' =
 			VAR D = [Off-Roster Active Users Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#587D17" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#4F6F17" ) )
 		displayFolder: Data Health
 		lineageTag: b1780065-0000-4000-8000-000000000178
 
@@ -1432,7 +1434,7 @@ table _Measures
 	measure 'Unknown Email Users Δ Color' =
 			VAR D = [Unknown Email Users Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#587D17" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#4F6F17" ) )
 		displayFolder: Ingest Health
 		lineageTag: b1780069-0000-4000-8000-000000000178
 

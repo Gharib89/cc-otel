@@ -19,8 +19,8 @@
     "followedHyperlink": "#B21E23"
   },
   "charts": {
-    "$comment": "Chart-safe categorical palettes derived from the theme accents (same hues, lightness snapped into the OKLCH band per mode). Raw theme accents FAIL as data colors: accent1 too dark, accent4/accent6 too light + sub-3:1 contrast on white. Validated with the dataviz six-checks script 2026-07-13 — all checks pass in both modes (worst adjacent CVD deltaE: 19.7 light / 28.9 dark, all contrast >= 3:1). Assign slots in this fixed order, never cycled; >6 series folds into 'Other'.",
-    "categoricalLight": ["#3A44D4", "#0198CB", "#6E9A21", "#792A8E", "#A17E00", "#B61E24"],
+    "$comment": "Chart-safe categorical palettes derived from the theme accents (same hues, lightness snapped into the OKLCH band per mode). Raw theme accents FAIL as data colors: accent1 too dark, accent4/accent6 too light + sub-3:1 contrast on white. Re-validated with the dataviz six-checks script 2026-07-26 after #315 darkened the green slot — all checks pass in both modes (worst adjacent CVD deltaE: 10.5 light / 9.8 dark, all contrast >= 3:1; the earlier 19.7/28.9 figures predate the script's current Machado CVD model and no longer reproduce). Slot 5 keeps the lighter amber deliberately: an amber dark enough for the 4.5:1 text floor is equiluminant with slot 6 red and collapses to deltaE 1.0 under deuteranopia, so the semantic `neutral` text token diverges from this slot rather than dragging it down (ADR-0013). Assign slots in this fixed order, never cycled; >6 series folds into 'Other'.",
+    "categoricalLight": ["#3A44D4", "#0198CB", "#4F6F17", "#792A8E", "#A17E00", "#B61E24"],
     "categoricalDark": ["#5D67E6", "#0AA2D3", "#73A129", "#9F54B6", "#B58E0A", "#CE3F45"],
     "surfaceLight": "#FCFCFB",
     "surfaceDark": "#1A1A19",
