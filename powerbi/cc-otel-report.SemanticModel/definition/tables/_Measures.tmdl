@@ -900,7 +900,11 @@ table _Measures
 	/// roster row. #321: a linked identity is one of them.
 	/// #336: the as-of gate replaced an all-time count. Over ALL ( dim_user ) with no date path the headline
 	/// could not respond to the slicer, so its delta was pinned and the sub-line read a permanent +0.0%.
-	/// Reuses [Instrumented Seats]' boundary-read rather than inventing a second window idiom.
+	/// Reuses [Instrumented Seats]' boundary-read rather than inventing a second window idiom, but bounds it
+	/// as < WindowEnd + 1, not <= WindowEnd: first_seen is a dateTime carrying a time of day while date_day is
+	/// midnight, so <= drops every identity first seen *during* the window's last day — on the default relative
+	/// window, all of today. [Instrumented Seats] and [New Users] carry the unfixed form; they move numbers on
+	/// other pages, so they are not swept here.
 	/// The roster side stays dim_seat_current, deliberately: it sits on the one-side of the dim_user
 	/// relationship so its OrgScope filter propagates, where fact_seat_day's stands alone and would make a
 	/// leaver read as a roster mismatch for role viewers (ADR-0010).
@@ -911,7 +915,7 @@ table _Measures
 			        COUNTROWS (
 			            FILTER (
 			                ALL ( dim_user ),
-			                dim_user[first_seen] <= WindowEnd
+			                dim_user[first_seen] < WindowEnd + 1
 			                    && ( dim_user[is_linked_identity]
 			                        || ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
 			            )
@@ -1510,7 +1514,7 @@ table _Measures
 			        TRUE (),
 			        ISBLANK ( D ), "— vs " & N & "d",
 			        D = 0, "no new vs " & N & "d",
-			        FORMAT ( D, "+#,##0" ) & " vs " & N & "d · worse"
+			        FORMAT ( D, "+#,##0;-#,##0" ) & " vs " & N & "d · worse"
 			    )
 		displayFolder: Data Health
 		lineageTag: b1780060-0000-4000-8000-000000000178
@@ -1567,6 +1571,10 @@ table _Measures
 	/// is a measurement, so guarding on ISBLANK ( PP ) would blank the delta precisely when the card most needs
 	/// to report the first one appearing. Guard on the prior window's day count instead; the base already
 	/// resolves an empty window to 0 rather than BLANK, so no ISBLANK survives on the value path.
+	/// Requires the prior window to be the *same length*, not merely non-empty. DATESBETWEEN returns only dates
+	/// dim_date holds, so a window near first ingest gets a truncated predecessor — comparing 28 days of events
+	/// against 23 understates the prior and inflates the delta. This is a flow count, so length matters;
+	/// [Roster Mismatch Count Δ] is a stock read at the window boundary and only needs PriorDays > 0.
 	measure 'Unattributed Events Δ' =
 			VAR Days = COUNTROWS ( dim_date )
 			VAR FirstDay = MIN ( dim_date[date_day] )
@@ -1576,7 +1584,7 @@ table _Measures
 			        DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 )
 			    )
 			RETURN
-			    IF ( PriorDays > 0, [Unattributed Events] - [Unattributed Events PP] )
+			    IF ( PriorDays = Days, [Unattributed Events] - [Unattributed Events PP] )
 		formatString: +#,##0;-#,##0;0
 		displayFolder: Ingest Health
 		lineageTag: b1780067-0000-4000-8000-000000000178
@@ -1584,9 +1592,14 @@ table _Measures
 	measure 'Unattributed Events Δ Label' =
 			VAR D = [Unattributed Events Δ]
 			VAR N = COUNTROWS ( dim_date )
-			VAR Verdict = IF ( D > 0, " · worse", IF ( D < 0, " · better", "" ) )
+			VAR Verdict = IF ( D > 0, " · worse", " · better" )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+#,##0;-#,##0;0" ) & " vs " & N & "d" & Verdict )
+			    SWITCH (
+			        TRUE (),
+			        ISBLANK ( D ), "— vs " & N & "d",
+			        D = 0, "no change vs " & N & "d",
+			        FORMAT ( D, "+#,##0;-#,##0" ) & " vs " & N & "d" & Verdict
+			    )
 		displayFolder: Ingest Health
 		lineageTag: b1780068-0000-4000-8000-000000000178
 
