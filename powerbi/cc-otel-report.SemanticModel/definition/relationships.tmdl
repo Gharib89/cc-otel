@@ -86,11 +86,11 @@ relationship fact_edit_decision_to_fact_session
 	toColumn: fact_session.session_id
 
 relationship dim_user_to_vw_UserBasicInfo
-	fromColumn: dim_user.user_email
+	fromColumn: dim_user.rls_email
 	toColumn: vw_UserBasicInfo.Email
 
 relationship dim_user_to_dim_seat_current
-	fromColumn: dim_user.user_email
+	fromColumn: dim_user.rls_email
 	toColumn: dim_seat_current.user_email
 
 relationship fact_tool_outcome_to_dim_date

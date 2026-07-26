@@ -19,7 +19,9 @@ table _Measures
 		lineageTag: b6055541-5d85-4a6a-b268-5f526649c39f
 
 	/// Distinct users with any activity in context — "any signal that day", no minimum-activity gate (#9).
-	measure 'Active Users' = DISTINCTCOUNT(fact_session_daily[user_email])
+	/// #321: counts [rls_email], not [user_email] — anything claiming to count *people* counts one person per human,
+	/// so a linked personal identity does not count twice for their own manager (ADR-0011).
+	measure 'Active Users' = DISTINCTCOUNT(fact_session_daily[rls_email])
 		formatString: #,##0
 		displayFolder: Adoption
 		lineageTag: 55aa8e20-36db-4ca3-9484-07abdea77d38
@@ -365,6 +367,11 @@ table _Measures
 	/// window, and a shifted window (the PP measures) would credit machines the installer had not yet reached.
 	/// Unguarded it reported the prior 28 days as 20 instrumented seats when 13 of those machines had never emitted
 	/// by then, turning a flat ~-5 pp into a +60 pp jump on the exec hero.
+	/// #321: deliberately NOT guarded on dim_user[is_linked_identity], and that was measured rather than assumed.
+	/// The bridge to fact_seat_day is TREATAS on the *base* column dim_user[user_email], not the re-pointed
+	/// relationship, so a linked identity's personal address matches no seat-day and contributes nothing —
+	/// 20 seats before and after the re-point unfiltered, 1 before and after for a scoped manager. ADR-0011's
+	/// "stays out of [Instrumented Seats]" holds by construction here, not by a ninth guard.
 	measure 'Instrumented Seats' =
 			VAR WindowEnd = MAX ( dim_date[date_day] )
 			VAR Reached =
@@ -433,10 +440,15 @@ table _Measures
 
 	/// Roster-matched distinct actives; the window comes from the report's relative-date slicer (#165),
 	/// not DAX (#117: off-roster identities excluded from the headline, surfaced on Data Health instead).
+	/// #321: a linked identity does not hold the seat it now reaches, so it stays out of the roster set (ADR-0011).
 	measure 'Active Roster Users' =
 			CALCULATE (
-			    DISTINCTCOUNT ( fact_session_daily[user_email] ),
-			    FILTER ( dim_user, NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
+			    DISTINCTCOUNT ( fact_session_daily[rls_email] ),
+			    FILTER (
+			        dim_user,
+			        NOT dim_user[is_linked_identity]
+			            && NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
+			    )
 			)
 		formatString: #,##0
 		displayFolder: Seat ROI
@@ -587,7 +599,7 @@ table _Measures
 			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
 			VAR WeekEnd = MAX ( dim_date[week_start] ) + 6
 			RETURN
-			    IF ( WeekEnd <= Anchor, DISTINCTCOUNT ( fact_session_daily[user_email] ) )
+			    IF ( WeekEnd <= Anchor, DISTINCTCOUNT ( fact_session_daily[rls_email] ) )
 		formatString: #,##0
 		displayFolder: Seat ROI
 		lineageTag: a233816c-5328-45ad-8f54-a9d9399761fe
@@ -598,7 +610,7 @@ table _Measures
 			VAR Anchor = CALCULATE ( MAX ( dim_date[date_day] ), ALL ( dim_date ) )
 			VAR MonthEnd = EOMONTH ( MAX ( dim_date[month_start] ), 0 )
 			RETURN
-			    IF ( MonthEnd <= Anchor, DISTINCTCOUNT ( fact_session_daily[user_email] ) )
+			    IF ( MonthEnd <= Anchor, DISTINCTCOUNT ( fact_session_daily[rls_email] ) )
 		formatString: #,##0
 		displayFolder: Seat ROI
 		lineageTag: b7c4f1a8-2e93-45d6-8a01-6f3d9c2e7b15
@@ -632,7 +644,8 @@ table _Measures
 			    COUNTROWS (
 			        FILTER (
 			            dim_user,
-			            NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
+			            NOT dim_user[is_linked_identity]
+			                && NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
 			                && dim_user[first_seen] >= WindowStart
 			                && dim_user[first_seen] <= WindowEnd
 			        )
@@ -641,18 +654,25 @@ table _Measures
 		displayFolder: Cohorts
 		lineageTag: 21e7484a-8148-4f90-aed1-3e48a518cba9
 
+	/// #321: set-valued, so both sides move to the scoping address together — INTERSECT matches on value, and
+	/// a roster set of [user_email] against an activity set of [rls_email] would silently drop a linked identity's
+	/// corporate partner from the intersection.
 	measure 'Retained Users' =
 			VAR Days = COUNTROWS ( dim_date )
 			VAR FirstDay = MIN ( dim_date[date_day] )
 			VAR Roster =
 			    CALCULATETABLE (
-			        VALUES ( dim_user[user_email] ),
-			        FILTER ( dim_user, NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
+			        VALUES ( dim_user[rls_email] ),
+			        FILTER (
+			            dim_user,
+			            NOT dim_user[is_linked_identity]
+			                && NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
+			        )
 			    )
-			VAR Cur = VALUES ( fact_session_daily[user_email] )
+			VAR Cur = VALUES ( fact_session_daily[rls_email] )
 			VAR Prior =
 			    CALCULATETABLE (
-			        VALUES ( fact_session_daily[user_email] ),
+			        VALUES ( fact_session_daily[rls_email] ),
 			        DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 )
 			    )
 			RETURN
@@ -667,18 +687,22 @@ table _Measures
 			VAR FirstDay = MIN ( dim_date[date_day] )
 			VAR Roster =
 			    CALCULATETABLE (
-			        VALUES ( dim_user[user_email] ),
-			        FILTER ( dim_user, NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
+			        VALUES ( dim_user[rls_email] ),
+			        FILTER (
+			            dim_user,
+			            NOT dim_user[is_linked_identity]
+			                && NOT ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
+			        )
 			    )
 			VAR OldUsers =
 			    CALCULATETABLE (
-			        VALUES ( dim_user[user_email] ),
+			        VALUES ( dim_user[rls_email] ),
 			        FILTER ( dim_user, dim_user[first_seen] < FirstDay )
 			    )
-			VAR Cur = VALUES ( fact_session_daily[user_email] )
+			VAR Cur = VALUES ( fact_session_daily[rls_email] )
 			VAR Prior =
 			    CALCULATETABLE (
-			        VALUES ( fact_session_daily[user_email] ),
+			        VALUES ( fact_session_daily[rls_email] ),
 			        DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 )
 			    )
 			RETURN
@@ -782,7 +806,7 @@ table _Measures
 
 	measure 'Users Using Agents' =
 			CALCULATE (
-			    DISTINCTCOUNT ( fact_session[user_email] ),
+			    DISTINCTCOUNT ( fact_session[rls_email] ),
 			    KEEPFILTERS ( TREATAS ( VALUES ( bridge_session_agent[session_id] ), fact_session[session_id] ) )
 			)
 		formatString: #,##0 "users"
@@ -796,7 +820,7 @@ table _Measures
 
 	measure 'Users Using Skills' =
 			CALCULATE (
-			    DISTINCTCOUNT ( fact_session[user_email] ),
+			    DISTINCTCOUNT ( fact_session[rls_email] ),
 			    KEEPFILTERS ( TREATAS ( VALUES ( bridge_session_skill[session_id] ), fact_session[session_id] ) )
 			)
 		formatString: #,##0 "users"
@@ -810,7 +834,7 @@ table _Measures
 
 	measure 'Users Using MCP' =
 			CALCULATE (
-			    DISTINCTCOUNT ( fact_session[user_email] ),
+			    DISTINCTCOUNT ( fact_session[rls_email] ),
 			    KEEPFILTERS ( TREATAS ( VALUES ( bridge_session_mcp[session_id] ), fact_session[session_id] ) )
 			)
 		formatString: #,##0 "users"
@@ -824,7 +848,7 @@ table _Measures
 
 	measure 'Users Using Hooks' =
 			CALCULATE (
-			    DISTINCTCOUNT ( fact_session[user_email] ),
+			    DISTINCTCOUNT ( fact_session[rls_email] ),
 			    KEEPFILTERS ( TREATAS ( VALUES ( bridge_session_hook[session_id] ), fact_session[session_id] ) )
 			)
 		formatString: #,##0 "users"
@@ -838,7 +862,7 @@ table _Measures
 
 	measure 'Users Using Plugins' =
 			CALCULATE (
-			    DISTINCTCOUNT ( fact_session[user_email] ),
+			    DISTINCTCOUNT ( fact_session[rls_email] ),
 			    KEEPFILTERS ( TREATAS ( VALUES ( bridge_session_plugin[session_id] ), fact_session[session_id] ) )
 			)
 		formatString: #,##0 "users"
@@ -846,17 +870,31 @@ table _Measures
 		lineageTag: a2a7369f-0c07-4f9e-8dc0-b716f8e8484e
 
 	/// Actives in the selected window with no roster row — the headline exclusion, surfaced (#117 decision 2).
+	/// #321: the assertion this ticket exists for — a linked identity still counts here, and because it now reaches
+	/// its management chain through [rls_email] the right manager reads 1 where it read blank (ADR-0011). Unguarded,
+	/// the re-pointed relationship would resolve a seat it does not hold and take this to 0 for everyone.
 	measure 'Off-Roster Active Users' =
 			CALCULATE (
-			    DISTINCTCOUNT ( fact_session_daily[user_email] ),
-			    FILTER ( dim_user, ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
+			    DISTINCTCOUNT ( fact_session_daily[rls_email] ),
+			    FILTER (
+			        dim_user,
+			        dim_user[is_linked_identity]
+			            || ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
+			    )
 			)
 		formatString: #,##0
 		displayFolder: Data Health
 		lineageTag: ad8752e9-4c15-4182-a3c2-a571460975f0
 
-	/// All-time: telemetry identities (incl. is_unknown) with no roster row.
-	measure 'Roster Mismatch Count' = COUNTROWS ( FILTER ( ALL ( dim_user ), ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) ) )
+	/// All-time: telemetry identities (incl. is_unknown) with no roster row. #321: a linked identity is one of them.
+	measure 'Roster Mismatch Count' =
+			COUNTROWS (
+			    FILTER (
+			        ALL ( dim_user ),
+			        dim_user[is_linked_identity]
+			            || ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
+			    )
+			)
 		formatString: #,##0
 		displayFolder: Data Health
 		lineageTag: 7f426481-4c81-4b6a-9e31-c45412e896fd
@@ -1562,10 +1600,18 @@ table _Measures
 	/// reconciliation column say the same word for the same state.
 	/// HASONEVALUE because MAXX over many users returns the alphabetical max, which is "Standard" — a plausible
 	/// wrong tier rather than a visible fallback if the drillthrough filter ever fails to land.
+	/// #321: the MAXX scan skips linked identities, so a personal address on the User Detail card keeps reading
+	/// "Off-roster identity" rather than the corporate seat's tier it now reaches (ADR-0011).
 	measure 'Selected User Tier' =
 			IF (
 			    HASONEVALUE ( dim_user[user_email] ),
-			    COALESCE ( MAXX ( dim_user, RELATED ( dim_seat_current[seat_tier] ) ), "Off-roster identity" ),
+			    COALESCE (
+			        MAXX (
+			            FILTER ( dim_user, NOT dim_user[is_linked_identity] ),
+			            RELATED ( dim_seat_current[seat_tier] )
+			        ),
+			        "Off-roster identity"
+			    ),
 			    "All users"
 			)
 		displayFolder: User Detail

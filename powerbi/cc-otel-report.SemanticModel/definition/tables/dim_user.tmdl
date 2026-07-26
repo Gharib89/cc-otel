@@ -59,6 +59,26 @@ table dim_user
 
 		annotation SummarizationSetBy = Automatic
 
+	column rls_email
+		dataType: string
+		lineageTag: 8d34c628-8895-495c-8bf7-570b62bac01e
+		summarizeBy: none
+		sourceColumn: rls_email
+
+		annotation SummarizationSetBy = Automatic
+
+	/// The off-roster flag that survives the link (ADR-0011), model calc column so it materialises at refresh and is
+	/// viewer-independent. Both relationships out of dim_user hang off [rls_email], so for a linked identity
+	/// RELATED ( dim_seat_current[...] ) resolves through a seat it does not hold — every site reading that as
+	/// "holds a seat" guards on this instead of on ISBLANK alone. #320 sets rls_email = user_email when unlinked,
+	/// so this is FALSE for every ordinary identity.
+	column is_linked_identity = dim_user[user_email] <> dim_user[rls_email]
+		dataType: boolean
+		lineageTag: d3210001-0000-4000-8000-000000000321
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
 	/// Roster/telemetry reconciliation bucket for the Data Health mismatch table (#124), model-side calc column, no migration.
 	/// #294: rewritten to the seat-population taxonomy (#290) now that the roster is IS's and not fabricated from telemetry —
 	/// "Off-roster identity" is reachable for the first time. Unknown-id stays first (spoofed/blank emails, #8): those have no
@@ -67,13 +87,16 @@ table dim_user
 	/// a calculated column materialises at refresh and cannot read the date slicer.
 	/// An untracked seat (one that has never emitted) is unreachable here by construction — dim_user is telemetry-only, so a
 	/// never-emitting seat has no row. It belongs to the untracked-seat worklist read off dim_seat_current[telemetry_status] (#295).
+	/// #321: [is_linked_identity] short-circuits the seat walk — a linked identity reaches its corporate seat through the
+	/// re-pointed relationship but does not hold it, so it must keep reading "Off-roster identity" (ADR-0011).
 	column 'Roster Status' =
 			VAR Cutoff = MAX ( dim_date[date_day] ) - 27
 			RETURN
 			    SWITCH (
 			        TRUE (),
 			        dim_user[is_unknown] = TRUE (), "Unknown id",
-			        ISBLANK ( RELATED ( dim_seat_current[user_email] ) ), "Off-roster identity",
+			        dim_user[is_linked_identity]
+			            || ISBLANK ( RELATED ( dim_seat_current[user_email] ) ), "Off-roster identity",
 			        dim_user[last_seen] >= Cutoff, "Active seat",
 			        "Dormant seat"
 			    )

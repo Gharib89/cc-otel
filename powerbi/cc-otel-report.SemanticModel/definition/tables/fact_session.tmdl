@@ -61,6 +61,16 @@ table fact_session
 
 		annotation SummarizationSetBy = Automatic
 
+	/// #321: the scoping address, mirroring fact_session_daily[rls_email] — see the note there. Feeds the five
+	/// [Users Using *] Ecosystem counts, the only people-counting measures over this grain.
+	column rls_email = RELATED ( dim_user[rls_email] )
+		dataType: string
+		lineageTag: d3210003-0000-4000-8000-000000000321
+		summarizeBy: none
+		isHidden
+
+		annotation SummarizationSetBy = Automatic
+
 	partition fact_session = m
 		mode: import
 		source =
