@@ -288,7 +288,7 @@ Findings from driving semantic-model edits through Desktop headlessly:
   so `<=` silently drops every row falling *during* the boundary day. `dim_date`
   has no future padding, so on the report's default relative window that boundary
   is today at 00:00 and the whole of today goes missing — the symptom is a KPI
-  that lags a day, never an error. Bit `[Roster Mismatch Count]` (#336 / PR #340)
+  that lags a day, never an error. It bit `[Roster Mismatch Count]` (#336 / PR #340)
   and `[Instrumented Seats]` + `[New Users]` (#341). The `>=` *lower* bound needs
   no such treatment: midnight is the start of the first day.
   **This half-closes it, not closes it.** The PostgreSQL connector renders a
