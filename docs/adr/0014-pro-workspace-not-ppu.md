@@ -8,9 +8,16 @@ feature. Reviewing the licensing rules before the first publish showed that read
 backwards: PPU is not a capability the publisher grants, it is a requirement the workspace
 imposes on every consumer. Microsoft's rule is unambiguous — "to collaborate and share
 content in a PPU workspace, all users need a PPU license", and a Pro-licensed viewer is
-*blocked* with an upgrade prompt rather than degraded. The report's audience is ITWorx
-engineering managers reached through `OrgScope` RLS, so a PPU workspace would convert every
-one of them into a PPU purchase.
+*blocked* with an upgrade prompt rather than degraded.
+
+The tenant licence inventory (2026-07-26, `subscribedSkus`) shows there is **no
+`POWER_BI_PRO` SKU in the tenant at all**: paid Power BI is entirely
+`PBI_PREMIUM_PER_USER` (61 of 100 assigned), and `POWER_BI_STANDARD` (178 assigned) is the
+free tier — `SPE_E3` does not bundle Pro. That makes the Pro workspace the *superset*
+choice rather than the cheaper one: "View shared content in non-Premium workspaces" is
+allowed for both Pro and PPU licences, so the 61 existing PPU holders read a Pro workspace
+unimpeded, and any future Pro assignment also works. A PPU workspace would narrow the
+possible audience to PPU holders alone while buying nothing.
 
 Nothing in the report needs what PPU buys. The Pro limits it would lift are a 1 GB model
 (this model imports 14 marts over a fleet of ~200 seats), 8 refreshes/day (the schedule
@@ -54,9 +61,16 @@ publish rather than after.
 
 ## Consequences
 
-- Every consumer needs a Pro or PPU licence until an F64+ capacity exists. If the manager
-  audience holds Free licences, distribution blocks on IS assigning licences — publishing
-  and refresh do not.
+- Every consumer needs a Pro or PPU licence until an F64+ capacity exists. In practice that
+  means a PPU seat, since the tenant carries no Pro SKU — 39 of 100 PPU seats were spare as
+  of 2026-07-26, so a manager audience fits without a purchase, but each manager outside the
+  61 already assigned needs IS to assign one. Publishing and refresh don't block on this;
+  only distribution does.
+- **The instrumented developers cannot see the report.** 178 tenant users hold the free
+  `POWER_BI_STANDARD` licence, which grants no access to shared content outside a Premium or
+  F64+ capacity. A report page showing a developer their own usage is therefore not
+  reachable by licensing alone — it needs an F64+ capacity, not more PPU seats. The report's
+  audience stays managers via `OrgScope` until that changes.
 - Refresh is capped at 8 slots/day. The schedule uses 07:30 and 19:30 Cairo; a future need
   for near-real-time refresh would hit the Pro ceiling and require capacity, not PPU.
 - No deployment pipelines. Interim-to-prod promotion (#83) stays a change to the model's
