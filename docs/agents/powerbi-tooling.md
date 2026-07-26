@@ -310,11 +310,15 @@ network, not the role). Two ways round it, and a run should use both:
   end-to-end test: `USERPRINCIPALNAME()` returns the connected operator, so the
   shipped role is exercised verbatim against a genuine identity.
 - **A temp clone of the role with `USERPRINCIPALNAME()` replaced by a literal UPN**,
-  TOM-added to the live model and queried via `Roles=<clone>`, covers any other
+  added to the live model and queried via `Roles=<clone>`, covers any other
   identity. It exercises the real filter engine — propagation included — and only
-  substitutes the identity function. Delete the clones before the merge gate; a TOM
-  `SaveChanges()` does not touch the on-disk TMDL, but a Desktop **save** would
-  serialize them into the pbip.
+  substitutes the identity function. Delete the clones before the merge gate; adding
+  one does not touch the on-disk TMDL, but a Desktop **save** would serialize them
+  into the pbip. Add them over **ADOMD as TMSL**, not TOM — TOM/AMO is not in
+  `.pbi-tools/` (only ADOMD is), and a `create` command with
+  `parentObject: {"database": <id>}` is what works: `createOrReplace` on a role that
+  does not exist yet fails with `cannot find the parent object of the new object`
+  (#321).
 
 An empty result is the silent failure mode here — a scoped view of someone with no
 reports is indistinguishable from a broken predicate — so assert a **non-empty**
