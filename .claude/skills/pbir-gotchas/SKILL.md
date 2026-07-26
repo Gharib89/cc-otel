@@ -183,6 +183,24 @@ Consequence: you cannot cap a high-cardinality bar to "top N" purely on disk. Op
 
 Before inserting, check each visual for an existing `visualContainerObjects.general` and **merge into it** (or skip — it already carries alt) rather than adding a second key. In this report only `pg_capacity/cht_util_heatmap` (pivotTable) shipped with hand-authored alt, so it was the lone landmine across a 110-visual pass. Note the two `general` bags are independent: a `textbox` carrying paragraphs in `objects.general` takes a new `visualContainerObjects.general` alt cleanly — fab-inspector does **not** merge `objects` and `visualContainerObjects`, so only a duplicate **within** `visualContainerObjects` collides.
 
+## 24. A canvas tooltip without `show` is silently inert — and the enum is `'Canvas'`, not `'ReportPage'`
+
+`visualContainerObjects.visualTooltip` carrying only `type` + `section` renders **no tooltip at all**, with no error anywhere: ajv passes, the lint passes, fab-inspector passes, and the tooltip page itself loads fine when opened directly. The Tooltips card's on/off toggle is a third property and it is **not** defaulted on:
+
+```json
+"visualTooltip": [{ "properties": {
+  "type":    { "expr": { "Literal": { "Value": "'Canvas'" } } },
+  "section": { "expr": { "Literal": { "Value": "'pg_tt_dq'" } } },
+  "show":    { "expr": { "Literal": { "Value": "true" } } }
+}}]
+```
+
+Settled by having Desktop write it (#325): Desktop added exactly `show` and **kept** `'Canvas'`. The data-goblin `pbir-format` reference's `'ReportPage'` spelling is wrong for PBIR, and Microsoft's `supportedTypes: { canvas }` is the *visual-capability* declaration, a different layer — neither is the report-format enum. `section` is the page **folder name**, not its display name.
+
+Verification is human-only: the desktop-bridge can screenshot but cannot synthesise a hover, so no automated check confirms a tooltip. Budget a human hover.
+
+Beware the cost of the Desktop route: saving re-serializes the whole pbip (~300 files on this report — key reordering, empty property bags, a `$schema` bump on the touched visual, and a full `_Measures.tmdl` reflow). Diff with `--ignore-all-space`, confirm the model is semantically unchanged (compare the measure-name set, don't eyeball 1800 lines), then transplant just the confirmed property rather than committing the churn.
+
 ## Validation flow
 
 Run `pwsh .github/powerbi/validate.ps1` before commit — it mirrors the `ci-powerbi` gate locally (ajv schema, pbir-gotchas lint, fab-inspector rules, Tabular Editor 2 BPA, MS conformance CLI). Setup, the tooling roster, and the exit-code contract: `docs/agents/powerbi-tooling.md`.
