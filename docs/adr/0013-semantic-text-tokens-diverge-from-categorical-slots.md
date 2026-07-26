@@ -33,15 +33,25 @@ whose whole problem is being mistaken for red. And 6-8 is the band the validator
   slot** (`dataColors[]`, `categoricalLight[]`) fills a mark and meets **3:1** plus
   colourblind separation from its neighbours. Where one colour cannot satisfy both, the
   families diverge and the divergence is the point, not an oversight.
-- **Green is shared; amber is not.** `good` and `dataColors[2]` both move to `#4F6F17`
-  (5.65:1) because hue 128 stays CVD-separable at that lightness. `neutral` moves to
-  `#7D6100` (5.71:1) while `dataColors[4]` / `categoricalLight[4]` keep `#A17E00`
-  (3.72:1) — which clears the graphical floor it is actually held to.
+- **Both hues diverge, and only the text side moves.** `good` -> `#4F6F17` (5.65:1) and
+  `neutral` -> `#7D6100` (5.71:1) as text; `dataColors[2]` / `categoricalLight[2]` keep
+  `#6E9A21` (3.24:1) and `dataColors[4]` / `categoricalLight[4]` keep `#A17E00` (3.72:1)
+  as marks. Both mark values clear the 3:1 floor they are actually held to, and darkening
+  either to its text value would buy nothing while destroying its CVD separation from
+  `bad` red — for green, 12.1 down to 1.5 against a floor of 6.0. The first draft of this
+  decision moved the green slot and left the amber slot, applying the rule to one hue and
+  not the other; the design review on the PR caught the asymmetry.
 - **A semantic text token owes no colour separation because it never carries meaning
   alone.** Every delta sub-line spells the sign (`+4.2% vs prior 28 days`) and every
   freshness pill spells the state (`Fresh`, `Delayed`, `Stale`). Hue is redundant
   reinforcement there, so the CVD standard that governs chart series does not apply.
-  A categorical slot has no such words and therefore cannot borrow this exemption.
+  A categorical slot has no such words and therefore cannot borrow this exemption — which
+  is why the marks, not the text, are the side that keeps the separable values.
+  The exemption has one known soft spot, recorded in #326: on an *inverted-sentiment*
+  card the sign contradicts the verdict (falling error rate is good news carrying a `-`),
+  so the sign alone does not spell the sentiment out. That predates this ADR — those cards
+  ran `#587D17` against `#B61E24` at a separation of 2.9, already unusable — so it is a
+  standing gap in the delta captions, not a cost of this decision.
 - **`bad` red is the anchor and does not move.** It already passes at 6.39:1, and
   lightening it to open CVD headroom for amber would spend contrast to buy separation —
   the wrong trade when the words already carry the meaning.
@@ -53,9 +63,14 @@ whose whole problem is being mistaken for red. And 6-8 is the band the validator
 
 ## Consequences
 
-- The report contains exactly one green (`#4F6F17`) and two ambers. The second amber is
-  legitimate and named: `neutral` is text, `dataColors[4]` is a mark. A design review that
-  re-files "two ambers" is answered by this ADR.
+- The report contains two greens and two ambers, and each pair splits on the same seam:
+  `good` / `neutral` are text, `dataColors[2]` / `dataColors[4]` are marks. A design review
+  that re-files "two greens" or "two ambers" is answered by this ADR. What would be a real
+  defect is a *third* value in either hue with no role to justify it — which is what
+  `#587D17` was in the delta measures before #315 swept it.
+- The chart palette is byte-identical to what it was before #315. Only `design-tokens.json`
+  prose changed there, to record why slot 3 stays light and to correct figures that no
+  longer reproduced.
 - `Freshness Color` and the sixteen `<metric> Delta Color` measures are semantic text
   tokens expressed in DAX, so they carry the text hexes, not the slot hexes. They are
   hardcoded literals with no theme binding available to a measure — a known duplication
