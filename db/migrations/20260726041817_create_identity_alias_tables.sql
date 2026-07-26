@@ -32,7 +32,7 @@ CREATE TABLE ref.identity_alias (
     personal_email TEXT PRIMARY KEY,
     corporate_email TEXT,
     added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    added_by TEXT NOT NULL DEFAULT CURRENT_USER,
+    added_by TEXT NOT NULL DEFAULT current_user,
     notes TEXT
 );
 
