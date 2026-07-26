@@ -39,10 +39,13 @@ which staleness stays below two hours and the card measures what it claims to me
   This keeps `Data Freshness Status` inside its 24h amber threshold by a wide margin, making
   Amber a genuine signal that ingest or `pg_cron` has stopped.
 - **Consumers reach the report through a Power BI app, never workspace access.** App
-  distribution enforces `OrgScope` without granting a workspace role, and it carries the
-  audience split `powerbi/README.md` specifies: the Data Health page goes to the owner/IS
-  audience only, because under the role its off-roster visuals render empty and read "all
-  clear" precisely when they are not.
+  distribution enforces `OrgScope` without granting a workspace role. The app has a **single
+  audience**: managers. The per-page audience split this ADR originally carried was dropped
+  once it proved unbuildable — audiences scope items, not pages, and hiding `pg_health` doesn't
+  contain it either, since every visible page has a `nav_health` button and navigation buttons
+  reach hidden pages. Reserving it would have required splitting the report in two over one
+  semantic model; the accepted consequence is that a manager can open Data Health and read it
+  as "all clear" when under `OrgScope` its off-roster visuals simply render empty.
 - **Only Viewers and app consumers are scoped.** RLS "doesn't apply to workspace Admin, Member,
   or Contributor roles", so every workspace role above Viewer is an unscoped view of all roster
   addresses. The workspace has exactly one Admin and no other members; handover happens by

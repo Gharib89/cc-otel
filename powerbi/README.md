@@ -102,16 +102,26 @@ cards colour themselves from the `Freshness Color` measure on all six pages. Wha
    publish would create a duplicate pair and leave the app bound to the old report while fresh
    data landed in the new one.
 
-### Audiences — Data Health is owner + IS only
+### Distribution — one audience, and Data Health is visible to it
 
-The report is distributed as a **Power BI App with audiences** (ADR-0014 — consumers get no
-workspace role at all, so `OrgScope` always applies). The **Data Health** page
-(`pg_health`) goes to the owner/IS audience only — never a manager audience. The reason is product,
-not security: `OrgScope` (ADR-0010) makes the page *safe* for a manager, but not *truthful*. Its
-off-roster-active-users and identity-mismatch visuals key on identities with no HR row, so under the
-role they render zero and empty — the page reads "everything is fine" precisely when it is not.
-Scoping is the model's job and holds regardless of audience (see RLS above); the audience split here
-only keeps a page whose meaning depends on org-wide visibility away from viewers who lack it.
+The report is distributed as a **Power BI App** (ADR-0014 — consumers get no workspace role at
+all, so `OrgScope` always applies). It has a **single audience**: managers.
+
+An earlier version of this section reserved the **Data Health** page (`pg_health`) for an
+owner/IS audience. That design is dropped because it can't be built. App audiences scope
+**items** — reports, dashboards, links — not pages within a report, and hiding a page doesn't
+help either: every visible page carries a `nav_health` button, and page-navigation buttons reach
+hidden pages perfectly well. Delivering it would have meant splitting the report in two over the
+same semantic model, which was judged not worth a second PBIR artifact and permanent page-set
+drift.
+
+**Accepted consequence, deliberately not tracked:** a manager can open Data Health, and under
+`OrgScope` (ADR-0010) it is *safe* but not *truthful*. Its off-roster-active-users and
+identity-mismatch visuals key on identities with no HR row, so under the role they render zero
+and empty — the page reads "everything is fine" precisely when it is not. Scoping is the model's
+job and holds regardless (see RLS above); what's lost is only the guarantee that nobody reads a
+page whose meaning depends on org-wide visibility. If that misreading ever costs something, the
+cheap fix is a viewer-scoped banner on the page, not an audience split.
 
 ## CI validation
 
