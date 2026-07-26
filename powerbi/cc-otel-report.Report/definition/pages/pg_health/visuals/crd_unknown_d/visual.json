@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Unknown Email Users Δ Label"
+                  "Property": "Unattributed Session Rate Δ Label"
                 }
               },
-              "queryRef": "_Measures.Unknown Email Users Δ Label",
-              "nativeQueryRef": "Unknown Email Users Δ Label"
+              "queryRef": "_Measures.Unattributed Session Rate Δ Label",
+              "nativeQueryRef": "Unattributed Session Rate Δ Label"
             }
           ]
         }
@@ -54,7 +54,7 @@
                           "Entity": "_Measures"
                         }
                       },
-                      "Property": "Unknown Email Users Δ Color"
+                      "Property": "Unattributed Session Rate Δ Color"
                     }
                   }
                 }

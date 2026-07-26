@@ -104,6 +104,10 @@ _Avoid_: merged user, alias account, identity resolution
 The address an identity is **secured** as, distinct from the address it **emits** as — `dim_user[rls_email]`. Its own address for everyone except a **linked identity**, which carries its corporate counterpart's. Both relationships out of `dim_user` key on it, so the `OrgScope` predicates themselves never mention linking (ADR-0011).
 _Avoid_: canonical email, primary email
 
+**Unattributed telemetry**:
+A metric or event whose `user_email` is NULL, bucketed by `marts.email_bucket` into the single `'(unknown)'` identity. Unattributed rows keep their facts and their session, so volume is measurable; what is lost is the person. Because every NULL-email row collapses into one `dim_user` row, the *number of people* behind unattributed telemetry is not derivable from the marts — only its share of traffic is.
+_Avoid_: unknown email users, anonymous user, orphan telemetry
+
 ### Licensing
 
 **Seat**:

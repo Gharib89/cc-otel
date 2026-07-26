@@ -320,10 +320,19 @@ table _Measures
 		displayFolder: Ingest Health
 		lineageTag: a1c00006-0000-4000-8000-000000000028
 
-	/// Distinct client-asserted emails flagged unresolved (#28 ingest-health page). Spoofing/blank emails
-	/// land as is_unknown in dim_user (#8); surfaced as a count, never silently dropped.
-	measure 'Unknown Email Users' = CALCULATE ( DISTINCTCOUNT ( dim_user[user_email] ), dim_user[is_unknown] = TRUE )
-		formatString: #,##0
+	/// Share of sessions arriving with no client-asserted email (#28 ingest-health page, #336 rewrite).
+	/// Replaces [Unknown Email Users], which could only ever return 0 or 1: marts.email_bucket maps a NULL
+	/// email to the literal '(unknown)' and dim_user is unique on user_email, so every unattributed identity
+	/// in the estate collapses into a single row. Counting them was a flag wearing a user count.
+	/// Volume survives that collapse, so the card measures traffic instead. fact_session is one row per
+	/// session_id — "3% of sessions" is actionable where "3% of session-days" needs a footnote and would
+	/// weight a session spanning midnight twice in a data-quality ratio.
+	measure 'Unattributed Session Rate' =
+			DIVIDE (
+			    CALCULATE ( COUNTROWS ( fact_session ), dim_user[is_unknown] = TRUE ),
+			    COUNTROWS ( fact_session )
+			)
+		formatString: 0.0%;-0.0%;0.0%
 		displayFolder: Ingest Health
 		lineageTag: a1c00007-0000-4000-8000-000000000028
 
@@ -886,15 +895,25 @@ table _Measures
 		displayFolder: Data Health
 		lineageTag: ad8752e9-4c15-4182-a3c2-a571460975f0
 
-	/// All-time: telemetry identities (incl. is_unknown) with no roster row. #321: a linked identity is one of them.
+	/// As-of the selected window's end: telemetry identities (incl. is_unknown) first seen by then with no
+	/// roster row. #321: a linked identity is one of them.
+	/// #336: the as-of gate replaced an all-time count. Over ALL ( dim_user ) with no date path the headline
+	/// could not respond to the slicer, so its delta was pinned and the sub-line read a permanent +0.0%.
+	/// Reuses [Instrumented Seats]' boundary-read rather than inventing a second window idiom.
+	/// The roster side stays dim_seat_current, deliberately: it sits on the one-side of the dim_user
+	/// relationship so its OrgScope filter propagates, where fact_seat_day's stands alone and would make a
+	/// leaver read as a roster mismatch for role viewers (ADR-0010).
 	measure 'Roster Mismatch Count' =
-			COUNTROWS (
-			    FILTER (
-			        ALL ( dim_user ),
-			        dim_user[is_linked_identity]
-			            || ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
+			VAR WindowEnd = MAX ( dim_date[date_day] )
+			RETURN
+			    COUNTROWS (
+			        FILTER (
+			            ALL ( dim_user ),
+			            dim_user[first_seen] <= WindowEnd
+			                && ( dim_user[is_linked_identity]
+			                    || ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
+			        )
 			    )
-			)
 		formatString: #,##0
 		displayFolder: Data Health
 		lineageTag: 7f426481-4c81-4b6a-9e31-c45412e896fd
@@ -1459,24 +1478,37 @@ table _Measures
 		displayFolder: Data Health\Support
 		lineageTag: b1780058-0000-4000-8000-000000000178
 
-	measure 'Roster Mismatch Count Δ' = DIVIDE ( [Roster Mismatch Count] - [Roster Mismatch Count PP], [Roster Mismatch Count PP] )
-		formatString: +0.0%;-0.0%;0.0%
+	/// #336: a count difference, not a ratio. Both windows check the same non-time-varying dim_seat_current,
+	/// so the prior-window population is a strict subset of the current one and the delta is structurally
+	/// non-negative — a percent framing could only ever read "worse" or, on a quiet day, the very +0.0% this
+	/// measure was rewritten to remove. Read it as an additions counter.
+	measure 'Roster Mismatch Count Δ' =
+			VAR Cur = [Roster Mismatch Count]
+			VAR Prior = [Roster Mismatch Count PP]
+			RETURN
+			    IF ( NOT ISBLANK ( Cur ) && NOT ISBLANK ( Prior ), Cur - Prior )
+		formatString: +#,##0;-#,##0;0
 		displayFolder: Data Health
 		lineageTag: b1780059-0000-4000-8000-000000000178
 
 	measure 'Roster Mismatch Count Δ Label' =
 			VAR D = [Roster Mismatch Count Δ]
 			VAR N = COUNTROWS ( dim_date )
-			VAR Verdict = IF ( D > 0, " · worse", IF ( D < 0, " · better", "" ) )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" & Verdict )
+			    SWITCH (
+			        TRUE (),
+			        ISBLANK ( D ), "— vs " & N & "d",
+			        D = 0, "no new vs " & N & "d",
+			        FORMAT ( D, "+#,##0" ) & " vs " & N & "d · worse"
+			    )
 		displayFolder: Data Health
 		lineageTag: b1780060-0000-4000-8000-000000000178
 
+	/// #336: two-state. The green branch is gone because the delta cannot go negative — see [Roster Mismatch Count Δ].
 	measure 'Roster Mismatch Count Δ Color' =
 			VAR D = [Roster Mismatch Count Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#4F6F17" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", "#B61E24" )
 		displayFolder: Data Health
 		lineageTag: b1780061-0000-4000-8000-000000000178
 
@@ -1510,31 +1542,37 @@ table _Measures
 		displayFolder: Data Health
 		lineageTag: b1780065-0000-4000-8000-000000000178
 
-	measure 'Unknown Email Users PP' =
+	measure 'Unattributed Session Rate PP' =
 			VAR Days = COUNTROWS ( dim_date )
 			VAR FirstDay = MIN ( dim_date[date_day] )
 			RETURN
-			    CALCULATE ( [Unknown Email Users], DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 ) )
+			    CALCULATE ( [Unattributed Session Rate], DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 ) )
 		isHidden
 		displayFolder: Ingest Health\Support
 		lineageTag: b1780066-0000-4000-8000-000000000178
 
-	measure 'Unknown Email Users Δ' = DIVIDE ( [Unknown Email Users] - [Unknown Email Users PP], [Unknown Email Users PP] )
-		formatString: +0.0%;-0.0%;0.0%
+	/// #336: a rate, so the delta is percentage points — same treatment as [API Error Rate Δ], not the
+	/// additions counter [Roster Mismatch Count Δ] uses.
+	measure 'Unattributed Session Rate Δ' =
+			VAR Cur = [Unattributed Session Rate]
+			VAR Prior = [Unattributed Session Rate PP]
+			RETURN
+			    IF ( NOT ISBLANK ( Cur ) && NOT ISBLANK ( Prior ), ( Cur - Prior ) * 100 )
+		formatString: +0.0 "pp";-0.0 "pp";0.0 "pp"
 		displayFolder: Ingest Health
 		lineageTag: b1780067-0000-4000-8000-000000000178
 
-	measure 'Unknown Email Users Δ Label' =
-			VAR D = [Unknown Email Users Δ]
+	measure 'Unattributed Session Rate Δ Label' =
+			VAR D = [Unattributed Session Rate Δ]
 			VAR N = COUNTROWS ( dim_date )
 			VAR Verdict = IF ( D > 0, " · worse", IF ( D < 0, " · better", "" ) )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" & Verdict )
+			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0;-0.0" ) & " pp vs " & N & "d" & Verdict )
 		displayFolder: Ingest Health
 		lineageTag: b1780068-0000-4000-8000-000000000178
 
-	measure 'Unknown Email Users Δ Color' =
-			VAR D = [Unknown Email Users Δ]
+	measure 'Unattributed Session Rate Δ Color' =
+			VAR D = [Unattributed Session Rate Δ]
 			RETURN
 			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#4F6F17" ) )
 		displayFolder: Ingest Health
