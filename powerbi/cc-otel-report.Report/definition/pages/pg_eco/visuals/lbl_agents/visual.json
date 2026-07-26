@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "lbl_agents",
   "position": {
-    "x": 516,
+    "x": 523,
     "y": 148,
     "z": 300,
     "height": 34,
-    "width": 232,
+    "width": 235,
     "tabOrder": -1
   },
   "visual": {

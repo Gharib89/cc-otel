@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "crd_agents",
   "position": {
-    "x": 516,
+    "x": 523,
     "y": 182,
     "z": 301,
     "height": 40,
-    "width": 232,
+    "width": 235,
     "tabOrder": 305
   },
   "visual": {
