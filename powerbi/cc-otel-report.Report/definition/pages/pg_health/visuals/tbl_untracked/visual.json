@@ -87,7 +87,8 @@
                 }
               },
               "queryRef": "_Measures.Days Since Assignment",
-              "nativeQueryRef": "Days Since Assignment"
+              "nativeQueryRef": "Days Since Assignment",
+              "displayName": "Days Assigned"
             }
           ]
         }

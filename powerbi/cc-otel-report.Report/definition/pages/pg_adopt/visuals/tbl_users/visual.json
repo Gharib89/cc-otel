@@ -71,7 +71,8 @@
                 }
               },
               "queryRef": "_Measures.Total Prompts",
-              "nativeQueryRef": "Total Prompts"
+              "nativeQueryRef": "Total Prompts",
+              "displayName": "Prompts"
             },
             {
               "field": {
@@ -115,7 +116,8 @@
                 }
               },
               "queryRef": "_Measures.Total Sessions",
-              "nativeQueryRef": "Total Sessions"
+              "nativeQueryRef": "Total Sessions",
+              "displayName": "Sessions"
             },
             {
               "field": {
