@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "crd_hooks_u",
   "position": {
-    "x": 760,
+    "x": 770,
     "y": 222,
     "z": 5307,
     "height": 28,
-    "width": 232,
+    "width": 235,
     "tabOrder": 308
   },
   "visual": {

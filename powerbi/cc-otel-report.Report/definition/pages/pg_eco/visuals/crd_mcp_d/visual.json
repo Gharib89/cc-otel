@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "crd_mcp_d",
   "position": {
-    "x": 272,
+    "x": 275,
     "y": 250,
     "z": 20011,
     "height": 28,
-    "width": 232,
+    "width": 235,
     "tabOrder": 20010
   },
   "visual": {

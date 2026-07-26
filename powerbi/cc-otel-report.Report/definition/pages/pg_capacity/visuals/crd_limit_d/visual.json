@@ -2,11 +2,11 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
   "name": "crd_limit_d",
   "position": {
-    "x": 934,
+    "x": 956,
     "y": 232,
     "z": 20006,
     "height": 28,
-    "width": 288,
+    "width": 296,
     "tabOrder": 20006
   },
   "visual": {
