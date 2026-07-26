@@ -99,6 +99,18 @@ table fact_session_daily
 
 		annotation SummarizationSetBy = Automatic
 
+	/// #321: the scoping address, for measures that claim to count *people* (ADR-0011). Identities are never merged, so
+	/// one human on two addresses has two dim_user rows and two sets of facts; DISTINCTCOUNT over [user_email] would
+	/// count them twice for their own manager. Hidden on purpose — slicing a visual by it would rebuild the merge the ADR
+	/// rejects. Per-email visuals keep projecting [user_email] and keep showing both addresses.
+	column rls_email = RELATED ( dim_user[rls_email] )
+		dataType: string
+		lineageTag: d3210002-0000-4000-8000-000000000321
+		summarizeBy: none
+		isHidden
+
+		annotation SummarizationSetBy = Automatic
+
 	partition fact_session_daily = m
 		mode: import
 		source =
