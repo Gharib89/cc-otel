@@ -89,6 +89,54 @@ DECLARE
     log_id BIGINT;
     n BIGINT;
 BEGIN
+    -- Derived identity aliases (#320, ADR-0011), materialised before the marts that read
+    -- them: dim_user joins the pair set and the unresolved-identity finding below scans it,
+    -- so it is derived once per cycle rather than once per consumer. Corporate means
+    -- '@itworx.com', inline here as it is elsewhere in this function; #278 tracks extracting
+    -- the predicate into a shared rule function across every site at once.
+    TRUNCATE staging.stg_identity_alias;
+
+    INSERT INTO staging.stg_identity_alias (personal_email, corporate_email, shared_sessions)
+    WITH session_email AS (
+        -- A session_id is one Claude Code process, so two addresses inside one session is one
+        -- human re-authenticating. UNION (not UNION ALL) because the next CTE self-joins this
+        -- one on session_id: an address emitting thousands of rows in a session would otherwise
+        -- fan the join out by their product. The counts below are DISTINCT either way.
+        --
+        -- Deliberately unwindowed, unlike the cost finding further down: the evidence is
+        -- historical, so a window would silently unlink a person once their shared sessions
+        -- aged past it.
+        SELECT session_id, user_email
+        FROM raw.metrics
+        WHERE session_id IS NOT NULL AND user_email IS NOT NULL
+        UNION
+        SELECT session_id, user_email
+        FROM raw.events
+        WHERE session_id IS NOT NULL AND user_email IS NOT NULL
+    ), pair AS (
+        -- Direction is fixed personal -> corporate, so corporate-to-corporate never links: on
+        -- a shared terminal both addresses are corporate and both already have an HR row.
+        SELECT p.user_email AS personal_email,
+               c.user_email AS corporate_email,
+               COUNT(DISTINCT p.session_id) AS shared_sessions
+        FROM session_email p
+        JOIN session_email c ON c.session_id = p.session_id
+        WHERE p.user_email NOT LIKE '%@itworx.com'
+          AND c.user_email LIKE '%@itworx.com'
+        GROUP BY p.user_email, c.user_email
+    )
+    SELECT candidate.personal_email, candidate.corporate_email, candidate.shared_sessions
+    FROM pair candidate
+    -- Two shared sessions, because one would link on a single accident; and exactly one
+    -- corporate partner across the address's sessions, tested against every partner rather
+    -- than only those over the threshold, so any conflict yields no link at all.
+    WHERE candidate.shared_sessions >= 2
+      AND NOT EXISTS (
+          SELECT 1 FROM pair other
+          WHERE other.personal_email = candidate.personal_email
+            AND other.corporate_email <> candidate.corporate_email
+      );
+
     -- Catalog-driven (#262): every matview in marts refreshes, alphabetically.
     -- No mart reads another mart today, so order is irrelevant; if mart-on-mart
     -- stacking ever appears, switch to pg_depend dependency ordering (see
@@ -308,6 +356,31 @@ BEGIN
            )
     FROM staging.stg_seat_interval
     HAVING COUNT(*) > 0;
+
+    -- DQ (#320, ADR-0011): a personal-address identity emitting telemetry that neither the
+    -- derived rule nor ref.identity_alias could resolve to a corporate one — it stays invisible
+    -- to every OrgScope viewer, and silence is the wrong output for "a human needs to look at
+    -- this". An address the operator has already ruled on is resolved either way, including a
+    -- suppression, so the worklist drains. Corporate emitters are out of scope: no alias rule
+    -- can resolve one, and seat_emitter_without_seat already reports them. The roster clause
+    -- makes "off-roster" literal rather than assumed — a personal address IS listed as a seat
+    -- would be on-roster, and the finding says nothing about it.
+    INSERT INTO marts.dq_finding (finding_type, row_count, details)
+    SELECT 'identity_alias_unresolved', COUNT(*),
+           jsonb_build_object(
+               'user_email', t.user_email,
+               'first_activity_date', MIN(t.activity_date),
+               'last_activity_date', MAX(t.activity_date)
+           )
+    FROM staging.stg_telemetry_day t
+    WHERE t.user_email NOT LIKE '%@itworx.com'
+      AND NOT EXISTS (SELECT 1 FROM staging.stg_identity_alias d
+                      WHERE d.personal_email = t.user_email)
+      AND NOT EXISTS (SELECT 1 FROM ref.identity_alias m
+                      WHERE m.personal_email = t.user_email)
+      AND NOT EXISTS (SELECT 1 FROM ref.seat_roster_snapshot s
+                      WHERE s.user_email = t.user_email)
+    GROUP BY t.user_email;
 END
 $_$;
 
@@ -731,6 +804,33 @@ CREATE MATERIALIZED VIEW marts.dim_seat_current AS
 
 
 --
+-- Name: identity_alias; Type: TABLE; Schema: ref; Owner: -
+--
+
+CREATE TABLE ref.identity_alias (
+    personal_email text NOT NULL,
+    corporate_email text,
+    added_at timestamp with time zone DEFAULT now() NOT NULL,
+    added_by text DEFAULT CURRENT_USER NOT NULL,
+    notes text
+);
+
+
+--
+-- Name: stg_identity_alias; Type: TABLE; Schema: staging; Owner: -
+--
+
+CREATE TABLE staging.stg_identity_alias (
+    personal_email text NOT NULL,
+    corporate_email text NOT NULL,
+    shared_sessions integer NOT NULL,
+    CONSTRAINT stg_identity_alias_corporate_side CHECK ((corporate_email ~~ '%@itworx.com'::text)),
+    CONSTRAINT stg_identity_alias_personal_side CHECK ((personal_email !~~ '%@itworx.com'::text)),
+    CONSTRAINT stg_identity_alias_two_shared_sessions CHECK ((shared_sessions >= 2))
+);
+
+
+--
 -- Name: dim_user; Type: MATERIALIZED VIEW; Schema: marts; Owner: -
 --
 
@@ -749,16 +849,31 @@ CREATE MATERIALIZED VIEW marts.dim_user AS
             events.cc_version,
             events.event_time
            FROM raw.events
+        ), identity AS (
+         SELECT marts.email_bucket(seen.user_email) AS user_email,
+            (seen.user_email IS NULL) AS is_unknown,
+            min(seen.seen_at) AS first_seen,
+            max(seen.seen_at) AS last_seen,
+            (array_agg(seen.user_account_id) FILTER (WHERE (seen.user_account_id IS NOT NULL)))[1] AS user_account_id,
+            (array_agg(seen.organization_id) FILTER (WHERE (seen.organization_id IS NOT NULL)))[1] AS organization_id,
+            (array_agg(seen.cc_version ORDER BY seen.seen_at DESC) FILTER (WHERE (seen.cc_version IS NOT NULL)))[1] AS last_cc_version
+           FROM seen
+          GROUP BY (marts.email_bucket(seen.user_email)), (seen.user_email IS NULL)
         )
- SELECT marts.email_bucket(user_email) AS user_email,
-    (user_email IS NULL) AS is_unknown,
-    min(seen_at) AS first_seen,
-    max(seen_at) AS last_seen,
-    (array_agg(user_account_id) FILTER (WHERE (user_account_id IS NOT NULL)))[1] AS user_account_id,
-    (array_agg(organization_id) FILTER (WHERE (organization_id IS NOT NULL)))[1] AS organization_id,
-    (array_agg(cc_version ORDER BY seen_at DESC) FILTER (WHERE (cc_version IS NOT NULL)))[1] AS last_cc_version
-   FROM seen
-  GROUP BY (marts.email_bucket(user_email)), (user_email IS NULL)
+ SELECT i.user_email,
+    i.is_unknown,
+    i.first_seen,
+    i.last_seen,
+    i.user_account_id,
+    i.organization_id,
+    i.last_cc_version,
+        CASE
+            WHEN (m.personal_email IS NOT NULL) THEN COALESCE(m.corporate_email, i.user_email)
+            ELSE COALESCE(d.corporate_email, i.user_email)
+        END AS rls_email
+   FROM ((identity i
+     LEFT JOIN ref.identity_alias m ON ((m.personal_email = i.user_email)))
+     LEFT JOIN staging.stg_identity_alias d ON ((d.personal_email = i.user_email)))
   WITH NO DATA;
 
 
@@ -1261,6 +1376,14 @@ ALTER TABLE ONLY public.schema_migrations
 
 
 --
+-- Name: identity_alias identity_alias_pkey; Type: CONSTRAINT; Schema: ref; Owner: -
+--
+
+ALTER TABLE ONLY ref.identity_alias
+    ADD CONSTRAINT identity_alias_pkey PRIMARY KEY (personal_email);
+
+
+--
 -- Name: roster_drop roster_drop_file_sha256_key; Type: CONSTRAINT; Schema: ref; Owner: -
 --
 
@@ -1282,6 +1405,14 @@ ALTER TABLE ONLY ref.roster_drop
 
 ALTER TABLE ONLY ref.seat_roster_snapshot
     ADD CONSTRAINT seat_roster_snapshot_pkey PRIMARY KEY (drop_id, user_email, subscription_seq);
+
+
+--
+-- Name: stg_identity_alias stg_identity_alias_pkey; Type: CONSTRAINT; Schema: staging; Owner: -
+--
+
+ALTER TABLE ONLY staging.stg_identity_alias
+    ADD CONSTRAINT stg_identity_alias_pkey PRIMARY KEY (personal_email);
 
 
 --
@@ -1535,4 +1666,7 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260725110850'),
     ('20260725110856'),
     ('20260725110902'),
-    ('20260725111500');
+    ('20260725111500'),
+    ('20260726041817'),
+    ('20260726041900'),
+    ('20260726042056');
