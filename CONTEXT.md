@@ -68,6 +68,24 @@ _Avoid_: attr map, column table
 **Drift**:
 An `attrs`/`resource` key observed in the raw reservoir but absent from the column registry — the signal that Anthropic added new telemetry. Surfaced on demand by prepared DuckDB queries (`tools/`) over the reservoir; analysis is manual. Postgres cannot detect it — schema-v2 drops the JSONB there.
 
+### Presentation
+
+**KPI band**:
+The horizontal stack of paired cards across the top of an **adoption report** page — a label row, a value row, and a **delta sub-line**, one column per metric. The band is a unit: its internal rhythm is identical on every page that has one, so a change to one tier is a change to all five pages.
+_Avoid_: card row, header cards, metric strip
+
+**Delta sub-line**:
+The period-over-period comparison under a KPI value — the "getting better or worse" half of the metric, carrying a signed change against the prior window. Colour marks sentiment only where sentiment is unambiguous, and never alone: the sign is always spelled out, so the reading never depends on hue.
+_Avoid_: trend line (that is a chart), variance, delta card
+
+**Chrome tier**:
+Report text that *frames* the data and can be shortened by editing the report — visual titles, page subtitles, hints, notes, tooltip text, legend series names, table column-header captions. Meets the design canon's readable minimum. See ADR-0012.
+_Avoid_: labels, static text
+
+**Dense tier**:
+Report text that *is* the data, where shortening the string would mean changing the data — category and axis tick labels, data labels, grid cell values, matrix headers bound to a data column. Carries a lower hard floor than **chrome tier**, deliberately: where size and information collide, information wins. See ADR-0012.
+_Avoid_: small text, data text
+
 ### Identity
 
 **Linked identity**:
