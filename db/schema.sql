@@ -823,7 +823,10 @@ CREATE TABLE ref.identity_alias (
 CREATE TABLE staging.stg_identity_alias (
     personal_email text NOT NULL,
     corporate_email text NOT NULL,
-    shared_sessions integer NOT NULL
+    shared_sessions integer NOT NULL,
+    CONSTRAINT stg_identity_alias_corporate_side CHECK ((corporate_email ~~ '%@itworx.com'::text)),
+    CONSTRAINT stg_identity_alias_personal_side CHECK ((personal_email !~~ '%@itworx.com'::text)),
+    CONSTRAINT stg_identity_alias_two_shared_sessions CHECK ((shared_sessions >= 2))
 );
 
 
