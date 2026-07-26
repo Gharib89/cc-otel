@@ -320,9 +320,19 @@ table _Measures
 		displayFolder: Ingest Health
 		lineageTag: a1c00006-0000-4000-8000-000000000028
 
-	/// Distinct client-asserted emails flagged unresolved (#28 ingest-health page). Spoofing/blank emails
-	/// land as is_unknown in dim_user (#8); surfaced as a count, never silently dropped.
-	measure 'Unknown Email Users' = CALCULATE ( DISTINCTCOUNT ( dim_user[user_email] ), dim_user[is_unknown] = TRUE )
+	/// API events in the window that arrived with no client-asserted email (#28 ingest-health page, #336 rewrite).
+	/// Replaces [Unknown Email Users], which could only ever return 0 or 1: marts.email_bucket maps a NULL
+	/// email to the literal '(unknown)' and dim_user is unique on user_email, so every unattributed identity
+	/// in the estate collapses into a single row. Counting them was a flag wearing a user count.
+	/// The defect was counting a collapsed *dimension* row, not counting as such — a fact count carries none of
+	/// it, responds to the slicer through fact_api_usage's dim_date relationship, and moves in both directions.
+	/// A rate was the first shape tried and does not survive the data: the whole unattributed footprint is a
+	/// single api_usage row, so any share rounds to 0.0% and reproduces the frozen zero this ticket is about.
+	/// fact_api_usage is also the only fact carrying unattributed rows here — the identity emitted for nine
+	/// seconds and never produced a session — so a session-grain measure reads blank by construction.
+	/// Resolves to 0, not BLANK, when the window holds none: on a data-quality card an empty headline cannot be
+	/// told apart from a broken one, and "no unattributed events" is the answer worth rendering.
+	measure 'Unattributed Events' = COALESCE ( CALCULATE ( COUNTROWS ( fact_api_usage ), dim_user[is_unknown] = TRUE ), 0 )
 		formatString: #,##0
 		displayFolder: Ingest Health
 		lineageTag: a1c00007-0000-4000-8000-000000000028
@@ -886,15 +896,32 @@ table _Measures
 		displayFolder: Data Health
 		lineageTag: ad8752e9-4c15-4182-a3c2-a571460975f0
 
-	/// All-time: telemetry identities (incl. is_unknown) with no roster row. #321: a linked identity is one of them.
+	/// As-of the selected window's end: telemetry identities (incl. is_unknown) first seen by then with no
+	/// roster row. #321: a linked identity is one of them.
+	/// #336: the as-of gate replaced an all-time count. Over ALL ( dim_user ) with no date path the headline
+	/// could not respond to the slicer, so its delta was pinned and the sub-line read a permanent +0.0%.
+	/// Reuses [Instrumented Seats]' boundary-read rather than inventing a second window idiom, but bounds it
+	/// as < WindowEnd + 1, not <= WindowEnd: first_seen is a dateTime carrying a time of day while date_day is
+	/// midnight, so <= drops every identity first seen *during* the window's last day — on the default relative
+	/// window, all of today. [Instrumented Seats] and [New Users] carry the unfixed form; they move numbers on
+	/// other pages, so they are not swept here.
+	/// The roster side stays dim_seat_current, deliberately: it sits on the one-side of the dim_user
+	/// relationship so its OrgScope filter propagates, where fact_seat_day's stands alone and would make a
+	/// leaver read as a roster mismatch for role viewers (ADR-0010).
 	measure 'Roster Mismatch Count' =
-			COUNTROWS (
-			    FILTER (
-			        ALL ( dim_user ),
-			        dim_user[is_linked_identity]
-			            || ISBLANK ( RELATED ( dim_seat_current[user_email] ) )
+			VAR WindowEnd = MAX ( dim_date[date_day] )
+			RETURN
+			    COALESCE (
+			        COUNTROWS (
+			            FILTER (
+			                ALL ( dim_user ),
+			                dim_user[first_seen] < WindowEnd + 1
+			                    && ( dim_user[is_linked_identity]
+			                        || ISBLANK ( RELATED ( dim_seat_current[user_email] ) ) )
+			            )
+			        ),
+			        0
 			    )
-			)
 		formatString: #,##0
 		displayFolder: Data Health
 		lineageTag: 7f426481-4c81-4b6a-9e31-c45412e896fd
@@ -1459,24 +1486,44 @@ table _Measures
 		displayFolder: Data Health\Support
 		lineageTag: b1780058-0000-4000-8000-000000000178
 
-	measure 'Roster Mismatch Count Δ' = DIVIDE ( [Roster Mismatch Count] - [Roster Mismatch Count PP], [Roster Mismatch Count PP] )
-		formatString: +0.0%;-0.0%;0.0%
+	/// #336: a count difference, not a ratio. Both windows check the same non-time-varying dim_seat_current,
+	/// so the prior-window population is a strict subset of the current one and the delta is structurally
+	/// non-negative — a percent framing could only ever read "worse" or, on a quiet day, the very +0.0% this
+	/// measure was rewritten to remove. Read it as an additions counter.
+	/// Guards on the prior window's day count rather than ISBLANK ( PP ), so an early window whose predecessor
+	/// simply predates the first identity still reports the additions — see [Unattributed Events Δ].
+	measure 'Roster Mismatch Count Δ' =
+			VAR Days = COUNTROWS ( dim_date )
+			VAR FirstDay = MIN ( dim_date[date_day] )
+			VAR PriorDays =
+			    CALCULATE (
+			        COUNTROWS ( dim_date ),
+			        DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 )
+			    )
+			RETURN
+			    IF ( PriorDays > 0, [Roster Mismatch Count] - [Roster Mismatch Count PP] )
+		formatString: +#,##0;-#,##0;0
 		displayFolder: Data Health
 		lineageTag: b1780059-0000-4000-8000-000000000178
 
 	measure 'Roster Mismatch Count Δ Label' =
 			VAR D = [Roster Mismatch Count Δ]
 			VAR N = COUNTROWS ( dim_date )
-			VAR Verdict = IF ( D > 0, " · worse", IF ( D < 0, " · better", "" ) )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" & Verdict )
+			    SWITCH (
+			        TRUE (),
+			        ISBLANK ( D ), "— vs " & N & "d",
+			        D = 0, "no new vs " & N & "d",
+			        FORMAT ( D, "+#,##0;-#,##0" ) & " vs " & N & "d · worse"
+			    )
 		displayFolder: Data Health
 		lineageTag: b1780060-0000-4000-8000-000000000178
 
+	/// #336: two-state. The green branch is gone because the delta cannot go negative — see [Roster Mismatch Count Δ].
 	measure 'Roster Mismatch Count Δ Color' =
 			VAR D = [Roster Mismatch Count Δ]
 			RETURN
-			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#4F6F17" ) )
+			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", "#B61E24" )
 		displayFolder: Data Health
 		lineageTag: b1780061-0000-4000-8000-000000000178
 
@@ -1510,31 +1557,54 @@ table _Measures
 		displayFolder: Data Health
 		lineageTag: b1780065-0000-4000-8000-000000000178
 
-	measure 'Unknown Email Users PP' =
+	measure 'Unattributed Events PP' =
 			VAR Days = COUNTROWS ( dim_date )
 			VAR FirstDay = MIN ( dim_date[date_day] )
 			RETURN
-			    CALCULATE ( [Unknown Email Users], DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 ) )
+			    CALCULATE ( [Unattributed Events], DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 ) )
 		isHidden
 		displayFolder: Ingest Health\Support
 		lineageTag: b1780066-0000-4000-8000-000000000178
 
-	measure 'Unknown Email Users Δ' = DIVIDE ( [Unknown Email Users] - [Unknown Email Users PP], [Unknown Email Users PP] )
-		formatString: +0.0%;-0.0%;0.0%
+	/// #336: a count difference. The #117 rule reads "BLANK unless both windows have data", and for a count of
+	/// bad rows that has to mean days, not a non-blank value — a prior window holding zero unattributed events
+	/// is a measurement, so guarding on ISBLANK ( PP ) would blank the delta precisely when the card most needs
+	/// to report the first one appearing. Guard on the prior window's day count instead; the base already
+	/// resolves an empty window to 0 rather than BLANK, so no ISBLANK survives on the value path.
+	/// Requires the prior window to be the *same length*, not merely non-empty. DATESBETWEEN returns only dates
+	/// dim_date holds, so a window near first ingest gets a truncated predecessor — comparing 28 days of events
+	/// against 23 understates the prior and inflates the delta. This is a flow count, so length matters;
+	/// [Roster Mismatch Count Δ] is a stock read at the window boundary and only needs PriorDays > 0.
+	measure 'Unattributed Events Δ' =
+			VAR Days = COUNTROWS ( dim_date )
+			VAR FirstDay = MIN ( dim_date[date_day] )
+			VAR PriorDays =
+			    CALCULATE (
+			        COUNTROWS ( dim_date ),
+			        DATESBETWEEN ( dim_date[date_day], FirstDay - Days, FirstDay - 1 )
+			    )
+			RETURN
+			    IF ( PriorDays = Days, [Unattributed Events] - [Unattributed Events PP] )
+		formatString: +#,##0;-#,##0;0
 		displayFolder: Ingest Health
 		lineageTag: b1780067-0000-4000-8000-000000000178
 
-	measure 'Unknown Email Users Δ Label' =
-			VAR D = [Unknown Email Users Δ]
+	measure 'Unattributed Events Δ Label' =
+			VAR D = [Unattributed Events Δ]
 			VAR N = COUNTROWS ( dim_date )
-			VAR Verdict = IF ( D > 0, " · worse", IF ( D < 0, " · better", "" ) )
+			VAR Verdict = IF ( D > 0, " · worse", " · better" )
 			RETURN
-			    IF ( ISBLANK ( D ), "— vs " & N & "d", FORMAT ( D, "+0.0%;-0.0%" ) & " vs " & N & "d" & Verdict )
+			    SWITCH (
+			        TRUE (),
+			        ISBLANK ( D ), "— vs " & N & "d",
+			        D = 0, "no change vs " & N & "d",
+			        FORMAT ( D, "+#,##0;-#,##0" ) & " vs " & N & "d" & Verdict
+			    )
 		displayFolder: Ingest Health
 		lineageTag: b1780068-0000-4000-8000-000000000178
 
-	measure 'Unknown Email Users Δ Color' =
-			VAR D = [Unknown Email Users Δ]
+	measure 'Unattributed Events Δ Color' =
+			VAR D = [Unattributed Events Δ]
 			RETURN
 			    IF ( ISBLANK ( D ) || D = 0, "#5A6473", IF ( D > 0, "#B61E24", "#4F6F17" ) )
 		displayFolder: Ingest Health

@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Unknown Email Users"
+                  "Property": "Unattributed Events"
                 }
               },
-              "queryRef": "_Measures.Unknown Email Users",
-              "nativeQueryRef": "Unknown Email Users"
+              "queryRef": "_Measures.Unattributed Events",
+              "nativeQueryRef": "Unattributed Events"
             }
           ]
         }
@@ -84,7 +84,7 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Unknown Email Users Δ Label"
+                  "Property": "Unattributed Events Δ Label"
                 }
               }
             }
