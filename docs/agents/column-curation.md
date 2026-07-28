@@ -86,8 +86,11 @@ Promoting a key (or adding any registry row) ships as **one PR** carrying, toget
 2. **Generate the migration** — `uv run python -m tools.spec_sync --name <slug>` diffs the
    spec against a from-zero DB, writes the `raw.*` DDL + `meta.column_registry` migration
    closing the delta, applies it, and regenerates `db/schema.sql`. (**Needs Docker** — in an
-   unattended run, do this before hand-off.) Renames/type changes are refused: hand-author
-   those and let `--check` prove convergence.
+   unattended run, do this before hand-off.) Renames, type changes, and **in-place `status`
+   edits** are refused: the registry diff is a set diff over the whole row, so editing a
+   `kept` row to `promoted` reads as a missing row *plus* an orphan row, and the generator
+   refuses orphans. Hand-author those as an `UPDATE` with a matching down body, then let
+   `--check` prove convergence.
 3. **Parser** (structural/derived columns only) — add the extraction/coalesce code in
    `sink/src/cc_otel_sink/parser.py`; a fixture test proves every promoted column is
    populated.

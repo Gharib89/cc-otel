@@ -1,5 +1,4 @@
 -- migrate:up
--- noqa: disable=LT05
 
 -- events/compaction/trigger: kept -> promoted (#353, #362).
 --

@@ -638,7 +638,8 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
     ),
     # ===== resource attrs (all signals) =====
     #
-    # The three identity rows below record the ADR-0003 wrapper contract: a wrapper
+    # The three identity rows below (session.id, user.email, user.account_id) record
+    # the ADR-0003 wrapper contract: a wrapper
     # may put identity on the *resource* block rather than the data point, and the
     # sink reads it through the same merge. They create no column of their own
     # (spec_raw_columns builds DDL for metrics/events), but without them the sweep's
@@ -2439,23 +2440,29 @@ def _check_invariants(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> None:
 
     # invariant 7: a kept/denied row must not contradict a promoted row for the
     # same attr path (#353). ``attr_columns(signal)`` drops signal_name, so the
-    # column is written whatever the name: 'kept' ("no Postgres column") is then
-    # false, and 'denied' is worse — redaction strips the key everywhere, so the
-    # promoted column silently never populates. Two forms, the second reachable
-    # through the sweep's resource/* fallback (``tools._registry``).
+    # column is written whatever the name — a 'kept' row ("no Postgres column")
+    # is then false. Its reach is the signals whose flat map writes the column:
+    # its own, plus metrics/events when the row is the resource mirror the sweep
+    # falls back to (``tools._registry``). 'denied' reaches further and is worse:
+    # ``denylist()`` / ``tool_param_keys()`` drop the signal, so redaction strips
+    # the key everywhere and the promoted column silently never populates.
     promoted: dict[str, set[str]] = {}
     for r in spec:
         if r.status == "promoted":
             promoted.setdefault(r.signal, set()).add(r.attr_path)
     signal_promoted = promoted.get("metrics", set()) | promoted.get("events", set())
+    any_promoted = signal_promoted | promoted.get("resource", set())
     for r in spec:
         if r.status == "promoted":
             continue
         key = (r.signal, r.signal_name, r.attr_path)
-        if r.attr_path in promoted.get(r.signal, set()):
-            raise ValueError(f"{r.status} row contradicts a promoted row in {r.signal}: {key}")
-        if r.signal == "resource" and r.attr_path in signal_promoted:
-            raise ValueError(f"{r.status} resource row contradicts a promoted signal row: {key}")
+        if r.status == "denied":
+            if r.attr_path in any_promoted:
+                raise ValueError(f"denied row contradicts a promoted row: {key}")
+        elif r.attr_path in promoted.get(r.signal, set()):
+            raise ValueError(f"kept row contradicts a promoted row in {r.signal}: {key}")
+        elif r.signal == "resource" and r.attr_path in signal_promoted:
+            raise ValueError(f"kept resource row contradicts a promoted signal row: {key}")
 
 
 _check_invariants()

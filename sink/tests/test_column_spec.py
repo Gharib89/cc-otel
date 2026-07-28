@@ -179,7 +179,16 @@ def test_denied_row_contradicting_a_promoted_row_in_the_same_signal_rejected() -
     bad = COLUMN_SPEC + (
         ColumnSpec("events", "some_event", "prompt_length", "denied", deny_mode="strip"),
     )
-    with pytest.raises(ValueError, match="contradicts a promoted row in events"):
+    with pytest.raises(ValueError, match="denied row contradicts"):
+        cs._check_invariants(bad)
+
+
+def test_denied_row_contradicting_a_promoted_row_in_another_signal_rejected() -> None:
+    # denylist() and tool_param_keys() carry no signal, so redaction is global: a
+    # denied `events` row for `window` would blank raw.metrics.usage_window, which
+    # `window` is promoted to under metrics only. Wider reach than the kept case.
+    bad = COLUMN_SPEC + (ColumnSpec("events", "some_event", "window", "denied", deny_mode="strip"),)
+    with pytest.raises(ValueError, match="denied row contradicts"):
         cs._check_invariants(bad)
 
 
