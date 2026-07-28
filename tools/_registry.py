@@ -12,9 +12,15 @@ diff rule can be unit-tested without a database.
 
 Matching rule — an extracted ``(signal, signal_name, attr_path)`` is *known* iff the
 registry holds a row with the same ``signal`` and ``attr_path`` whose ``signal_name`` is
-either the same name or the wildcard ``'*'``. This mirrors the registry's grain: an attr
-with uniform meaning is recorded once at ``'*'``; one whose meaning differs by signal name
-gets a row per name, so a known key seen under a *new* name is still surfaced.
+either the same name or the wildcard ``'*'``, falling back to the ``('resource', '*')``
+row for that path. The name dimension mirrors the registry's grain: an attr with uniform
+meaning is recorded once at ``'*'``; one whose meaning differs by signal name gets a row
+per name, so a known key seen under a *new* name is still surfaced. The signal dimension
+does not resurface for resource attrs: the sink merges the resource block into each
+signal's flat namespace (``attrs = {**res_attrs, **flatten(rec_attrs)}``, and ``attr_columns``
+drops ``signal_name``), so a resource attribute seen under a signal path is the same byte
+the parser already reads, not a second fact needing a second verdict. The fallback is
+one-directional — a genuinely new key at the resource path still surfaces.
 """
 
 from __future__ import annotations
@@ -46,11 +52,13 @@ class Registry:
             self._index.setdefault((signal, attr_path), {})[signal_name] = status
 
     def status_of(self, signal: str, signal_name: str, attr_path: str) -> str | None:
-        """Return the status for a key path, matching the exact name then ``'*'``."""
+        """Return the status: exact name, then ``'*'``, then the ``resource``/``'*'`` row."""
         names = self._index.get((signal, attr_path))
-        if names is None:
-            return None
-        return names.get(signal_name) or names.get("*")
+        if names is not None:
+            status = names.get(signal_name) or names.get("*")
+            if status is not None:
+                return status
+        return self._index.get(("resource", attr_path), {}).get("*")
 
     def diff(self, extracted: set[KeyPath]) -> Diff:
         unclassified: list[KeyPath] = []

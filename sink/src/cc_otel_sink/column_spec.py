@@ -188,6 +188,19 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
     ColumnSpec(
         "metrics",
         "*",
+        "process.owner",
+        "promoted",
+        "process_owner",
+        "TEXT",
+        description="OS account the Claude Code process runs under (e.g. a Windows username).",
+        useful_for="account sharing: a row whose process_owner disagrees with user_email is "
+        "one person emitting under another person's account",
+        decided_at="2026-07-28",
+        notes="promoted, not denied: discloses strictly less than the promoted user.email (#353)",
+    ),
+    ColumnSpec(
+        "metrics",
+        "*",
         "user.account_uuid",
         "promoted",
         "user_account_id",
@@ -624,6 +637,63 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         notes="non-Claude-Code (GitHub Copilot); not modeled",
     ),
     # ===== resource attrs (all signals) =====
+    #
+    # The three identity rows below (session.id, user.email, user.account_id) record
+    # the ADR-0003 wrapper contract: a wrapper
+    # may put identity on the *resource* block rather than the data point, and the
+    # sink reads it through the same merge. They create no column of their own
+    # (spec_raw_columns builds DDL for metrics/events), but without them the sweep's
+    # one-directional resource/* fallback still reads them unclassified at the
+    # resource path (#353).
+    ColumnSpec(
+        "resource",
+        "*",
+        "session.id",
+        "promoted",
+        "session_id",
+        "UUID",
+        description="Claude Code session UUID.",
+        useful_for="session facts",
+        decided_at="2026-07-28",
+        notes="ADR-0003 wrapper contract: identity on the resource block",
+    ),
+    ColumnSpec(
+        "resource",
+        "*",
+        "user.email",
+        "promoted",
+        "user_email",
+        "TEXT",
+        description="Developer identity (normalized lowercase/trim).",
+        useful_for="dim_user join",
+        decided_at="2026-07-28",
+        notes="ADR-0003 wrapper contract: identity on the resource block",
+    ),
+    ColumnSpec(
+        "resource",
+        "*",
+        "user.account_id",
+        "promoted",
+        "user_account_id",
+        "TEXT",
+        "derived",
+        description="Anthropic tagged account id.",
+        decided_at="2026-07-28",
+        notes="ADR-0003 wrapper contract; coalesced into user_account_id under user.account_uuid",
+    ),
+    ColumnSpec(
+        "resource",
+        "*",
+        "process.owner",
+        "promoted",
+        "process_owner",
+        "TEXT",
+        description="OS account the Claude Code process runs under (e.g. a Windows username).",
+        useful_for="account sharing: a row whose process_owner disagrees with user_email is "
+        "one person emitting under another person's account",
+        decided_at="2026-07-28",
+        notes="promoted, not denied: discloses strictly less than the promoted user.email (#353)",
+    ),
     ColumnSpec(
         "resource",
         "*",
@@ -861,6 +931,19 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         useful_for="dim_user join",
         decided_at="2026-07-13",
         notes="identity kept per #6",
+    ),
+    ColumnSpec(
+        "events",
+        "*",
+        "process.owner",
+        "promoted",
+        "process_owner",
+        "TEXT",
+        description="OS account the Claude Code process runs under (e.g. a Windows username).",
+        useful_for="account sharing: a row whose process_owner disagrees with user_email is "
+        "one person emitting under another person's account",
+        decided_at="2026-07-28",
+        notes="promoted, not denied: discloses strictly less than the promoted user.email (#353)",
     ),
     ColumnSpec(
         "events",
@@ -1209,6 +1292,28 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
     ),
     ColumnSpec(
         "events",
+        "mcp_server_connection",
+        "duration_ms",
+        "promoted",
+        "duration_ms",
+        "BIGINT",
+        description="MCP server connection duration.",
+        decided_at="2026-07-28",
+        notes="already stored: 1,164 rows 100% populated before the row existed (#353)",
+    ),
+    ColumnSpec(
+        "events",
+        "compaction",
+        "duration_ms",
+        "promoted",
+        "duration_ms",
+        "BIGINT",
+        description="Compaction duration.",
+        decided_at="2026-07-28",
+        notes="already stored: 56 rows 100% populated before the row existed (#353)",
+    ),
+    ColumnSpec(
+        "events",
         "user_prompt",
         "prompt_length",
         "promoted",
@@ -1267,6 +1372,20 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "TEXT",
         description="Mode-change trigger.",
         decided_at="2026-07-13",
+    ),
+    # raw.events.trigger is polysemous — shift_tab/auto_gate_denied/exit_plan_mode
+    # from permission_mode_changed, manual/auto from compaction. Not colliding, and
+    # the per-signal_name grain is what documents the two meanings.
+    ColumnSpec(
+        "events",
+        "compaction",
+        "trigger",
+        "promoted",
+        "trigger",
+        "TEXT",
+        description="Compaction trigger (auto/manual).",
+        decided_at="2026-07-28",
+        notes="promoted from kept: raw.events.trigger already carried 57 compaction rows (#353)",
     ),
     ColumnSpec(
         "events",
@@ -1822,14 +1941,6 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
     ColumnSpec(
         "events",
         "compaction",
-        "trigger",
-        "kept",
-        description="Compaction trigger (auto/manual).",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "compaction",
         "pre_tokens",
         "kept",
         description="Pre-compaction tokens.",
@@ -2135,13 +2246,17 @@ def derived_coalesce(
     resource-signal derived rows in file order. This mirrors the parser's
     attr-merge semantics (datapoint attrs shadow resource attrs), so it
     reproduces ``user_account_id`` and ``cc_version`` with no per-column code.
+    A path repeated across the two signals is kept once, in first-seen order, so
+    the union is idempotent.
     """
     out: dict[str, list[str]] = {}
     for sig in dict.fromkeys((signal, "resource")):
         for r in spec:
             if r.signal == sig and r.status == "promoted" and r.kind == "derived":
                 assert r.column_name is not None  # invariant 2
-                out.setdefault(r.column_name, []).append(r.attr_path)
+                sources = out.setdefault(r.column_name, [])
+                if r.attr_path not in sources:
+                    sources.append(r.attr_path)
     return out
 
 
@@ -2322,6 +2437,32 @@ def _check_invariants(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> None:
     spec_metrics = {r.signal_name for r in spec if r.signal == "metrics" and r.signal_name != "*"}
     if not spec_metrics <= METRIC_NAMES:
         raise ValueError(f"metric grains absent from METRIC_NAMES: {spec_metrics - METRIC_NAMES}")
+
+    # invariant 7: a kept/denied row must not contradict a promoted row for the
+    # same attr path (#353). ``attr_columns(signal)`` drops signal_name, so the
+    # column is written whatever the name — a 'kept' row ("no Postgres column")
+    # is then false. Its reach is the signals whose flat map writes the column:
+    # its own, plus metrics/events when the row is the resource mirror the sweep
+    # falls back to (``tools._registry``). 'denied' reaches further and is worse:
+    # ``denylist()`` / ``tool_param_keys()`` drop the signal, so redaction strips
+    # the key everywhere and the promoted column silently never populates.
+    promoted: dict[str, set[str]] = {}
+    for r in spec:
+        if r.status == "promoted":
+            promoted.setdefault(r.signal, set()).add(r.attr_path)
+    signal_promoted = promoted.get("metrics", set()) | promoted.get("events", set())
+    any_promoted = signal_promoted | promoted.get("resource", set())
+    for r in spec:
+        if r.status == "promoted":
+            continue
+        key = (r.signal, r.signal_name, r.attr_path)
+        if r.status == "denied":
+            if r.attr_path in any_promoted:
+                raise ValueError(f"denied row contradicts a promoted row: {key}")
+        elif r.attr_path in promoted.get(r.signal, set()):
+            raise ValueError(f"kept row contradicts a promoted row in {r.signal}: {key}")
+        elif r.signal == "resource" and r.attr_path in signal_promoted:
+            raise ValueError(f"kept resource row contradicts a promoted signal row: {key}")
 
 
 _check_invariants()

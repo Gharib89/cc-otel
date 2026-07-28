@@ -235,10 +235,13 @@ def main(argv: list[str] | None = None) -> int:
     with psycopg.connect(settings.database_url) as conn:
         markdown = build(conn)
 
+    # render() already ends with a newline; a second one is a trailing blank line,
+    # which the repo's end-of-file-fixer strips back out on commit. Both branches
+    # emit the same bytes so `--out -` can be diffed against the committed file.
     if args.out == "-":
-        print(markdown)
+        print(markdown, end="")
     else:
-        Path(args.out).write_text(markdown + "\n", encoding="utf-8")
+        Path(args.out).write_text(markdown, encoding="utf-8")
         print(f"Wrote {args.out}", file=sys.stderr)
     return 0
 

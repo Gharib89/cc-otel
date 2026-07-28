@@ -13,8 +13,8 @@ tool is the convergence gate between the two.
 
     uv run python -m tools.spec_sync --name <slug>
         Author: diff the spec against a from-zero DB, write a migration closing
-        the delta (``ADD COLUMN`` / registry ``INSERT``/``UPDATE`` + a down
-        section), apply it, verify the delta is empty, regenerate schema.sql.
+        the delta (``ADD COLUMN`` / registry ``INSERT`` + a down section), apply
+        it, verify the delta is empty, regenerate schema.sql.
 
     uv run python -m tools.spec_sync --allow-destructive --name <slug>
         Opt in to ``DROP COLUMN`` deltas (a column dropped from the spec).
@@ -241,7 +241,12 @@ def generate_migration(name: str, delta: Delta, *, allow_destructive: bool = Fal
 
     body_up = "\n".join(up) if up else "-- no forward changes"
     body_down = "\n".join(reversed(down)) if down else "-- no rollback changes"
-    return f"-- migrate:up\n-- spec_sync: {name}\n\n{body_up}\n\n-- migrate:down\n\n{body_down}\n"
+    # sqlfluff lints db/*.sql (pre-commit, and so CI). Registry rows carry prose
+    # descriptions on one line, so a generated INSERT/DELETE is long by
+    # construction and keeps WHERE on the statement line — waive those two rules
+    # here rather than reformat machine-written SQL nobody hand-edits.
+    header = f"-- migrate:up\n-- spec_sync: {name}\n-- noqa: disable=LT05,LT14"
+    return f"{header}\n\n{body_up}\n\n-- migrate:down\n\n{body_down}\n"
 
 
 # --- mart-literal lint (#168) -------------------------------------------------

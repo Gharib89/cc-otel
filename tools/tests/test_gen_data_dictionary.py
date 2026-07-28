@@ -37,3 +37,6 @@ def test_render_has_sections_and_column_row():
     # kept/denied section lists the blob-only key
     assert "## Kept & denied attributes (not in Postgres)" in md
     assert "| resource | `*` | `host.name` | kept | Hostname. |  |" in md
+    # exactly one trailing newline — main() writes this verbatim, and a trailing
+    # blank line would be stripped again by the end-of-file-fixer on every commit
+    assert md.endswith("|\n") and not md.endswith("\n\n")

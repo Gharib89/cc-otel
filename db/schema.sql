@@ -441,7 +441,8 @@ CREATE TABLE raw.events (
     severity_number smallint,
     log_trace_id text,
     log_span_id text,
-    dropped_attributes_count integer
+    dropped_attributes_count integer,
+    process_owner text
 );
 
 
@@ -557,7 +558,8 @@ CREATE TABLE raw.metrics (
     marketplace_name text,
     start_type text,
     scope_name text,
-    scope_version text
+    scope_version text,
+    process_owner text
 );
 
 
@@ -1674,4 +1676,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260726041817'),
     ('20260726041900'),
     ('20260726042056'),
-    ('20260726142533');
+    ('20260726142533'),
+    ('20260728175537'),
+    ('20260728175738');

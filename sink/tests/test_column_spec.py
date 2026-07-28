@@ -19,6 +19,7 @@ from cc_otel_sink.store import EVENT_COLUMNS, METRIC_COLUMNS
 _EXPECTED_METRIC_ATTR = {
     "session.id": "session_id",
     "user.email": "user_email",
+    "process.owner": "process_owner",
     "organization.id": "organization_id",
     "model": "model",
     "query_source": "query_source",
@@ -41,6 +42,7 @@ _EXPECTED_EVENT_ATTR = {
     "session.id": "session_id",
     "prompt.id": "prompt_id",
     "user.email": "user_email",
+    "process.owner": "process_owner",
     "organization.id": "organization_id",
     "model": "model",
     "request_id": "request_id",
@@ -159,6 +161,52 @@ def test_wellformed_tool_param_sweep_path_accepted() -> None:
         ),
     )
     cs._check_invariants(ok)  # no raise
+
+
+def test_kept_row_contradicting_a_promoted_row_in_the_same_signal_rejected() -> None:
+    # attr_columns(signal) drops signal_name, so the column is written under every
+    # event name — a `kept` row ("no Postgres column") for the same path states
+    # something false. This is the class that let events/compaction/trigger sit
+    # `kept` while raw.events.trigger carried 57 compaction rows (#353).
+    bad = COLUMN_SPEC + (ColumnSpec("events", "some_event", "prompt_length", "kept"),)
+    with pytest.raises(ValueError, match="contradicts a promoted row in events"):
+        cs._check_invariants(bad)
+
+
+def test_denied_row_contradicting_a_promoted_row_in_the_same_signal_rejected() -> None:
+    # Worse than `kept`: redaction strips the key everywhere, so the promoted
+    # column silently never populates.
+    bad = COLUMN_SPEC + (
+        ColumnSpec("events", "some_event", "prompt_length", "denied", deny_mode="strip"),
+    )
+    with pytest.raises(ValueError, match="denied row contradicts"):
+        cs._check_invariants(bad)
+
+
+def test_denied_row_contradicting_a_promoted_row_in_another_signal_rejected() -> None:
+    # denylist() and tool_param_keys() carry no signal, so redaction is global: a
+    # denied `events` row for `window` would blank raw.metrics.usage_window, which
+    # `window` is promoted to under metrics only. Wider reach than the kept case.
+    bad = COLUMN_SPEC + (ColumnSpec("events", "some_event", "window", "denied", deny_mode="strip"),)
+    with pytest.raises(ValueError, match="denied row contradicts"):
+        cs._check_invariants(bad)
+
+
+def test_kept_resource_row_contradicting_a_promoted_signal_row_rejected() -> None:
+    # Cross-signal form of the same lie, reachable through the sweep's resource/*
+    # fallback: the resource row denies a column metrics/events actually write.
+    bad = COLUMN_SPEC + (ColumnSpec("resource", "*", "prompt_length", "kept"),)
+    with pytest.raises(ValueError, match="resource row contradicts"):
+        cs._check_invariants(bad)
+
+
+def test_derived_coalesce_dedupes_repeated_sources() -> None:
+    # A resource row mirroring an own-signal derived row must not duplicate the
+    # source — the union of own-signal and resource rows stays idempotent.
+    dup = COLUMN_SPEC + (
+        ColumnSpec("resource", "*", "app.version", "promoted", "cc_version", "TEXT", "derived"),
+    )
+    assert cs.derived_coalesce("metrics", dup)["cc_version"] == ["app.version", "service.version"]
 
 
 def _attr_list(pairs: dict[str, str]) -> list[dict[str, object]]:

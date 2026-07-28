@@ -39,6 +39,9 @@ def test_generate_migration_emits_add_column_and_insert() -> None:
     delta = Delta(missing_rows=[_ROW], missing_columns=[("metrics", "xy", "TEXT")])
     sql = generate_migration("add_xy", delta)
     assert "-- migrate:up" in sql and "-- migrate:down" in sql
+    # The file lands under db/, which pre-commit lints with sqlfluff: a one-line
+    # registry INSERT is long by construction, so the generator waives LT05/LT14.
+    assert "-- noqa: disable=LT05,LT14" in sql
     assert "ALTER TABLE raw.metrics ADD COLUMN xy TEXT;" in sql
     assert "INSERT INTO meta.column_registry" in sql and "'xy'" in sql
     # down reverses both
