@@ -50,6 +50,14 @@ Matching is wildcard-aware: a key recorded at `signal_name = '*'` is known under
 name; a key recorded only under specific names is surfaced again when it appears under a
 new one (its meaning may differ there).
 
+It also falls back across the **signal** dimension, one-directionally: a key with no row
+under its own signal resolves to the `resource`/`*` row for the same path. The sink merges
+the resource block into each signal's flat namespace (`attrs = {**res_attrs, **rec_attrs}`,
+and `attr_columns` drops `signal_name`), so a resource attribute seen at
+`events/api_request/os.type` is the same byte the parser already reads — not a second fact
+needing a second verdict. The fallback does **not** run the other way: a genuinely new key
+at the resource path still surfaces. Register a resource attribute once, as `resource`/`*`.
+
 ## 2. Classification obligation
 
 Every value-bearing key that reaches the pipeline must have exactly one

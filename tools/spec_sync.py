@@ -13,8 +13,8 @@ tool is the convergence gate between the two.
 
     uv run python -m tools.spec_sync --name <slug>
         Author: diff the spec against a from-zero DB, write a migration closing
-        the delta (``ADD COLUMN`` / registry ``INSERT``/``UPDATE`` + a down
-        section), apply it, verify the delta is empty, regenerate schema.sql.
+        the delta (``ADD COLUMN`` / registry ``INSERT`` + a down section), apply
+        it, verify the delta is empty, regenerate schema.sql.
 
     uv run python -m tools.spec_sync --allow-destructive --name <slug>
         Opt in to ``DROP COLUMN`` deltas (a column dropped from the spec).

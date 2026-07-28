@@ -19,6 +19,30 @@ def test_status_of_matches_exact_name_then_wildcard():
     assert reg.status_of("metrics", "x", "nope") is None
 
 
+def test_resource_attr_resolves_under_a_signal_path():
+    # The sink merges resource attrs into each signal's flat namespace, so a
+    # resource attribute seen at events/api_request/os.type is the same byte the
+    # parser already reads — not a second fact needing a second verdict.
+    reg = Registry(ROWS)
+    assert reg.status_of("events", "api_request", "os.type") == "kept"
+    assert reg.status_of("metrics", "claude_code.token.usage", "os.type") == "kept"
+
+
+def test_resource_fallback_leaves_unknown_keys_unclassified():
+    reg = Registry(ROWS)
+    assert reg.status_of("events", "api_request", "brand.new") is None
+    assert reg.status_of("resource", "*", "brand.new") is None
+
+
+def test_resource_fallback_keeps_per_name_resurfacing():
+    # The fallback narrows the *signal* dimension only. An attr registered under
+    # specific names still resurfaces under a new one — compaction.trigger is live
+    # proof that meaning genuinely differs per event family.
+    reg = Registry(ROWS)
+    assert reg.status_of("metrics", "claude_code.token.usage", "type") == "promoted"
+    assert reg.status_of("metrics", "claude_code.session.count", "type") is None
+
+
 def test_diff_splits_unclassified_and_denied_leaks():
     reg = Registry(ROWS)
     extracted = {
