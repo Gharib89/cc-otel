@@ -1,5 +1,6 @@
 -- migrate:up
 -- spec_sync: registry_truth
+-- noqa: disable=LT05,LT14
 
 ALTER TABLE raw.metrics ADD COLUMN process_owner TEXT;
 ALTER TABLE raw.events ADD COLUMN process_owner TEXT;
