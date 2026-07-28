@@ -5,8 +5,16 @@ from datetime import date
 import duckdb
 import pytest
 
+from azure.core.exceptions import ResourceNotFoundError
+
 from tools._window import compacted_name, partition_prefix
-from tools.compact import compact_partition, partition_days, plan, run
+from tools.compact import (
+    MissingCompactedContainer,
+    compact_partition,
+    partition_days,
+    plan,
+    run,
+)
 
 TODAY = date(2026, 7, 28)
 SIGNALS = ("logs",)
@@ -71,6 +79,19 @@ def test_plan_covers_every_signal(fake_reservoir):
         ("metrics", day),
         ("logs", day),
     ]
+
+
+def test_plan_reports_an_unprovisioned_compacted_container(fake_reservoir):
+    # ADR-0015 declares the container in Bicep and never lets the tool create it, so every
+    # environment hits this once — an opaque ContainerNotFound traceback is not an answer.
+    class _Absent:
+        container_name = "compacted"
+
+        def list_names(self, prefix):
+            raise ResourceNotFoundError("The specified container does not exist.")
+
+    with pytest.raises(MissingCompactedContainer, match="deploy iac/"):
+        plan(fake_reservoir({_raw(date(2026, 7, 27), "a"): b""}), _Absent(), SIGNALS, TODAY)
 
 
 # --- build ---------------------------------------------------------------------

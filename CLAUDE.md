@@ -7,7 +7,7 @@ Pipeline: Claude Code OTel exporter → OTel Collector (bearer auth) → FastAPI
 ## Design sources
 
 - **`CONTEXT.md`** — the glossary. Use its vocabulary in issues, code, and tests; don't drift to the avoided synonyms.
-- **`docs/adr/`** — settled decisions: 0001 no traces, 0002 fresh schema / no backfill, 0003 minimal wrapper contract, 0004 production in Azure, 0005 blob raw reservoir, 0006 interim POC backfill, 0007 cost as API-equivalent value, 0008 canonical mart definitions, 0009 roster drops as immutable dated snapshots, 0010 seat marts under OrgScope RLS, 0011 linked identities scoped not merged, 0012 two-tier text floor + compressed spacing, 0013 semantic text tokens diverge from categorical slots, 0014 PPU workspace + hourly refresh + app-with-audiences distribution. Conflicts get surfaced, never silently overridden.
+- **`docs/adr/`** — settled decisions: 0001 no traces, 0002 fresh schema / no backfill, 0003 minimal wrapper contract, 0004 production in Azure, 0005 blob raw reservoir, 0006 interim POC backfill, 0007 cost as API-equivalent value, 0008 canonical mart definitions, 0009 roster drops as immutable dated snapshots, 0010 seat marts under OrgScope RLS, 0011 linked identities scoped not merged, 0012 two-tier text floor + compressed spacing, 0013 semantic text tokens diverge from categorical slots, 0014 PPU workspace + hourly refresh + app-with-audiences distribution, 0015 compacted reservoir (one parquet per signal/day, derived + additive). Conflicts get surfaced, never silently overridden.
 - **Map issue #1** — the full locked design and decision log. Every implementation issue (#17–#31) traces to a decision bullet there; read the relevant bullet before implementing.
 
 ## Way of working
@@ -53,6 +53,8 @@ uv run python -m tools.matview_sync --check    # gate: canonical db/views/marts/
 uv run python -m tools.matview_sync --name <slug>  # author: edited mart file -> DROP+CREATE+index+GRANT migration (git-HEAD down body); then dev-migrate.sh regenerates schema.sql
 uv run python -m tools.roster_load --file <csv> --as-of YYYY-MM-DD  # dry-run an IS seat-roster drop: prints target host/db, then the delta (ADR-0009)
 uv run python -m tools.roster_load --file <csv> --as-of YYYY-MM-DD --execute [--force]  # land the drop in ref, then refresh the seat marts + dim_date (--force overrides the as-of/truncation guards)
+uv run python -m tools.compact               # dry-run the reservoir compaction catch-up: frozen partitions with no parquet counterpart (ADR-0015)
+uv run python -m tools.compact --execute     # build + upload one parquet per (signal, day); --rebuild re-derives existing counterparts (needed after tools.scrub)
 scripts/ship/local-gate.sh   # path-aware local mirror of CI (JSON verdict; the ship skill's phase-5 gate)
 psql "$DATABASE_URL"         # ad-hoc DB access (Azure otel real data / cc_otel)
 ```

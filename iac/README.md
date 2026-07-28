@@ -13,7 +13,7 @@ two `.bicepparam` files — not per-environment layers.
 |---|---|
 | `modules/containerapp.bicep` | Container Apps env + one app: `collector` (external HTTPS ingress `:4318`) and `sink` (loopback `:8080`, no ingress — #6). System-assigned identity; collector queue on an emptyDir volume; `minReplicas: 1` (#7). |
 | `modules/postgres.bicep` | PostgreSQL Flexible Server — Burstable, **public** endpoint + firewall rules, `pg_cron` enabled, `cc_otel` database. |
-| `modules/storage.bicep` | Storage account for the redacted-raw blob reservoir (ADR-0005) — StorageV2 / LRS / Hot, container `raw`, **no** lifecycle policy (#15). |
+| `modules/storage.bicep` | Storage account for the redacted-raw blob reservoir (ADR-0005) — StorageV2 / LRS / Hot, containers `raw` and `compacted` (the derived parquet read cache, ADR-0015), **no** lifecycle policy (#15). |
 | `modules/monitoring.bicep` | Log Analytics workspace + scheduled-query alerts: collector queue-full / export-failure (#7) and sink strip-fire (#8). |
 | `modules/budget.bicep` | RG-scoped monthly cost budget (150 USD) with Actual 50/75/90/100% + Forecasted 100% email alerts. |
 

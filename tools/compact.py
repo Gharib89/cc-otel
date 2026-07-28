@@ -34,12 +34,29 @@ from pathlib import Path
 from typing import NamedTuple
 
 import duckdb
+from azure.core.exceptions import ResourceNotFoundError
 from cc_otel_sink.config import load_settings
 
 from ._progress import Progress
 from ._reservoir import CurationReservoir, configure_duckdb
 from ._window import compacted_name, partition_glob
 from .signals import ROUTES
+
+
+class MissingCompactedContainer(RuntimeError):
+    """The compacted container is not provisioned — the guaranteed first-run failure.
+
+    ADR-0015 declares the container in ``iac/modules/storage.bicep`` and never lets the tool
+    create it, so every environment hits this once: before the deploy lands, the Azure SDK
+    answers a plain listing with an opaque ``ContainerNotFound`` traceback.
+    """
+
+    def __init__(self, container: str) -> None:
+        super().__init__(
+            f"container '{container}' does not exist — deploy iac/ to this environment "
+            "(manual workflow_dispatch) before compacting, or point "
+            "CC_OTEL_BLOB_COMPACTED_CONTAINER at an existing container"
+        )
 
 
 def partition_days(prefixes: list[str]) -> list[date]:
@@ -75,7 +92,10 @@ def plan(
     todo: list[tuple[str, date]] = []
     for signal in signals:
         prefix = f"signal={signal}/"
-        existing = set(compacted.list_names(prefix))
+        try:
+            existing = set(compacted.list_names(prefix))
+        except ResourceNotFoundError as err:
+            raise MissingCompactedContainer(compacted.container_name) from err
         for day in partition_days(raw.list_prefixes(prefix)):
             if day >= today or (since and day < since) or (until and day > until):
                 continue
@@ -165,15 +185,19 @@ def main(argv: list[str] | None = None) -> int:
     raw = CurationReservoir.from_settings(settings)
     compacted = CurationReservoir.from_settings(settings, container=target_container)
     try:
-        partitions = plan(
-            raw,
-            compacted,
-            signals,
-            datetime.now(UTC).date(),
-            args.since,
-            args.until,
-            args.rebuild,
-        )
+        try:
+            partitions = plan(
+                raw,
+                compacted,
+                signals,
+                datetime.now(UTC).date(),
+                args.since,
+                args.until,
+                args.rebuild,
+            )
+        except MissingCompactedContainer as err:
+            print(err, file=sys.stderr)
+            return 2
         counts = Counts(len(partitions), 0)
         if args.execute and partitions:
             con = duckdb.connect()

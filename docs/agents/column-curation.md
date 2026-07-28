@@ -10,6 +10,7 @@ uv run python -m tools.spec_sync --name <slug>     # author: spec delta -> new m
 uv run python -m tools.gen_data_dictionary
 uv run python -m tools.scrub  --since <d> --until <d> [--execute]
 uv run python -m tools.replay --since <d> --until <d> [--execute]
+uv run python -m tools.compact [--since <d> --until <d>] [--rebuild] [--execute]
 ```
 
 The attr-to-column-to-status catalogue is `sink/src/cc_otel_sink/column_spec.py` (**Column
@@ -22,11 +23,17 @@ All read the sink's own config: `DATABASE_URL` plus `CC_OTEL_BLOB_CONNECTION_STR
 `CC_OTEL_BLOB_ACCOUNT_URL` (+ `CC_OTEL_BLOB_CONTAINER`, default `raw`). Point them at an
 environment by exporting that environment's values (interim/prod secrets live in ACA /
 GitHub, not in a committed env file). `sweep` reads blobs with DuckDB's Azure extension;
-`scrub`/`replay` use the blob SDK; `replay` re-POSTs to a reachable sink URL.
+`scrub`/`replay` use the blob SDK; `compact` uses both; `replay` re-POSTs to a reachable sink URL.
 
 The reservoir is Hive-partitioned `signal=<metrics|logs>/dt=<YYYY-MM-DD>/…json.gz` — the
 partition uses the OTLP **route** names `metrics`/`logs`, while the registry's signal
 dimension is `metrics`/`events`/`resource`; the sweep maps between them.
+
+Beside it sits the **compacted reservoir** (`CC_OTEL_BLOB_COMPACTED_CONTAINER`, ADR-0015): one
+parquet per `(signal, day)` at the same Hive path, written on demand by `tools.compact` and
+preferred by the `analysis/` notebooks. It is **derived, additive and rebuildable** — `sweep`,
+`scrub` and `replay` address `raw` only, which stays the source of truth. It touches curation in
+exactly one place: the deny flow in step 6.
 
 ## 1. Sweep — find unclassified keys
 
@@ -117,7 +124,18 @@ When a key becomes `denied`:
    the sink's `redact` and overwrites it; it is idempotent on already-clean blobs and
    deliberately does **not** touch `processed_batches` (the payload bytes change, so the
    hash would too — replaying is the wrong tool for a deny).
-3. Postgres needs no change if the key was never a promoted column; if it was, drop/clear
+3. **Re-compact the scrubbed window.** A compacted partition (ADR-0015) built before the deny
+   still carries the denied key — scrub rewrites `raw` in place and never touches the derived
+   container, so the deny is not complete until the parquet is re-derived from the scrubbed
+   blobs:
+
+   ```sh
+   uv run python -m tools.compact --since <scrubbed-start> --until <scrubbed-end> --rebuild --execute
+   ```
+
+   Skipping this leaves the key readable through the notebooks' preferred read path. Nothing to
+   do if the window was never compacted.
+4. Postgres needs no change if the key was never a promoted column; if it was, drop/clear
    the column in the same migration.
 
 ## 7. Replay (incident recovery)
