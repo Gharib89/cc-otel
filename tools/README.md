@@ -39,7 +39,7 @@ the agent-facing curation workflow lives in
 
 ### Blob RBAC per tool
 
-Grant the role on the storage account (or `raw` container) to the identity you logged in as with `az login`:
+Grant the role on the storage account (or the named container) to the identity you logged in as with `az login`:
 
 | tool | blob role | why |
 |---|---|---|
@@ -47,7 +47,7 @@ Grant the role on the storage account (or `raw` container) to the identity you l
 | `tools.gen_data_dictionary` | *(none — Postgres only)* | never touches blobs |
 | `tools.replay` | **Storage Blob Data Reader** | downloads blobs to re-POST; never rewrites them |
 | `tools.scrub` | **Storage Blob Data Contributor** | overwrites blobs in place |
-| `tools.compact` | **Reader** on `raw` + **Contributor** on `compacted` | reads raw via DuckDB, writes only the derived container |
+| `tools.compact` | **Storage Blob Data Reader** on `raw` + **Storage Blob Data Contributor** on `compacted` | reads raw via DuckDB, writes only the derived container |
 | `tools.roster_load` | *(none — Postgres only)* | never touches blobs (ADR-0009 keeps no file copy) |
 
 > Progress: sweep / scrub / replay / compact print a throttled `label: n[/total]` line to **stderr**

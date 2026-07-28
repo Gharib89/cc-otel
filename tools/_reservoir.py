@@ -1,12 +1,14 @@
 """Blob-reservoir access for the curation tools.
 
 Built from the sink's own ``Settings`` (``CC_OTEL_BLOB_*``) so the tools read the same
-container the sink writes. Two consumers:
+container the sink writes — or, with ``from_settings``' container override, the compacted
+container beside it (ADR-0015), which the sink never touches. Two consumers:
 
-* ``CurationReservoir`` — list / download / overwrite, for ``tools.scrub`` and
-  ``tools.replay`` (the sink's ``BlobReservoir`` only writes new blobs).
-* ``configure_duckdb`` — register an Azure secret on a DuckDB connection so
-  ``tools.sweep`` can ``read_json_objects('azure://…')`` over the reservoir.
+* ``CurationReservoir`` — list / download / overwrite, for ``tools.scrub``, ``tools.replay``
+  and ``tools.compact`` (the sink's ``BlobReservoir`` only writes new blobs).
+* ``configure_duckdb`` — register an Azure secret on a DuckDB connection so ``tools.sweep``,
+  ``tools.compact`` and the ``analysis`` notebooks can read ``azure://…`` over the reservoir.
+  The secret is account-scoped, so it reaches both containers.
 """
 
 from __future__ import annotations

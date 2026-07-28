@@ -1,6 +1,8 @@
-"""Blob-window addressing shared by sweep / scrub / replay.
+"""Blob-window addressing shared by sweep / scrub / replay / compact and ``analysis``.
 
-The reservoir is Hive-partitioned ``signal=<metrics|logs>/dt=<YYYY-MM-DD>/`` (blob.py).
+The reservoir is Hive-partitioned ``signal=<metrics|logs>/dt=<YYYY-MM-DD>/`` (blob.py). The
+compacted reservoir (ADR-0015) reuses that prefix with a fixed ``part-0.parquet`` leaf, so both
+addresses are built here and cannot drift apart.
 Note the partition uses the OTLP *route* names ``metrics`` / ``logs`` — not the registry's
 ``events`` — so window helpers speak ``logs``.
 """

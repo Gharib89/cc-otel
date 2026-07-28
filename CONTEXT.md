@@ -59,7 +59,7 @@ A second Azure Blob container (`compacted`) holding one parquet per `(signal, da
 _Avoid_: curated reservoir (curation is the column-classification flow), parquet cache, blob archive
 
 **Blob backend**:
-`cc_otel_sink/blob_backend.py` — maps `Settings` to authenticated **Raw reservoir** container access, and holds the one copy of the auth-precedence rule (connection string wins, else account URL + managed identity, else none). Both the sink (`BlobReservoir`) and the curation tools (`CurationReservoir`, `configure_duckdb`) build their clients through it; the `None` case is each caller's own policy.
+`cc_otel_sink/blob_backend.py` — maps `Settings` to authenticated **Raw reservoir** container access (and, via `CurationReservoir.from_settings`' container override, the **Compacted reservoir**), and holds the one copy of the auth-precedence rule (connection string wins, else account URL + managed identity, else none). Both the sink (`BlobReservoir`) and the curation tools (`CurationReservoir`, `configure_duckdb`) build their clients through it; the `None` case is each caller's own policy.
 _Avoid_: blob config, storage adapter
 
 **Column spec**:

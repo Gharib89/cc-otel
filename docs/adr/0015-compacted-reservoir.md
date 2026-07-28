@@ -49,8 +49,14 @@ fetch 10–15 s → 0.6–1.6 s per partition, and the Jul 14 → 28 window from
 - **No lifecycle policy**, matching raw's keep-forever posture (#15) but for the opposite reason:
   raw is keep-forever because it is the source of truth, `compacted` because it is ~2 MB/day and
   cheap to rebuild. Nobody should read its retention as evidence that it is irreplaceable.
-- **The sink identity gets no write path.** The sink writes `raw` only; compaction runs under the
-  operator identity (`az login`, Storage Blob Data Contributor).
+- **The sink never writes `compacted`; compaction runs under the operator identity** (`az login`,
+  Storage Blob Data Contributor). Note what this is *not*: the Container App identity's
+  `Storage Blob Data Contributor` assignment is scoped to the whole storage account
+  (`iac/main.bicep`), so the sink identity retains the *permission* to write the new container —
+  it simply never addresses it (`Settings.blob_container` is the only container the sink builds a
+  client for). That is the accepted cost of the "one credential, one RBAC surface" decision
+  above; tightening it to a per-container assignment is a separate change, not a guarantee this
+  ADR makes.
 - **Unset means today's behaviour exactly.** `CC_OTEL_BLOB_COMPACTED_CONTAINER` unset ⇒
   `read_payloads` reads raw as before, so a machine that has never compacted anything still runs
   the notebooks.

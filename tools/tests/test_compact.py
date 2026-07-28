@@ -4,7 +4,6 @@ from datetime import date
 
 import duckdb
 import pytest
-
 from azure.core.exceptions import ResourceNotFoundError
 
 from tools._window import compacted_name, partition_prefix

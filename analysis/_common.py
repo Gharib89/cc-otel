@@ -60,7 +60,7 @@ def load_env(env_file: str | os.PathLike[str] | None = None) -> Path | None:
     return path
 
 
-def _read(con: DuckDBPyConnection, sql: str) -> list[tuple[str]] | None:
+def _read_if_present(con: DuckDBPyConnection, sql: str) -> list[tuple[str]] | None:
     """Run a payload-text query; ``None`` when the target matched no files.
 
     DuckDB raises the same "no files found" ``IOException`` for three different
@@ -100,10 +100,10 @@ def read_payloads(
             rows = None
             if compacted_container is not None:
                 target = compacted_url(compacted_container, signal, day).replace("'", "''")
-                rows = _read(con, f"SELECT json FROM read_parquet('{target}')")
+                rows = _read_if_present(con, f"SELECT json FROM read_parquet('{target}')")
             if rows is None:
                 target = partition_glob(container, signal, day).replace("'", "''")
-                rows = _read(
+                rows = _read_if_present(
                     con, f"SELECT json FROM read_json_objects('{target}', format='unstructured')"
                 )
             payloads.extend(json.loads(text) for (text,) in rows or [])
