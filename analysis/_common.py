@@ -13,13 +13,15 @@ from __future__ import annotations
 import json
 import os
 from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import duckdb
+from cc_otel_sink.attrs import event_name
 from dotenv import load_dotenv
 
-from tools._keypaths import KeyPath, extract_key_paths
+from tools._keypaths import METRIC_KINDS, KeyPath, extract_key_paths
 from tools._window import globs
 
 if TYPE_CHECKING:
@@ -102,9 +104,9 @@ def scalar(anyvalue: Any) -> str:
     """Flatten an OTLP ``AnyValue`` to a display string (first scalar field wins)."""
     if not isinstance(anyvalue, dict):
         return str(anyvalue)
-    for field in ("stringValue", "intValue", "doubleValue", "boolValue"):
-        if field in anyvalue:
-            return str(anyvalue[field])
+    for scalar_field in ("stringValue", "intValue", "doubleValue", "boolValue"):
+        if scalar_field in anyvalue:
+            return str(anyvalue[scalar_field])
     return str(anyvalue)
 
 
@@ -123,6 +125,122 @@ def iter_attrs(obj: Any) -> Iterator[tuple[str, Any]]:
     elif isinstance(obj, list):
         for item in obj:
             yield from iter_attrs(item)
+
+
+def _attr_map(attributes: Any) -> dict[str, str]:
+    """Flatten an OTLP ``attributes`` list to a ``key -> display string`` mapping."""
+    if not isinstance(attributes, list):
+        return {}
+    return {
+        a["key"]: scalar(a.get("value"))
+        for a in attributes
+        if isinstance(a, dict) and isinstance(a.get("key"), str)
+    }
+
+
+def iter_records(payload: dict[str, Any]) -> Iterator[tuple[str, str, dict[str, str]]]:
+    """Yield ``(signal, signal_name, attrs)`` per data point, log record, and resource block.
+
+    The record grain ``extract_key_paths`` deliberately discards: it answers "which
+    key paths exist", this answers "how often, and on whose records". Signal naming
+    matches the registry's (``metrics``/``events``/``resource``, resource blocks at
+    ``'*'``), so profiles join straight onto ``meta.column_registry``.
+    """
+    for rm in payload.get("resourceMetrics", []) or []:
+        resource = _attr_map((rm.get("resource") or {}).get("attributes"))
+        yield "resource", "*", resource
+        for sm in rm.get("scopeMetrics", []) or []:
+            for metric in sm.get("metrics", []) or []:
+                name = metric.get("name")
+                if not isinstance(name, str):
+                    continue
+                for kind in METRIC_KINDS:
+                    container = metric.get(kind)
+                    if not isinstance(container, dict):
+                        continue
+                    for dp in container.get("dataPoints", []) or []:
+                        yield "metrics", name, _attr_map(dp.get("attributes"))
+
+    for rl in payload.get("resourceLogs", []) or []:
+        resource = _attr_map((rl.get("resource") or {}).get("attributes"))
+        yield "resource", "*", resource
+        for sl in rl.get("scopeLogs", []) or []:
+            for record in sl.get("logRecords", []) or []:
+                attrs = record.get("attributes")
+                yield "events", event_name(attrs, record.get("name")) or "∅", _attr_map(attrs)
+
+
+VALUE_CAP = 500
+"""Distinct values tracked per key before :attr:`KeyStats.capped` is set.
+
+Free-text keys (prompts, error messages) would otherwise grow a Counter per distinct
+value across a multi-day window; the cap keeps a wide profile pass in memory while
+still reporting "cardinality exceeds the cap", which is itself the promotion verdict.
+"""
+
+CROSSTAB_CARD = 25
+"""Distinct values a per-value seat cross-tab is kept for.
+
+Only categorical keys get one: past this many values the key is an identifier or a
+measure, where "which seats carry value V" is noise rather than evidence.
+"""
+
+
+@dataclass
+class KeyStats:
+    """Record-grain profile of one key path — or of a whole signal-name population."""
+
+    records: int = 0
+    sessions: set[str] = field(default_factory=set)
+    seats: set[str] = field(default_factory=set)
+    values: Counter[str] = field(default_factory=Counter)
+    capped: bool = False
+    value_seats: dict[str, set[str]] = field(default_factory=dict)
+    """Seat reach per value — complete only while ``len(values) <= CROSSTAB_CARD``.
+
+    Answers "is this value one developer or the fleet?", which a value *count* cannot:
+    a category carried by 4,000 records from two seats is a different promotion case
+    from the same count spread across twenty.
+    """
+
+    def observe(self, session: str, seat: str, value: str | None) -> None:
+        self.records += 1
+        if session:
+            self.sessions.add(session)
+        if seat:
+            self.seats.add(seat)
+        if value is None:
+            return
+        if value in self.values or len(self.values) < VALUE_CAP:
+            self.values[value] += 1
+        else:
+            self.capped = True
+        if seat and (value in self.value_seats or len(self.value_seats) < CROSSTAB_CARD):
+            self.value_seats.setdefault(value, set()).add(seat)
+
+
+@dataclass
+class Profile:
+    """Per-key-path stats plus the per-signal-name population they are a share of.
+
+    ``update`` is additive, so a wide window streams day by day instead of holding
+    every payload in memory at once.
+    """
+
+    keys: dict[KeyPath, KeyStats] = field(default_factory=dict)
+    populations: dict[tuple[str, str], KeyStats] = field(default_factory=dict)
+
+    def update(self, payloads: list[dict[str, Any]]) -> None:
+        for payload in payloads:
+            for signal, name, attrs in iter_records(payload):
+                # Identity rides on the record's own attributes for signal records and
+                # on the block itself for resource pseudo-records — one lookup covers both.
+                session = attrs.get("session.id", "")
+                seat = attrs.get("user.email", "").strip().lower()
+                self.populations.setdefault((signal, name), KeyStats()).observe(session, seat, None)
+                for key, value in attrs.items():
+                    stats = self.keys.setdefault((signal, name, key), KeyStats())
+                    stats.observe(session, seat, value)
 
 
 def attr_value_samples(payloads: list[dict[str, Any]]) -> dict[str, Counter[str]]:

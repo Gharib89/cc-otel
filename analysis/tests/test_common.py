@@ -10,9 +10,12 @@ import duckdb
 import pytest
 
 from analysis._common import (
+    VALUE_CAP,
+    Profile,
     attr_value_samples,
     fill_counts,
     iter_attrs,
+    iter_records,
     load_env,
     read_payloads,
     scalar,
@@ -105,6 +108,66 @@ def test_attr_value_samples_cardinality_and_examples() -> None:
     samples = attr_value_samples([_metrics_payload("h1", "opus"), _metrics_payload("h1", "sonnet")])
     assert samples["model"] == Counter({"opus": 1, "sonnet": 1})  # cardinality 2
     assert samples["host"] == Counter({"h1": 2})  # cardinality 1
+
+
+def _logs_payload(event: str, attrs: dict[str, str]) -> dict:
+    """Minimal OTLP logs payload: one resource attr + one log record."""
+    pairs = [{"key": "event.name", "value": {"stringValue": event}}]
+    pairs += [{"key": k, "value": {"stringValue": v}} for k, v in attrs.items()]
+    return {
+        "resourceLogs": [
+            {
+                "resource": {"attributes": [{"key": "host", "value": {"stringValue": "h1"}}]},
+                "scopeLogs": [{"logRecords": [{"attributes": pairs}]}],
+            }
+        ]
+    }
+
+
+def test_iter_records_yields_resource_block_then_data_points() -> None:
+    records = list(iter_records(_metrics_payload("h1", "opus")))
+    assert records == [("resource", "*", {"host": "h1"}), ("metrics", "m1", {"model": "opus"})]
+
+
+def test_iter_records_names_log_records_by_event_name() -> None:
+    signal, name, attrs = list(iter_records(_logs_payload("tool_result", {"tool_name": "Bash"})))[1]
+    assert (signal, name) == ("events", "tool_result")
+    assert attrs["tool_name"] == "Bash"
+
+
+def test_profile_counts_records_sessions_and_seats() -> None:
+    profile = Profile()
+    profile.update(
+        [
+            _logs_payload(
+                "tool_result", {"session.id": "s1", "user.email": "A@x.com", "t": "Bash"}
+            ),
+            _logs_payload(
+                "tool_result", {"session.id": "s1", "user.email": "a@x.com", "t": "Read"}
+            ),
+            _logs_payload(
+                "tool_result", {"session.id": "s2", "user.email": "b@x.com", "t": "Bash"}
+            ),
+        ]
+    )
+
+    stats = profile.keys[("events", "tool_result", "t")]
+    assert stats.records == 3
+    assert stats.sessions == {"s1", "s2"}
+    assert stats.seats == {"a@x.com", "b@x.com"}  # normalized, so one seat not two
+    assert stats.values == Counter({"Bash": 2, "Read": 1})
+    assert stats.value_seats == {"Bash": {"a@x.com", "b@x.com"}, "Read": {"a@x.com"}}
+    assert profile.populations[("events", "tool_result")].records == 3
+
+
+def test_profile_caps_distinct_values_but_keeps_counting() -> None:
+    profile = Profile()
+    profile.update([_logs_payload("user_prompt", {"p": f"v{n}"}) for n in range(VALUE_CAP + 5)])
+
+    stats = profile.keys[("events", "user_prompt", "p")]
+    assert stats.records == VALUE_CAP + 5  # every record still counted
+    assert len(stats.values) == VALUE_CAP  # ...but only VALUE_CAP distinct values retained
+    assert stats.capped
 
 
 def test_load_env_overrides_the_inherited_environment(tmp_path, monkeypatch) -> None:
