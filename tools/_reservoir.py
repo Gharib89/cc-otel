@@ -1,16 +1,19 @@
 """Blob-reservoir access for the curation tools.
 
 Built from the sink's own ``Settings`` (``CC_OTEL_BLOB_*``) so the tools read the same
-container the sink writes. Two consumers:
+container the sink writes — or, with ``from_settings``' container override, the compacted
+container beside it (ADR-0015), which the sink never touches. Two consumers:
 
-* ``CurationReservoir`` — list / download / overwrite, for ``tools.scrub`` and
-  ``tools.replay`` (the sink's ``BlobReservoir`` only writes new blobs).
-* ``configure_duckdb`` — register an Azure secret on a DuckDB connection so
-  ``tools.sweep`` can ``read_json_objects('azure://…')`` over the reservoir.
+* ``CurationReservoir`` — list / download / overwrite, for ``tools.scrub``, ``tools.replay``
+  and ``tools.compact`` (the sink's ``BlobReservoir`` only writes new blobs).
+* ``configure_duckdb`` — register an Azure secret on a DuckDB connection so ``tools.sweep``,
+  ``tools.compact`` and the ``analysis`` notebooks can read ``azure://…`` over the reservoir.
+  The secret is account-scoped, so it reaches both containers.
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -47,15 +50,41 @@ class CurationReservoir:
         self._credential = credential
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> CurationReservoir:
+    def from_settings(cls, settings: Settings, container: str | None = None) -> CurationReservoir:
+        """Build a client for ``settings.blob_container``, or for ``container`` instead.
+
+        The override exists for the compacted reservoir (ADR-0015), which lives in a second
+        container on the same account: swapping the field keeps the auth-precedence rule in
+        ``blob_backend`` as the only copy rather than growing a parallel builder.
+        """
+        if container is not None:
+            settings = replace(settings, blob_container=container)
         built = build_container_client(settings)
         if built is None:
             raise ReservoirUnconfigured
         client, credential = built
         return cls(client, credential)
 
+    @property
+    def container_name(self) -> str:
+        return self._container.container_name
+
     def list_names(self, prefix: str) -> list[str]:
         return [b.name for b in self._container.list_blobs(name_starts_with=prefix)]
+
+    def list_prefixes(self, prefix: str) -> list[str]:
+        """Immediate child *prefixes* of ``prefix`` — Hive partition discovery (compact).
+
+        ``walk_blobs`` with a ``/`` delimiter returns one entry per partition instead of one
+        per blob, so discovering which days exist costs a directory listing rather than a
+        scan of ~20k blob names. Child blobs come back too and are filtered out by the
+        trailing delimiter.
+        """
+        return [
+            item.name
+            for item in self._container.walk_blobs(name_starts_with=prefix, delimiter="/")
+            if item.name.endswith("/")
+        ]
 
     def download(self, name: str) -> bytes:
         return self._container.download_blob(name).readall()

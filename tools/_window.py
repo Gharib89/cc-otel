@@ -1,6 +1,8 @@
-"""Blob-window addressing shared by sweep / scrub / replay.
+"""Blob-window addressing shared by sweep / scrub / replay / compact and ``analysis``.
 
-The reservoir is Hive-partitioned ``signal=<metrics|logs>/dt=<YYYY-MM-DD>/`` (blob.py).
+The reservoir is Hive-partitioned ``signal=<metrics|logs>/dt=<YYYY-MM-DD>/`` (blob.py). The
+compacted reservoir (ADR-0015) reuses that prefix with a fixed ``part-0.parquet`` leaf, so both
+addresses are built here and cannot drift apart.
 Note the partition uses the OTLP *route* names ``metrics`` / ``logs`` — not the registry's
 ``events`` — so window helpers speak ``logs``.
 """
@@ -36,6 +38,26 @@ def prefixes(signals: tuple[str, ...], days: list[date]) -> list[str]:
     return [partition_prefix(s, d) for s in signals for d in days]
 
 
+def partition_glob(container: str, signal: str, day: date) -> str:
+    """``azure://`` glob over one raw partition's gzipped-JSON blobs."""
+    return f"azure://{container}/{partition_prefix(signal, day)}*.json.gz"
+
+
 def globs(container: str, signals: tuple[str, ...], days: list[date]) -> list[str]:
     """``azure://`` globs for DuckDB ``read_json_objects`` (sweep)."""
-    return [f"azure://{container}/{partition_prefix(s, d)}*.json.gz" for s in signals for d in days]
+    return [partition_glob(container, s, d) for s in signals for d in days]
+
+
+def compacted_name(signal: str, day: date) -> str:
+    """Blob name of one partition's compacted parquet — what ``tools.compact`` writes.
+
+    Deliberately the raw layout's own Hive prefix plus a fixed leaf (ADR-0015): one file per
+    partition, so a compacted address differs from a raw one only in the leaf, the two globs
+    stay symmetric, and the route-name mapping keeps living in ``partition_prefix``.
+    """
+    return f"{partition_prefix(signal, day)}part-0.parquet"
+
+
+def compacted_url(container: str, signal: str, day: date) -> str:
+    """``azure://`` URL of one partition's compacted parquet — the analysis read path."""
+    return f"azure://{container}/{compacted_name(signal, day)}"

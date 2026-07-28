@@ -8,8 +8,8 @@ import pytest
 class FakeReservoir:
     """Dict-backed ``CurationReservoir`` stand-in for scrub / replay unit tests.
 
-    Implements the four methods the tools use (``list_names``, ``download``,
-    ``overwrite``, ``close``) over an in-memory ``{name: gzip-bytes}`` map, and
+    Implements the five methods the tools use (``list_names``, ``list_prefixes``,
+    ``download``, ``overwrite``, ``close``) over an in-memory ``{name: bytes}`` map, and
     records every overwrite so a test can assert dry-run wrote nothing.
     """
 
@@ -20,6 +20,17 @@ class FakeReservoir:
 
     def list_names(self, prefix: str) -> list[str]:
         return [name for name in self.blobs if name.startswith(prefix)]
+
+    def list_prefixes(self, prefix: str) -> list[str]:
+        """Immediate child prefixes of ``prefix`` — the real client's ``walk_blobs`` shape."""
+        depth = prefix.count("/") + 1
+        return sorted(
+            {
+                "/".join(name.split("/")[:depth]) + "/"
+                for name in self.blobs
+                if name.startswith(prefix) and name.count("/") >= depth
+            }
+        )
 
     def download(self, name: str) -> bytes:
         return self.blobs[name]

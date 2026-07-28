@@ -40,7 +40,36 @@ dashboard. Decision + charter: #87.
    `ReservoirUnconfigured`).
 
    Required vars: `CC_OTEL_BLOB_ACCOUNT_URL`, `CC_OTEL_BLOB_CONTAINER` (default
-   `raw`), and `DATABASE_URL` (the marts join-in).
+   `raw`), and `DATABASE_URL` (the marts join-in). Optional but strongly
+   recommended: `CC_OTEL_BLOB_COMPACTED_CONTAINER=compacted` (below) — unset, the
+   notebooks read raw blobs and a wide window costs minutes rather than seconds.
+
+## Compaction — read the window in seconds, not minutes
+
+Read cost is driven by **file count, not bytes**: one day's ~860 gzipped blobs take
+9.6 s to parse with *zero* network, so ~11 ms of per-file overhead dominates the
+2.83 MB of payload (#352). `tools.compact` collapses each partition into one zstd
+parquet in the `compacted` container, and `read_payloads` prefers it — taking the
+Jul 14 → 28 window from ~6–11 min to ~3.5 min.
+
+```sh
+uv run python -m tools.compact             # dry-run: the catch-up plan
+uv run python -m tools.compact --execute   # build + upload the missing partitions
+```
+
+Three rules worth knowing before you rely on it (full reasoning in
+[ADR-0015](../docs/adr/0015-compacted-reservoir.md), operator detail in
+[`tools/README.md`](../tools/README.md)):
+
+- **Derived, additive, rebuildable.** `raw` stays the source of truth and the replay
+  source; `compacted` is a read cache. Deleting it costs ~21 s per partition to rebuild.
+- **On demand, no schedule.** Past partitions are immutable, so compaction is a
+  once-per-partition-ever job — there is no drift to correct, only a backlog to catch up,
+  and one run catches up whatever is missing no matter when it last ran. **Today's
+  partition is never compacted** (it is still growing); the read path falls back to `raw`
+  for it, so a notebook window ending today always works.
+- **Unset means today's behaviour.** No `CC_OTEL_BLOB_COMPACTED_CONTAINER`, no parquet
+  probe — a machine that has never compacted anything still runs every notebook.
 
 ## Running
 
@@ -61,6 +90,6 @@ uv run --group analysis marimo export html analysis/overview.py -o overview.html
 - **Outputs are not committed** — only the `.py` source. Export HTML locally when
   a snapshot needs sharing.
 - **No new abstraction** — notebooks reuse the `tools/` reservoir helpers
-  (`configure_duckdb`, `globs`, `extract_key_paths`, `load_registry`); the only
-  shared code is `analysis/_common.py` (`read_payloads`), unit-tested in
-  `analysis/tests/`.
+  (`configure_duckdb`, `partition_glob` / `compacted_url`, `extract_key_paths`,
+  `load_registry`); the only shared code is `analysis/_common.py`
+  (`read_payloads`), unit-tested in `analysis/tests/`.

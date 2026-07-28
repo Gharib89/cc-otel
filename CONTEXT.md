@@ -54,8 +54,12 @@ _Avoid_: aggregate table, summary view
 An Azure Blob Storage container (`raw`) holding the **redacted-raw** OTLP payloads — the full body with only secret-bearing fields stripped (`full_command`, `bash_command`, `file_path`, `error`), everything else kept verbatim. Purpose: keep Postgres lean while preserving raw for **drift** discovery and future-parser replay. Not the source of truth (the report reads Postgres marts); queried ad-hoc with DuckDB. See ADR-0005.
 _Avoid_: raw dump, blob backup
 
+**Compacted reservoir**:
+A second Azure Blob container (`compacted`) holding one parquet per `(signal, day)` — a single `json VARCHAR` column carrying the same payload text as the **Raw reservoir** blobs, at the same Hive path with a `part-0.parquet` leaf. **Derived, additive and rebuildable**: it exists only because reservoir read cost is driven by file count (~11 ms per file), so a partition's ~860 blobs collapse to one. Written on demand by `tools.compact`, preferred by the analysis read path, never seen by `tools.scrub` / `tools.replay` — the **Raw reservoir** stays the replay source. See ADR-0015.
+_Avoid_: curated reservoir (curation is the column-classification flow), parquet cache, blob archive
+
 **Blob backend**:
-`cc_otel_sink/blob_backend.py` — maps `Settings` to authenticated **Raw reservoir** container access, and holds the one copy of the auth-precedence rule (connection string wins, else account URL + managed identity, else none). Both the sink (`BlobReservoir`) and the curation tools (`CurationReservoir`, `configure_duckdb`) build their clients through it; the `None` case is each caller's own policy.
+`cc_otel_sink/blob_backend.py` — maps `Settings` to authenticated **Raw reservoir** container access (and, via `CurationReservoir.from_settings`' container override, the **Compacted reservoir**), and holds the one copy of the auth-precedence rule (connection string wins, else account URL + managed identity, else none). Both the sink (`BlobReservoir`) and the curation tools (`CurationReservoir`, `configure_duckdb`) build their clients through it; the `None` case is each caller's own policy.
 _Avoid_: blob config, storage adapter
 
 **Column spec**:

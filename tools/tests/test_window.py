@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 
-from tools._window import date_range, globs, prefixes, resolve_window
+from tools._window import compacted_url, date_range, globs, partition_glob, prefixes, resolve_window
 
 
 def test_date_range_is_inclusive():
@@ -44,3 +44,19 @@ def test_prefixes_and_globs_cover_signal_x_day():
     assert globs("raw", ("metrics",), days) == [
         "azure://raw/signal=metrics/dt=2026-07-10/*.json.gz",
     ]
+
+
+def test_globs_is_the_partition_glob_cross_product():
+    days = [date(2026, 7, 10)]
+    assert globs("raw", ("metrics", "logs"), days) == [
+        partition_glob("raw", "metrics", days[0]),
+        partition_glob("raw", "logs", days[0]),
+    ]
+
+
+def test_compacted_url_mirrors_the_raw_partition_layout():
+    # Same Hive prefix as raw, one deterministic file name, so the two stay symmetric.
+    assert (
+        compacted_url("compacted", "logs", date(2026, 7, 26))
+        == "azure://compacted/signal=logs/dt=2026-07-26/part-0.parquet"
+    )
