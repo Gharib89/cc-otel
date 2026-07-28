@@ -39,6 +39,15 @@ def test_partition_days_ignores_children_that_are_not_partitions():
     ]
 
 
+def test_partition_days_skips_an_unparseable_dt_without_aborting(capsys):
+    # One stray prefix must not abort discovery of every other partition; skipping costs
+    # only that partition's speedup, since the read path falls back to raw.
+    assert partition_days(["signal=logs/dt=not-a-date/", "signal=logs/dt=2026-07-26/"]) == [
+        date(2026, 7, 26)
+    ]
+    assert "dt=not-a-date" in capsys.readouterr().err  # named, not silently swallowed
+
+
 # --- plan ----------------------------------------------------------------------
 
 
