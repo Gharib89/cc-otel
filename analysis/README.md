@@ -9,6 +9,7 @@ dashboard. Decision + charter: #87.
 |---|---|
 | `overview.py` | Reservoir blob counts per signal + marts / column-registry status (EDA seed) |
 | `promotion_candidates.py` | Kept / unclassified attribute keys ranked by fill rate — promotion candidates for #16 |
+| `promotion_profile.py` | The same candidates at **record** grain over a wide window, cross-tabbed against sessions and seats — the evidence a promotion value case argues from (#351; frozen cut: [`docs/research/promotion-candidate-profile.md`](../docs/research/promotion-candidate-profile.md)) |
 | `redaction_audit.py` | `denied` keys still present in the redacted reservoir — redaction leaks (#8) |
 | `ecosystem.py` | Generic attribute-value explorer — top skills, custom-skill authors (starter) |
 

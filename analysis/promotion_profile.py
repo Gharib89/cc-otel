@@ -100,12 +100,16 @@ def _(ROUTES, Profile, configure_duckdb, days, duckdb, read_payloads, settings):
     blobs_per_day = {}
     con = duckdb.connect()
     try:
+        configure_duckdb(con, settings)
         for _day in days:
-            # Re-register the Azure secret per day: `configure_duckdb` pins one prefetched
-            # OAuth token, and a multi-day read outlives it — the window then dies partway
-            # with `InvalidAuthenticationInfo` and loses the whole pass.
-            configure_duckdb(con, settings)
-            _payloads = read_payloads(con, settings.blob_container, ROUTES, [_day])
+            try:
+                _payloads = read_payloads(con, settings.blob_container, ROUTES, [_day])
+            except duckdb.IOException:
+                # `configure_duckdb` pins one prefetched OAuth token and a multi-day read
+                # outlives it (`InvalidAuthenticationInfo` partway through the window).
+                # Re-register once and retry; a second failure is real and propagates.
+                configure_duckdb(con, settings)
+                _payloads = read_payloads(con, settings.blob_container, ROUTES, [_day])
             profile.update(_payloads)
             blobs_per_day[_day] = len(_payloads)
     finally:
