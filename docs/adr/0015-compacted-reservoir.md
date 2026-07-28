@@ -45,7 +45,8 @@ fetch 10–15 s → 0.6–1.6 s per partition, and the Jul 14 → 28 window from
   reservoir), and no compute could run it today anyway — `pg_cron` cannot reach blobs, there is no
   ACA job, and a GitHub Actions cron would need reservoir credentials in CI plus an egress path.
 - **Declared in Bicep, never created by the tool** (`iac/modules/storage.bicep`) — infra comes from
-  `iac/`. Needs a manual `workflow_dispatch` deploy per environment before the tool can write.
+  `iac/`. Needs an operator-run `bootstrap/bootstrap.ps1 -Environment <env> -Step deploy` per
+  environment before the tool can write; no workflow deploys `iac/` (bootstrap runs locally, #52).
 - **No lifecycle policy**, matching raw's keep-forever posture (#15) but for the opposite reason:
   raw is keep-forever because it is the source of truth, `compacted` because it is ~2 MB/day and
   cheap to rebuild. Nobody should read its retention as evidence that it is irreplaceable.
