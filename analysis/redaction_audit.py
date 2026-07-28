@@ -44,11 +44,15 @@ def _():
     import psycopg
     from cc_otel_sink.config import load_settings
 
-    from analysis._common import fill_counts, read_payloads
+    from analysis._common import fill_counts, load_env, read_payloads
     from tools._registry import load_registry
     from tools._reservoir import configure_duckdb
     from tools._window import resolve_window
     from tools.signals import ROUTES
+
+    # No shell sourced the env file into this kernel — load it before the cell
+    # below builds Settings (`CC_OTEL_ENV_FILE` picks a file other than .env.interim).
+    load_env()
 
     return (
         ROUTES,

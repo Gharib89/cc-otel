@@ -23,9 +23,10 @@ cc-otel-sink = { workspace = true }
 # notebooks reuse tools._reservoir + cc_otel_sink.config, so they only add the
 # notebook runtime (marimo) and the query engines here.
 analysis = [
-    "marimo>=0.11",
+    "marimo>=0.23.14",
     "duckdb>=1.1",
     "psycopg[binary]>=3.2",
+    "python-dotenv>=1.0",
 ]
 dev = [
     "ruff>=0.15",

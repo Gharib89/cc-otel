@@ -11,10 +11,13 @@ these primitives stay here so they can be unit-tested without a live reservoir.
 from __future__ import annotations
 
 import json
+import os
 from collections import Counter
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import duckdb
+from dotenv import load_dotenv
 
 from tools._keypaths import KeyPath, extract_key_paths
 from tools._window import globs
@@ -24,6 +27,35 @@ if TYPE_CHECKING:
     from datetime import date
 
     from duckdb import DuckDBPyConnection
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_env(env_file: str | os.PathLike[str] | None = None) -> Path | None:
+    """Load a repo-root ``.env.<env>`` into ``os.environ``; return the file, or ``None``.
+
+    The notebooks read the reservoir and marts settings from the environment
+    (``cc_otel_sink.config.load_settings``), but a marimo kernel has no shell to
+    ``set -a; . ./.env.interim; set +a`` into — so the load happens here instead.
+    Defaults to ``.env.interim``; ``CC_OTEL_ENV_FILE`` selects another file (e.g.
+    ``.env.prod``, or an absolute path). A missing file is not an error: the
+    notebook then runs on whatever the environment already carries.
+
+    ``override=True`` on purpose: marimo auto-loads the repo-root ``.env`` into the
+    kernel before any cell runs, and that file points at the POC server (no
+    ``meta.column_registry``, no marts) — deferring to the inherited value pointed
+    the notebooks at the wrong database. The chosen file names the environment, so
+    it wins; to target another one, set ``CC_OTEL_ENV_FILE`` rather than exporting
+    individual variables.
+    """
+    name = env_file if env_file is not None else os.environ.get("CC_OTEL_ENV_FILE", ".env.interim")
+    path = Path(name)
+    if not path.is_absolute():
+        path = _REPO_ROOT / path
+    if not path.is_file():
+        return None
+    load_dotenv(path, override=True)
+    return path
 
 
 def read_payloads(

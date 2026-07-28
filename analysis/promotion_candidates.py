@@ -13,21 +13,19 @@ def _():
 
 @app.cell
 def _(mo):
-    mo.md(
-        """
-        # Promotion-candidate mining
+    mo.md("""
+    # Promotion-candidate mining
 
-        Blob-reservoir attribute keys that are **kept** (blob-only) or **unclassified**
-        — the candidates to promote into the marts via the #16 curation flow. For each
-        key path this shows its fill rate (share of export blobs carrying it), value
-        cardinality, and example values — the stats curation needs to size a column.
-        Value stats are pooled per attribute key (across signals). High-fill kept keys
-        are the strongest promotion candidates.
+    Blob-reservoir attribute keys that are **kept** (blob-only) or **unclassified**
+    — the candidates to promote into the marts via the #16 curation flow. For each
+    key path this shows its fill rate (share of export blobs carrying it), value
+    cardinality, and example values — the stats curation needs to size a column.
+    Value stats are pooled per attribute key (across signals). High-fill kept keys
+    are the strongest promotion candidates.
 
-        Complements `tools.sweep` (which reports the drift verdict); this ranks the
-        candidates by prevalence so curation can triage.
-        """
-    )
+    Complements `tools.sweep` (which reports the drift verdict); this ranks the
+    candidates by prevalence so curation can triage.
+    """)
     return
 
 
@@ -49,11 +47,15 @@ def _():
     import psycopg
     from cc_otel_sink.config import load_settings
 
-    from analysis._common import attr_value_samples, fill_counts, read_payloads
+    from analysis._common import attr_value_samples, fill_counts, load_env, read_payloads
     from tools._registry import load_registry
     from tools._reservoir import configure_duckdb
     from tools._window import resolve_window
     from tools.signals import ROUTES
+
+    # No shell sourced the env file into this kernel — load it before the cell
+    # below builds Settings (`CC_OTEL_ENV_FILE` picks a file other than .env.interim).
+    load_env()
 
     return (
         ROUTES,
@@ -79,7 +81,8 @@ def _(UTC, datetime, load_settings, resolve_window):
     window_days = 3
     settings = load_settings()
     days = resolve_window(window_days, None, None, datetime.now(UTC).date())
-    return (days, settings)
+
+    return days, settings
 
 
 @app.cell
@@ -90,6 +93,7 @@ def _(ROUTES, configure_duckdb, days, duckdb, read_payloads, settings):
         payloads = read_payloads(con, settings.blob_container, ROUTES, days)
     finally:
         con.close()
+
     return (payloads,)
 
 
@@ -98,7 +102,8 @@ def _(attr_value_samples, fill_counts, payloads):
     fill = fill_counts(payloads)  # blob-level: how many payloads carry each key path
     values = attr_value_samples(payloads)  # attr key -> value Counter (cardinality/examples)
     total_blobs = len(payloads) or 1
-    return (fill, total_blobs, values)
+
+    return fill, total_blobs, values
 
 
 @app.cell
@@ -123,6 +128,7 @@ def _(fill, load_registry, psycopg, settings, total_blobs, values):
             }
         )
     candidates = [r for r in rows if r["status"] in ("kept", "unclassified")]
+
     return (candidates,)
 
 
@@ -134,6 +140,12 @@ def _(candidates, mo):
             mo.ui.table(candidates, selection=None),
         ]
     )
+
+    return
+
+
+@app.cell
+def _():
     return
 
 

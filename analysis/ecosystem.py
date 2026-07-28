@@ -45,10 +45,14 @@ def _():
     import duckdb
     from cc_otel_sink.config import load_settings
 
-    from analysis._common import iter_attrs, read_payloads, scalar
+    from analysis._common import iter_attrs, load_env, read_payloads, scalar
     from tools._reservoir import configure_duckdb
     from tools._window import resolve_window
     from tools.signals import ROUTES
+
+    # No shell sourced the env file into this kernel — load it before the cell
+    # below builds Settings (`CC_OTEL_ENV_FILE` picks a file other than .env.interim).
+    load_env()
 
     return (
         Counter,

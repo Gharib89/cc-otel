@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections import Counter
 from datetime import date
 
@@ -12,6 +13,7 @@ from analysis._common import (
     attr_value_samples,
     fill_counts,
     iter_attrs,
+    load_env,
     read_payloads,
     scalar,
 )
@@ -103,3 +105,22 @@ def test_attr_value_samples_cardinality_and_examples() -> None:
     samples = attr_value_samples([_metrics_payload("h1", "opus"), _metrics_payload("h1", "sonnet")])
     assert samples["model"] == Counter({"opus": 1, "sonnet": 1})  # cardinality 2
     assert samples["host"] == Counter({"h1": 2})  # cardinality 1
+
+
+def test_load_env_overrides_the_inherited_environment(tmp_path, monkeypatch) -> None:
+    env_file = tmp_path / ".env.test"
+    env_file.write_text(
+        "CC_OTEL_BLOB_ACCOUNT_URL=https://acct.blob.core.windows.net\nDATABASE_URL=from-file\n"
+    )
+    monkeypatch.delenv("CC_OTEL_BLOB_ACCOUNT_URL", raising=False)
+    # marimo auto-loads the repo-root `.env` (POC database) before any cell runs
+    monkeypatch.setenv("DATABASE_URL", "poc-from-marimo-dotenv")
+
+    assert load_env(env_file) == env_file
+    assert os.environ["CC_OTEL_BLOB_ACCOUNT_URL"] == "https://acct.blob.core.windows.net"
+    assert os.environ["DATABASE_URL"] == "from-file"  # the chosen env file wins
+
+
+def test_load_env_missing_file_is_not_an_error(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("CC_OTEL_ENV_FILE", str(tmp_path / "absent"))
+    assert load_env() is None

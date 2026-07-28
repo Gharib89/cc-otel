@@ -27,13 +27,16 @@ dashboard. Decision + charter: #87.
    az login
    ```
 
-3. **Load the environment** so the notebooks see the reservoir and marts. Source
-   the interim (or prod) env file — it carries the blob and DB settings the
-   notebooks read via `cc_otel_sink.config.load_settings`:
-
-   ```sh
-   set -a; . ./.env.interim; set +a
-   ```
+3. **Environment** — nothing to source: each notebook's setup cell calls
+   `analysis._common.load_env()`, which loads the repo-root `.env.interim` into
+   the kernel before `cc_otel_sink.config.load_settings` reads it. Point it at
+   another file with `CC_OTEL_ENV_FILE` (e.g. `.env.prod`, or an absolute path) —
+   not by exporting individual variables, because the file wins: marimo
+   auto-loads the repo-root `.env` (the POC server, no marts) into every kernel,
+   so deferring to the inherited environment would silently query the wrong
+   database. A missing file is not an error — the notebook then runs on whatever
+   the environment already carries (an unset reservoir surfaces as
+   `ReservoirUnconfigured`).
 
    Required vars: `CC_OTEL_BLOB_ACCOUNT_URL`, `CC_OTEL_BLOB_CONTAINER` (default
    `raw`), and `DATABASE_URL` (the marts join-in).

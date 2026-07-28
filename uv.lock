@@ -140,6 +140,7 @@ analysis = [
     { name = "duckdb" },
     { name = "marimo" },
     { name = "psycopg", extra = ["binary"] },
+    { name = "python-dotenv" },
 ]
 dev = [
     { name = "duckdb" },
@@ -162,8 +163,9 @@ requires-dist = [{ name = "cc-otel-sink", editable = "sink" }]
 [package.metadata.requires-dev]
 analysis = [
     { name = "duckdb", specifier = ">=1.1" },
-    { name = "marimo", specifier = ">=0.11" },
+    { name = "marimo", specifier = ">=0.23.14" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
+    { name = "python-dotenv", specifier = ">=1.0" },
 ]
 dev = [
     { name = "duckdb", specifier = ">=1.1" },
