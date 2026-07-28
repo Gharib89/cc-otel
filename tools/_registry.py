@@ -17,7 +17,7 @@ row for that path. The name dimension mirrors the registry's grain: an attr with
 meaning is recorded once at ``'*'``; one whose meaning differs by signal name gets a row
 per name, so a known key seen under a *new* name is still surfaced. The signal dimension
 does not resurface for resource attrs: the sink merges the resource block into each
-signal's flat namespace (``attrs = {**res_attrs, **rec_attrs}``, and ``attr_columns``
+signal's flat namespace (``attrs = {**res_attrs, **flatten(rec_attrs)}``, and ``attr_columns``
 drops ``signal_name``), so a resource attribute seen under a signal path is the same byte
 the parser already reads, not a second fact needing a second verdict. The fallback is
 one-directional — a genuinely new key at the resource path still surfaces.
