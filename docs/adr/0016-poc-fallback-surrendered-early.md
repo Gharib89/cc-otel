@@ -45,7 +45,7 @@ the parallel-cutover gate.
 - **The POC's dev `cc_otel` database is dumped but not archived.** 7.7 MB holding only this repo's
   migrations over an empty schema, reproducible via `scripts/dev-migrate.sh`. Keeping it would
   imply it carries something the repo doesn't.
-- **`.env` `DATABASE_URL` repoints to the interim **read-only** login**, `cc_otel_read_user`, not
+- **`.env` `DATABASE_URL` repoints to the interim _read-only_ login**, `cc_otel_read_user`, not
   the admin. This is the value silently inherited by `dbmate` / `spec_sync --check` /
   `roster_load`, so after the delete it must name a live database — and the least dangerous live
   one. It covers `raw.metrics`, `raw.events`, `meta.*` and all of `marts`; staging views and writes
