@@ -27,7 +27,7 @@ from cc_otel_sink.attrs import event_name as _event_name
 KeyPath = tuple[str, str, str]
 
 # OTLP metric data are carried under one of these per-metric containers.
-_METRIC_KINDS = ("gauge", "sum", "histogram", "exponentialHistogram", "summary")
+METRIC_KINDS = ("gauge", "sum", "histogram", "exponentialHistogram", "summary")
 
 
 def _attr_keys(attributes: Any) -> list[str]:
@@ -58,7 +58,7 @@ def extract_key_paths(payload: dict[str, Any]) -> set[KeyPath]:
                 name = metric.get("name")
                 if not isinstance(name, str):
                     continue
-                for kind in _METRIC_KINDS:
+                for kind in METRIC_KINDS:
                     container = metric.get(kind)
                     if not isinstance(container, dict):
                         continue
