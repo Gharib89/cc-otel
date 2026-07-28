@@ -16,6 +16,10 @@ class Settings:
     blob_container: str
     host: str
     port: int
+    # Compacted reservoir (ADR-0015) — the derived read cache `tools.compact` writes and the
+    # analysis notebooks prefer. Operator-side only: the sink neither reads nor writes it, so
+    # unset ⇒ the read path behaves exactly as it did before compaction existed.
+    blob_compacted_container: str | None = None
 
 
 def load_settings() -> Settings:
@@ -28,4 +32,5 @@ def load_settings() -> Settings:
         # the sink must never get its own external ingress.
         host=os.environ.get("CC_OTEL_SINK_HOST", "127.0.0.1"),
         port=int(os.environ.get("CC_OTEL_SINK_PORT", "8080")),
+        blob_compacted_container=os.environ.get("CC_OTEL_BLOB_COMPACTED_CONTAINER") or None,
     )

@@ -14,6 +14,9 @@ param location string
 @description('Blob container for the raw reservoir.')
 param containerName string = 'raw'
 
+@description('Blob container for the compacted reservoir (ADR-0015) — derived, operator-written.')
+param compactedContainerName string = 'compacted'
+
 @description('Resource tags.')
 param tags object = {}
 
@@ -59,6 +62,18 @@ resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2024-01-01'
 resource container 'Microsoft.Storage/storageAccounts/blobServices/containers@2024-01-01' = {
   parent: blobService
   name: containerName
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
+// Derived read cache, one parquet per (signal, day) — additive to raw and never the replay
+// source (ADR-0015). Written by the operator running `tools.compact`, not by the sink, which
+// only ever addresses containerName. Same keep-forever posture as raw (no lifecycle policy),
+// but for the opposite reason: a partition is ~2 MB/day and rebuildable in ~21 s.
+resource compactedContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2024-01-01' = {
+  parent: blobService
+  name: compactedContainerName
   properties: {
     publicAccess: 'None'
   }

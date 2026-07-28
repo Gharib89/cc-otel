@@ -2,8 +2,8 @@
 
 Thin, notebook-agnostic helpers reused across the lab: read a blob window into
 decoded OTLP payloads over DuckDB (reusing the ``tools/`` sweep helpers —
-``configure_duckdb`` for the Azure secret, ``globs`` for the Hive-partition
-addressing), and the payload aggregations the notebooks share (key-path fill
+``configure_duckdb`` for the Azure secret, ``partition_glob`` / ``compacted_url``
+for the Hive-partition addressing), and the payload aggregations the notebooks share (key-path fill
 counts, attribute-value sampling). Analysis *narrative* lives in the notebooks;
 these primitives stay here so they can be unit-tested without a live reservoir.
 """
@@ -22,7 +22,7 @@ from cc_otel_sink.attrs import event_name
 from dotenv import load_dotenv
 
 from tools._keypaths import METRIC_KINDS, KeyPath, extract_key_paths
-from tools._window import globs
+from tools._window import compacted_url, partition_glob
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -60,31 +60,53 @@ def load_env(env_file: str | os.PathLike[str] | None = None) -> Path | None:
     return path
 
 
+def _read(con: DuckDBPyConnection, sql: str) -> list[tuple[str]] | None:
+    """Run a payload-text query; ``None`` when the target matched no files.
+
+    DuckDB raises the same "no files found" ``IOException`` for three different
+    situations — an empty partition, a partition not compacted yet, and a target that
+    was never going to exist — so the distinction is the *caller's* to make and this
+    returns ``None`` rather than an empty list. Any other ``IOException`` is a real
+    read/credential failure and propagates rather than silently yielding a short read.
+    """
+    try:
+        return con.execute(sql).fetchall()
+    except duckdb.IOException as err:
+        if "no files found" not in str(err).lower():
+            raise
+        return None
+
+
 def read_payloads(
     con: DuckDBPyConnection,
     container: str,
     signals: tuple[str, ...],
     days: list[date],
+    compacted_container: str | None = None,
 ) -> list[dict[str, Any]]:
     """Decode every blob in the ``signals`` x ``days`` window into OTLP payload dicts.
 
-    One ``read_json_objects`` call per partition glob (mirrors ``tools.sweep``); an
-    empty partition (DuckDB "no files found") contributes nothing, while any other
-    ``IOException`` — a real read/credential failure — propagates rather than
-    silently yielding a short read.
+    One query per partition. When ``compacted_container`` is set the partition's
+    compacted parquet (ADR-0015) is preferred and the raw glob is only read if that
+    file is absent — today's partition is never compacted, and a catch-up may be
+    pending, so the fallback is the normal path rather than an error case. Unset (the
+    default) reads raw exactly as before. Either way an empty partition contributes
+    nothing, and the payload column is ``json VARCHAR`` on both paths, so everything
+    downstream of this function is identical.
     """
     payloads: list[dict[str, Any]] = []
-    for target in globs(container, signals, days):
-        escaped = target.replace("'", "''")
-        try:
-            rows = con.execute(
-                f"SELECT json FROM read_json_objects('{escaped}', format='unstructured')"
-            ).fetchall()
-        except duckdb.IOException as err:
-            if "no files found" not in str(err).lower():
-                raise
-            rows = []
-        payloads.extend(json.loads(text) for (text,) in rows)
+    for signal in signals:
+        for day in days:
+            rows = None
+            if compacted_container is not None:
+                target = compacted_url(compacted_container, signal, day).replace("'", "''")
+                rows = _read(con, f"SELECT json FROM read_parquet('{target}')")
+            if rows is None:
+                target = partition_glob(container, signal, day).replace("'", "''")
+                rows = _read(
+                    con, f"SELECT json FROM read_json_objects('{target}', format='unstructured')"
+                )
+            payloads.extend(json.loads(text) for (text,) in rows or [])
     return payloads
 
 

@@ -84,6 +84,44 @@ def test_reraises_real_io_error() -> None:
         read_payloads(con, "raw", ("metrics",), [DAY])
 
 
+_NO_FILES = "No files found that match the pattern"
+
+
+def test_prefers_the_compacted_partition_and_never_reads_raw() -> None:
+    con = _FakeCon([[('{"a": 1}',)]])
+    assert read_payloads(con, "raw", ("metrics",), [DAY], "compacted") == [{"a": 1}]
+    assert len(con.calls) == 1  # raw never probed once the parquet answered
+    assert "read_parquet" in con.calls[0]
+    assert "azure://compacted/signal=metrics/dt=2026-07-01/part-0.parquet" in con.calls[0]
+
+
+def test_falls_back_to_raw_for_an_uncompacted_partition() -> None:
+    # "not compacted yet" (today, or a pending catch-up) reaches DuckDB as the same
+    # no-files IOException as an empty partition — so the parquet probe must fall through.
+    con = _FakeCon([duckdb.IOException(_NO_FILES), [('{"a": 1}',)]])
+    assert read_payloads(con, "raw", ("metrics",), [DAY], "compacted") == [{"a": 1}]
+    assert "read_parquet" in con.calls[0]  # parquet probed first
+    assert "read_json_objects" in con.calls[1]
+
+
+def test_empty_partition_contributes_nothing_on_both_paths() -> None:
+    con = _FakeCon([duckdb.IOException(_NO_FILES), duckdb.IOException(_NO_FILES)])
+    assert read_payloads(con, "raw", ("metrics",), [DAY], "compacted") == []
+
+
+def test_reraises_a_real_io_error_from_the_compacted_probe() -> None:
+    con = _FakeCon([duckdb.IOException("403 Forbidden: credential token expired")])
+    with pytest.raises(duckdb.IOException):
+        read_payloads(con, "raw", ("metrics",), [DAY], "compacted")
+
+
+def test_unset_compacted_container_reads_raw_only() -> None:
+    con = _FakeCon([[('{"a": 1}',)]])
+    assert read_payloads(con, "raw", ("metrics",), [DAY], None) == [{"a": 1}]
+    assert len(con.calls) == 1
+    assert "read_json_objects" in con.calls[0]
+
+
 def test_fill_counts_blob_level_presence() -> None:
     # host in both payloads; model only in the first -> counts are per-payload.
     counts = fill_counts([_metrics_payload("h1", "opus"), _metrics_payload("h2", None)])

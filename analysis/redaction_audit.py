@@ -85,7 +85,9 @@ def _(ROUTES, configure_duckdb, days, duckdb, read_payloads, settings):
     con = duckdb.connect()
     try:
         configure_duckdb(con, settings)
-        payloads = read_payloads(con, settings.blob_container, ROUTES, days)
+        payloads = read_payloads(
+            con, settings.blob_container, ROUTES, days, settings.blob_compacted_container
+        )
     finally:
         con.close()
     return (payloads,)

@@ -91,3 +91,51 @@ def test_curation_reservoir_unconfigured_raises():
     # Policy stays with the caller: unconfigured -> raise (unlike the sink's NullReservoir).
     with pytest.raises(ReservoirUnconfigured):
         CurationReservoir.from_settings(_settings())
+
+
+_CONN_STR = (
+    "DefaultEndpointsProtocol=https;AccountName=acct;AccountKey=a2V5;"
+    "EndpointSuffix=core.windows.net"
+)
+
+
+def test_from_settings_defaults_to_the_raw_container():
+    reservoir = CurationReservoir.from_settings(_settings(connection_string=_CONN_STR))
+    assert reservoir.container_name == "raw"
+
+
+def test_from_settings_container_override_targets_the_second_container():
+    # tools.compact writes the compacted reservoir (ADR-0015) through the same auth
+    # precedence as raw — only the container differs.
+    reservoir = CurationReservoir.from_settings(
+        _settings(connection_string=_CONN_STR), container="compacted"
+    )
+    assert reservoir.container_name == "compacted"
+
+
+class _FakeContainer:
+    """Minimal ``ContainerClient`` stand-in for ``walk_blobs`` prefix discovery."""
+
+    def __init__(self, items: list[str]) -> None:
+        self._items = items
+        self.calls: list[tuple[str, str]] = []
+
+    def walk_blobs(self, name_starts_with: str, delimiter: str):
+        self.calls.append((name_starts_with, delimiter))
+        return [type("Item", (), {"name": name})() for name in self._items]
+
+
+def test_list_prefixes_returns_only_child_prefixes():
+    container = _FakeContainer(
+        [
+            "signal=logs/dt=2026-07-26/",
+            "signal=logs/dt=2026-07-27/",
+            "signal=logs/stray.json.gz",  # a blob, not a partition prefix
+        ]
+    )
+    reservoir = CurationReservoir(container)
+    assert reservoir.list_prefixes("signal=logs/") == [
+        "signal=logs/dt=2026-07-26/",
+        "signal=logs/dt=2026-07-27/",
+    ]
+    assert container.calls == [("signal=logs/", "/")]

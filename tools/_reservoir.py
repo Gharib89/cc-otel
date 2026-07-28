@@ -11,6 +11,7 @@ container the sink writes. Two consumers:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -47,15 +48,41 @@ class CurationReservoir:
         self._credential = credential
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> CurationReservoir:
+    def from_settings(cls, settings: Settings, container: str | None = None) -> CurationReservoir:
+        """Build a client for ``settings.blob_container``, or for ``container`` instead.
+
+        The override exists for the compacted reservoir (ADR-0015), which lives in a second
+        container on the same account: swapping the field keeps the auth-precedence rule in
+        ``blob_backend`` as the only copy rather than growing a parallel builder.
+        """
+        if container is not None:
+            settings = replace(settings, blob_container=container)
         built = build_container_client(settings)
         if built is None:
             raise ReservoirUnconfigured
         client, credential = built
         return cls(client, credential)
 
+    @property
+    def container_name(self) -> str:
+        return self._container.container_name
+
     def list_names(self, prefix: str) -> list[str]:
         return [b.name for b in self._container.list_blobs(name_starts_with=prefix)]
+
+    def list_prefixes(self, prefix: str) -> list[str]:
+        """Immediate child *prefixes* of ``prefix`` — Hive partition discovery (compact).
+
+        ``walk_blobs`` with a ``/`` delimiter returns one entry per partition instead of one
+        per blob, so discovering which days exist costs a directory listing rather than a
+        scan of ~20k blob names. Child blobs come back too and are filtered out by the
+        trailing delimiter.
+        """
+        return [
+            item.name
+            for item in self._container.walk_blobs(name_starts_with=prefix, delimiter="/")
+            if item.name.endswith("/")
+        ]
 
     def download(self, name: str) -> bytes:
         return self._container.download_blob(name).readall()

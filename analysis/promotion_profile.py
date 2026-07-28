@@ -94,8 +94,9 @@ def _(UTC, date, date_range, datetime, load_settings):
 
 @app.cell
 def _(ROUTES, Profile, configure_duckdb, days, duckdb, read_payloads, settings):
-    # ~30s of network read per day of blobs, so the window streams day by day and
-    # aggregates as it goes rather than holding every payload at once.
+    # ~30s of network read per uncompacted day of blobs (~1s once compacted, ADR-0015), so
+    # the window streams day by day and aggregates as it goes rather than holding every
+    # payload at once.
     profile = Profile()
     blobs_per_day = {}
     con = duckdb.connect()
@@ -103,13 +104,17 @@ def _(ROUTES, Profile, configure_duckdb, days, duckdb, read_payloads, settings):
         configure_duckdb(con, settings)
         for _day in days:
             try:
-                _payloads = read_payloads(con, settings.blob_container, ROUTES, [_day])
+                _payloads = read_payloads(
+                    con, settings.blob_container, ROUTES, [_day], settings.blob_compacted_container
+                )
             except duckdb.IOException:
                 # `configure_duckdb` pins one prefetched OAuth token and a multi-day read
                 # outlives it (`InvalidAuthenticationInfo` partway through the window).
                 # Re-register once and retry; a second failure is real and propagates.
                 configure_duckdb(con, settings)
-                _payloads = read_payloads(con, settings.blob_container, ROUTES, [_day])
+                _payloads = read_payloads(
+                    con, settings.blob_container, ROUTES, [_day], settings.blob_compacted_container
+                )
             profile.update(_payloads)
             blobs_per_day[_day] = len(_payloads)
     finally:
