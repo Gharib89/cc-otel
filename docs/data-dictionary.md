@@ -296,4 +296,3 @@ to see what is actually present in the blob reservoir.
 | resource | `*` | `service.name` | kept | Service name (claude-code). |  |
 | resource | `*` | `team` | kept | Org team. |  |
 | resource | `*` | `wsl.version` | kept | WSL version. |  |
-
