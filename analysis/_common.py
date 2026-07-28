@@ -44,9 +44,11 @@ def load_env(env_file: str | os.PathLike[str] | None = None) -> Path | None:
     notebook then runs on whatever the environment already carries.
 
     ``override=True`` on purpose: marimo auto-loads the repo-root ``.env`` into the
-    kernel before any cell runs, and that file points at the POC server (no
-    ``meta.column_registry``, no marts) — deferring to the inherited value pointed
-    the notebooks at the wrong database. The chosen file names the environment, so
+    kernel before any cell runs, and that file is the ad-hoc ``psql`` environment — a
+    bare ``DATABASE_URL`` on a read-only login plus the Azure identity vars, no
+    reservoir settings at all, and a target that moves with operator housekeeping
+    (interim since the POC delete, ADR-0016). Deferring to the inherited value pointed
+    the notebooks at whatever that happened to be. The chosen file names the environment, so
     it wins; to target another one, set ``CC_OTEL_ENV_FILE`` rather than exporting
     individual variables.
     """

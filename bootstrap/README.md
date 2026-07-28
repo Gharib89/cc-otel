@@ -90,7 +90,7 @@ The orchestrator **stops** at these — a person decides, no step assumes:
 | **G2 · GHCR classic PAT** | interim + prod | Caught up front by `precheck` (the `GHCR_TOKEN` key). The ACA image-pull credential is a GitHub classic PAT (`read:packages`) created in the GitHub UI — a manual credential action; put it in `.env` before running. |
 | **G3 · Prod tenant verification** | prod only | Enforced by `precheck`'s tenant match: the unprefixed-identity design assumes prod lands in tenant `a1a5384f`. A different tenant breaks it (new app + federated credential + prefixed client/tenant). **Verify before prod bootstrap.** |
 | **G4 · IS RG grant** | prod only | Prod bootstrap cannot start until IS provisions the empty RG and grants Contributor scoped to it (ADR-0004); `deploy` halts if the RG is absent. Prod RG name is still pending ([#23](https://github.com/Gharib89/cc-otel/issues/23)). |
-| **G5 · Fleet cutover + POC decommission** | after prod | Out of scope for the orchestrator. Parallel cutover (ADR-0004): move the fleet and retire the POC only once the new environment is proven. A judgement call — see the end of this file. |
+| **G5 · Fleet cutover + interim decommission** | after prod | Out of scope for the orchestrator. Parallel cutover (ADR-0004): move the fleet and retire **interim** only once prod is proven — two weeks stable (#248 Part B). A judgement call — see the end of this file. The POC half is already spent (ADR-0016). |
 
 ## `.env.<env>` — the one source of truth
 
@@ -250,10 +250,13 @@ acceptance check: run the installer (`installer/install.ps1`) and confirm the si
 `/healthz` is green, rows land in `raw`, and the Power BI refresh has data — data
 flowing end-to-end is the acceptance for interim bring-up.
 
-Then repoint the repo's working `.env` `DATABASE_URL` at interim (was the retired
-POC server); interim is now the dev/target DB for ad-hoc `dbmate`/`psql` until POC
-decommission. Lock the operator firewall rule back down when done with direct DB
-work:
+Then repoint the repo's working `.env` `DATABASE_URL` at interim `cc_otel` — the POC
+server it used to name was deleted on 2026-07-28 (ADR-0016), so this is no longer
+optional housekeeping. Use the **read-only** `cc_otel_read_user`, not the admin login:
+this is the value `dbmate` / `spec_sync --check` / `roster_load` silently inherit, and
+it now names a live database. Interim is the dev/target DB for ad-hoc `psql` until
+interim decommission (#248 Part B). Lock the operator firewall rule back down when
+done with direct DB work:
 
 ```powershell
 .\bootstrap\bootstrap.ps1 -Environment interim -Step close-ip
@@ -331,11 +334,48 @@ DROP ROLE "First.Last@itworx.com";
 (Entra offboarding already kills their token issuance; the `DROP ROLE` is
 hygiene so `pg_roles` reflects reality.)
 
-## GATE G5 — fleet cutover + POC decommission
+## GATE G5 — fleet cutover + interim decommission
 
-Once prod is proven, cut the fleet over to the prod sink and retire the POC
+Once prod is proven, cut the fleet over to the prod sink and retire **interim**
 (parallel cutover, ADR-0004). A judgement call made with Ahmed — not part of any
-script or step.
+script or step. The gate is two weeks of stable prod post-cutover (#248 Part B).
+
+The POC half of this gate is already spent: `rg-cc-otel-poc` was archived and
+deleted on 2026-07-28, ahead of the gate and for cost, because it had no writer
+and no reader (ADR-0016).
+
+### Archive-before-delete (the same sequence Part B repeats)
+
+Order matters — the delete is irreversible and the checksum is the only proof the
+archive survived the wire:
+
+```powershell
+# 1. Dump, and count rows against the LIVE server before it goes away.
+pg_dump -Fc --file=<slug>.dump "<admin url>"
+psql "<admin url>" -c "SELECT 'metrics', count(*) FROM raw.metrics UNION ALL ..."
+
+# 2. Grant yourself the data plane. RG Owner creates containers but cannot write
+#    blobs: the account sets allowSharedKeyAccess=false, so writes are Entra-authed.
+az role assignment create --assignee <your-object-id> `
+  --role "Storage Blob Data Contributor" `
+  --scope /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Storage/storageAccounts/<acct>
+
+# 3. Upload dump + a provenance manifest (what it is, PII warning, coverage,
+#    row counts, restore recipe) to the `archive` container.
+az storage blob upload --auth-mode login --account-name <acct> `
+  --container-name archive --name <slug>.dump --file <slug>.dump
+
+# 4. Verify by reading it BACK and re-hashing — a size match is not a proof, and
+#    contentMD5 is absent on chunked uploads. Then and only then delete.
+az storage blob download --auth-mode login --account-name <acct> `
+  --container-name archive --name <slug>.dump --file roundtrip.dump
+(Get-FileHash roundtrip.dump -Algorithm SHA256).Hash   # must equal the local dump's
+az group delete --name <rg>
+```
+
+`archive` is its own container, never a prefix inside `raw`: a dump is unredacted
+and `raw` is redacted at the sink and is `tools.scrub`'s scrubbable surface
+(ADR-0016).
 
 ---
 

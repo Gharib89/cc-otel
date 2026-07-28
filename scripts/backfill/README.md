@@ -1,9 +1,13 @@
 # POC -> interim backfill (#131, ADR-0006)
 
-One-shot, operator-run backfill of the retired POC's ~6 weeks of Claude Code telemetry
+One-shot, operator-run backfill of the POC's ~6 weeks of Claude Code telemetry
 into the **interim** `raw.metrics` / `raw.events`, mapped into schema-v2 exactly as the
 current sink would have written it. Interim-only; production still starts fresh
 (ADR-0002, superseded here for interim only by [ADR-0006](../../docs/adr/0006-interim-poc-backfill.md)).
+
+**Already run, and no longer runnable as written**: its source server was archived and
+deleted on 2026-07-28 (ADR-0016). Kept as the record of how interim's pilot history got
+there; a re-run would first restore the dump from the prod `archive` container.
 
 This is **not** part of CI or any deploy — it is a manual operation with a verification
 gate. The mapping SQL is unit-tested (`tests/integration/test_backfill.py`); the transport,

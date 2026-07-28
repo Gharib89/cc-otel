@@ -16,9 +16,9 @@ so Power BI is current without waiting for the hourly cycle; every other telemet
 to ``marts.refresh_all()``.
 
 Destructive (writes HR data); dry-run by default. Pass ``--execute`` to write. The dry run
-prints the resolved target host and database **first**: the ambient ``DATABASE_URL`` points at
-the retired POC server, so the most natural invocation would otherwise report success against a
-decommissioned database.
+prints the resolved target host and database **first**: the ambient ``DATABASE_URL`` names a live
+database (interim since the POC delete, ADR-0016), so the most natural invocation writes HR data
+into whichever environment that variable happens to point at.
 
 Refusals that no flag overrides: byte-identical content already ingested, and an as-of date
 earlier than the newest assignment date in the file (provably impossible). Refusals that
@@ -415,7 +415,7 @@ def main(argv: list[str] | None = None) -> int:
         print("No target database: pass --database-url or set DATABASE_URL", file=sys.stderr)
         return 2
     # Before anything else, including reading the file: the operator's first line of defense
-    # against loading HR data into the retired POC server.
+    # against loading HR data into whatever live database the ambient DATABASE_URL names.
     print(f"Target: {_target_label(database_url)}")
 
     try:

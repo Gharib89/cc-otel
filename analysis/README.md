@@ -33,9 +33,9 @@ dashboard. Decision + charter: #87.
    the kernel before `cc_otel_sink.config.load_settings` reads it. Point it at
    another file with `CC_OTEL_ENV_FILE` (e.g. `.env.prod`, or an absolute path) —
    not by exporting individual variables, because the file wins: marimo
-   auto-loads the repo-root `.env` (the POC server, no marts) into every kernel,
-   so deferring to the inherited environment would silently query the wrong
-   database. A missing file is not an error — the notebook then runs on whatever
+   auto-loads the repo-root `.env` (the ad-hoc `psql` login — no reservoir settings,
+   and its target moves with operator housekeeping) into every kernel, so deferring
+   to the inherited environment would silently query the wrong database. A missing file is not an error — the notebook then runs on whatever
    the environment already carries (an unset reservoir surfaces as
    `ReservoirUnconfigured`).
 

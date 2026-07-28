@@ -171,9 +171,9 @@ uv run python -m tools.roster_load --file ~/Downloads/claude_users.csv --as-of 2
 ```
 
 The first line of output is the resolved **target host and database** — check it before
-anything else: the ambient `DATABASE_URL` points at the retired POC server, so the most
-natural invocation would otherwise write HR data into a decommissioned database and report
-success. Pass `--database-url` to override.
+anything else: the ambient `DATABASE_URL` names a live database — interim since the POC
+delete (ADR-0016) — so the most natural invocation writes HR data into whichever
+environment that variable happens to point at. Pass `--database-url` to override.
 
 `--as-of` is required: the file carries no export timestamp and a filesystem timestamp resets
 on copy. The dry run then prints the delta against the newest existing drop — new seats, tier

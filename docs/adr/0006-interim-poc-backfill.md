@@ -35,9 +35,11 @@ mapped into schema-v2 as the current sink would write it.
 - Interim carries mapped pilot history indistinguishable from live rows; the report renders
   `2026-05-24` → today.
 - Production is unaffected and still starts fresh per ADR-0002.
-- When the POC stack is decommissioned after cutover, the interim copy is the last surviving
-  record of pilot history (ADR-0002's "pilot history is permanently gone" no longer holds for
-  interim).
+- The POC stack was decommissioned on 2026-07-28, ahead of the cutover gate (ADR-0016), so the
+  interim copy is now the only *queryable* record of pilot history — ADR-0002's "pilot history is
+  permanently gone" no longer holds for interim. The schema-v1 original survives only as the
+  `pg_dump` in the prod `archive` container, which is where the columns the next consequence lists
+  as unrecovered actually live.
 - Prompt text and other PII are not recovered — the backfill carries only the promoted columns
   the sink writes; no `attrs`/`resource` JSONB (ADR-0005 keeps unpromoted keys in the blob
   reservoir, which this backfill does not touch).
