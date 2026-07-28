@@ -17,6 +17,9 @@ param containerName string = 'raw'
 @description('Blob container for the compacted reservoir (ADR-0015) — derived, operator-written.')
 param compactedContainerName string = 'compacted'
 
+@description('Blob container for decommission archives (ADR-0016) — unredacted, operator-written.')
+param archiveContainerName string = 'archive'
+
 @description('Resource tags.')
 param tags object = {}
 
@@ -74,6 +77,19 @@ resource container 'Microsoft.Storage/storageAccounts/blobServices/containers@20
 resource compactedContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2024-01-01' = {
   parent: blobService
   name: compactedContainerName
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
+// Decommission archives: a pg_dump of a database whose server is being deleted (ADR-0016).
+// Its own container, NOT a prefix inside containerName: a dump is unredacted (raw user_email,
+// every promoted column), whereas every blob in the raw reservoir is redacted at the sink
+// (ADR-0005) and tools.scrub treats that container as its scrubbable surface. Written by the
+// operator, never by the sink. Empty in any environment that has not retired a database yet.
+resource archiveContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2024-01-01' = {
+  parent: blobService
+  name: archiveContainerName
   properties: {
     publicAccess: 'None'
   }

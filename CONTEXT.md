@@ -149,7 +149,7 @@ _Avoid_: endpoint (for the entitlement, say **seat** — the two are distinct, n
 _Avoid_: deployment script, rollout tool
 
 **Parallel cutover**:
-The POC Azure env stays live as fallback until the adoption report completes its first successful Power BI refresh from the **production** Azure Postgres; only then is the POC decommissioned. See ADR-0004.
+The environment currently serving the report stays live as fallback until the adoption report completes its first successful Power BI refresh from the **production** Azure Postgres; only then is the old one decommissioned. That environment is **interim** — the POC half of the arrangement was surrendered early for cost (ADR-0016) once it had no writer and no reader, leaving interim, which carries the mapped pilot history (ADR-0006), as the thing a bad prod cutover falls back to. See ADR-0004 and ADR-0016.
 
 **Azure prod stack**:
 The production environment: a second Azure resource group — IS-provisioned but empty, in an ITWorx subscription — holding a Postgres Flexible Server (public endpoint) plus an Azure Container Apps environment running the collector + sink in one Container App. IS grants RG Contributor only; Ahmed deploys all of it, Postgres included, via Bicep (ADR-0004).

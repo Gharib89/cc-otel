@@ -33,10 +33,12 @@ carried its own endpoint and worked on these same seats and Claude Code versions
 
 ---
 
-## Ground truth: the POC database (sibling `otel` DB on the retired POC server)
+## Ground truth: the POC database (sibling `otel` DB on the POC server)
 
 The POC is the authoritative record of what these ITWorx seats emit. Query
-(`otel` DB, `public.metrics`):
+(`otel` DB, `public.metrics`) — **captured while the POC server was live**; that server
+was archived and deleted on 2026-07-28 (ADR-0016), so re-running this needs the dump
+restored from the prod `archive` container, and the numbers below stand as recorded:
 
 ```
              metric_name             |     scope_name     |  rows  |         first_seen         |         last_seen          | users

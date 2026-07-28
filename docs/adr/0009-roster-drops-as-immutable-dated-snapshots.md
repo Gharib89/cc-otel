@@ -58,8 +58,10 @@ denominator that did not exist yet. Decision log: #290; implementation: #292 (in
   duplicating or preceding an existing drop is refused without `--force`.
 - **Dry run by default, and it prints the resolved host and database first.** Consistent with the
   two other destructive tools in `tools/` (`scrub`, `replay`). Printing the target defuses a live
-  trap: the ambient `DATABASE_URL` points at the retired POC server, so the most natural
-  invocation would otherwise write HR data into a decommissioned database and report success.
+  trap: the ambient `DATABASE_URL` names a live database — interim since the POC delete
+  (ADR-0016) — so the most natural invocation writes HR data into whichever environment that
+  variable happens to point at. Sharper now than when this was written, not softer: the variable
+  used to name a decommissioned server, where the same mistake was merely a no-op.
 - **No copy of the file is retained.** The snapshot plus the `extra` capture is the archive; the
   hash remains the idempotency key. This is a deliberate exception to the convention that raw
   artefacts land in the blob reservoir (ADR-0005), taken because the roster is a small,
