@@ -132,8 +132,9 @@ uv run python -m tools.compact --since <scrubbed-start> --until <scrubbed-end> -
 ```
 
 The container is declared in `iac/modules/storage.bicep` and never created by the tool, so a
-fresh environment needs a manual `workflow_dispatch` deploy first; until then `compact` exits 2
-naming that step. Deleting the whole container is safe — it is derived and rebuildable at ~21 s
+fresh environment needs an infra deploy first — `bootstrap/bootstrap.ps1 -Environment <env> -Step
+deploy`, the operator-run Bicep apply (`workflow_dispatch` covers the app/migration deploys, not
+`iac/`) — and until then `compact` exits 2 naming that step. Deleting the whole container is safe — it is derived and rebuildable at ~21 s
 per partition.
 
 ## `tools.replay` — rebuild a window through the sink (destructive)

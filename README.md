@@ -57,8 +57,9 @@ Production is an Azure stack — Container Apps running collector + sink, a
 Postgres Flexible Server, and the reservoir storage account — deployed via
 Bicep (`iac/`). Dual-target for the parallel cutover (ADR-0004): an interim
 VS-benefits resource group until IS grants the production one. Merges trigger
-CI only; deploys are manual `workflow_dispatch` with migrations before image
-rollout.
+CI only; app deploys are manual `workflow_dispatch` with migrations before image
+rollout, and the Bicep apply itself is operator-run (`bootstrap/bootstrap.ps1
+-Step deploy`).
 
 ## Contributing
 

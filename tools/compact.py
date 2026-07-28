@@ -54,8 +54,8 @@ class MissingCompactedContainer(RuntimeError):
     def __init__(self, container: str) -> None:
         super().__init__(
             f"container '{container}' does not exist — deploy iac/ to this environment "
-            "(manual workflow_dispatch) before compacting, or point "
-            "CC_OTEL_BLOB_COMPACTED_CONTAINER at an existing container"
+            "(bootstrap/bootstrap.ps1 -Environment <env> -Step deploy) before compacting, "
+            "or point CC_OTEL_BLOB_COMPACTED_CONTAINER at an existing container"
         )
 
 
