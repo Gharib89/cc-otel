@@ -129,7 +129,9 @@ When a key becomes `denied`:
 1. Add a `denied` spec row with the right `deny_mode` (`strip` / `defense_in_depth`) —
    `redaction.py`'s `DENYLIST` / `DEFENSE_IN_DEPTH` derive from it, so there is no separate
    denylist to edit — then `spec_sync --name <slug>` ships the registry row (promotion-PR
-   bundle, minus DDL). Deny the **whole attribute**, never a leaf inside it: the emitted
+   bundle, minus DDL). A key moving `kept` -> `denied` is an in-place `status` edit, which
+   the generator refuses (step 3): hand-author that `UPDATE` in its own earlier migration.
+   Deny the **whole attribute**, never a leaf inside it: the emitted
    shape of a structured value is the client's choice, and a mode that descends one shape
    strips nothing when the fleet sends another (#369).
 2. Blobs written before the deploy still hold the key. Rewrite the exposed window in place

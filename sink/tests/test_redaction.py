@@ -126,7 +126,7 @@ def test_tool_payload_keys_stripped_from_nested_kvlist_shape():
 def test_tool_payload_keys_stripped_on_a_non_tool_event():
     # The deny is signal-blind (denylist() carries no signal), so the keys go
     # wherever they appear — not only on tool_result / tool_decision, which is
-    # what the predecessor's TOOL_PARAM_EVENTS gate restricted it to.
+    # all the predecessor's tool-event gate reached.
     payload = _log("user_prompt", [_attr("tool_parameters", '{"full_command":"keep"}')])
     result = redact(payload)
     assert _keys(_record_attrs(result.payload)) == {"event.name"}

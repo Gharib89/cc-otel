@@ -1,4 +1,5 @@
 -- migrate:up
+-- noqa: disable=LT05,LT14
 
 -- events/tool_result/tool_input: kept -> denied, and retire the three
 -- tool_parameters.<leaf> rows (#359, #369).
@@ -37,16 +38,6 @@ SET
     notes = 'not in #8 denylist; revisit if PII review flags'
 WHERE signal = 'events' AND signal_name = 'tool_result' AND attr_path = 'tool_input';
 
-INSERT INTO meta.column_registry (
-    signal, signal_name, attr_path, status, column_name, data_type, description,
-    useful_for, decided_at, notes
-) VALUES
-('events', '*', 'tool_parameters.full_command', 'denied', NULL, NULL,
- 'Full command inside tool_parameters.', NULL, '2026-07-13',
- '#8 recursive tool_parameters sweep (tool_result + tool_decision)'),
-('events', '*', 'tool_parameters.bash_command', 'denied', NULL, NULL,
- 'Bash command inside tool_parameters.', NULL, '2026-07-13',
- '#8 recursive tool_parameters sweep'),
-('events', '*', 'tool_parameters.file_path', 'denied', NULL, NULL,
- 'File path inside tool_parameters.', NULL, '2026-07-13',
- '#8 recursive tool_parameters sweep');
+INSERT INTO meta.column_registry (signal, signal_name, attr_path, status, column_name, data_type, description, useful_for, decided_at, notes) VALUES ('events', '*', 'tool_parameters.full_command', 'denied', NULL, NULL, 'Full command inside tool_parameters.', NULL, '2026-07-13', '#8 recursive tool_parameters sweep (tool_result + tool_decision)');
+INSERT INTO meta.column_registry (signal, signal_name, attr_path, status, column_name, data_type, description, useful_for, decided_at, notes) VALUES ('events', '*', 'tool_parameters.bash_command', 'denied', NULL, NULL, 'Bash command inside tool_parameters.', NULL, '2026-07-13', '#8 recursive tool_parameters sweep');
+INSERT INTO meta.column_registry (signal, signal_name, attr_path, status, column_name, data_type, description, useful_for, decided_at, notes) VALUES ('events', '*', 'tool_parameters.file_path', 'denied', NULL, NULL, 'File path inside tool_parameters.', NULL, '2026-07-13', '#8 recursive tool_parameters sweep');
