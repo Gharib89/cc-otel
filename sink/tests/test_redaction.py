@@ -1,4 +1,4 @@
-"""Redaction pass (#8): denylist, tool_parameters sweep, defense-in-depth counting."""
+"""Redaction pass (#8): denylist, defense-in-depth counting."""
 
 from __future__ import annotations
 
@@ -86,53 +86,50 @@ def test_denylist_stripped_from_metric_datapoint_attributes():
     "event_name",
     ["tool_result", "tool_decision", "claude_code.tool_result", "claude_code.tool_decision"],
 )
-def test_tool_parameters_recursive_sweep(event_name):
+def test_tool_payload_keys_stripped_from_json_string_shape(event_name):
+    # The shape the fleet actually emits (#369): tool_parameters / tool_input arrive
+    # as a JSON *stringValue*, not a nested kvlist. The predecessor sweep only
+    # descended kvlistValue, so it stripped nothing while full command lines and
+    # absolute paths landed at rest. The deny is on the whole attribute, so the
+    # payload's shape can no longer decide whether redaction happens.
+    payload = _log(
+        event_name,
+        [
+            _attr("tool_parameters", '{"bash_command":"cat","full_command":"cat ~/.ssh/id_rsa"}'),
+            _attr("tool_input", '{"file_path":"e:\\\\POCs\\\\itworx\\\\secrets.json"}'),
+            _attr("tool_name", "Bash"),
+        ],
+    )
+    result = redact(payload)
+    assert _keys(_record_attrs(result.payload)) == {"event.name", "tool_name"}
+
+
+def test_tool_payload_keys_stripped_from_nested_kvlist_shape():
+    # The other emission shape: a nested kvlist. Denied wholesale too, so no leaf
+    # survives — the predecessor swept named leaves and kept the rest of the args.
     tool_params = {
         "key": "tool_parameters",
         "value": {
             "kvlistValue": {
                 "values": [
                     {"key": "full_command", "value": {"stringValue": "rm -rf /"}},
-                    {"key": "file_path", "value": {"stringValue": "/etc/passwd"}},
                     {"key": "timeout", "value": {"intValue": "30"}},
-                    {
-                        "key": "nested",
-                        "value": {
-                            "kvlistValue": {
-                                "values": [
-                                    {"key": "bash_command", "value": {"stringValue": "x"}},
-                                    {"key": "keep_me", "value": {"stringValue": "ok"}},
-                                ]
-                            }
-                        },
-                    },
                 ]
             }
         },
     }
-    payload = _log(event_name, [tool_params])
-    redact(payload)
-    values = _record_attrs(payload)[1]["value"]["kvlistValue"]["values"]
-    top_keys = {v["key"] for v in values}
-    assert top_keys == {"timeout", "nested"}
-    nested = next(v for v in values if v["key"] == "nested")
-    nested_keys = {v["key"] for v in nested["value"]["kvlistValue"]["values"]}
-    assert nested_keys == {"keep_me"}
+    payload = _log("tool_result", [tool_params, _attr("tool_name", "Bash")])
+    result = redact(payload)
+    assert _keys(_record_attrs(result.payload)) == {"event.name", "tool_name"}
 
 
-def test_tool_parameters_not_swept_on_non_tool_event():
-    # A non-tool event keeps its tool_parameters content untouched by the sweep
-    # (denylist only strips top-level attribute keys, not nested kvlist entries).
-    tool_params = {
-        "key": "tool_parameters",
-        "value": {
-            "kvlistValue": {"values": [{"key": "full_command", "value": {"stringValue": "keep"}}]}
-        },
-    }
-    payload = _log("user_prompt", [tool_params])
-    redact(payload)
-    values = _record_attrs(payload)[1]["value"]["kvlistValue"]["values"]
-    assert {v["key"] for v in values} == {"full_command"}
+def test_tool_payload_keys_stripped_on_a_non_tool_event():
+    # The deny is signal-blind (denylist() carries no signal), so the keys go
+    # wherever they appear — not only on tool_result / tool_decision, which is
+    # all the predecessor's tool-event gate reached.
+    payload = _log("user_prompt", [_attr("tool_parameters", '{"full_command":"keep"}')])
+    result = redact(payload)
+    assert _keys(_record_attrs(result.payload)) == {"event.name"}
 
 
 def test_defense_in_depth_nonempty_counted_and_stripped():

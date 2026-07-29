@@ -88,7 +88,7 @@ def _logs_body(*, with_denylist: bool = True) -> dict:
             {
                 "kvlistValue": {
                     "values": [
-                        # nested denylist key — recursive sweep must remove it
+                        # nested bait: the whole tool_parameters attribute is denied
                         {"key": "file_path", "value": {"stringValue": SECRET_PATH}},
                         {"key": "command_name", "value": {"stringValue": "ls"}},
                     ]
@@ -235,7 +235,7 @@ def test_redaction_at_rest_and_gate_leak(client: TestClient, db: str):
     with psycopg.connect(db) as c:
         rows = c.execute("SELECT to_jsonb(e)::text FROM raw.events e").fetchall()
     persisted = " ".join(r[0] for r in rows)
-    # Nothing secret survived to rest — denylist, nested sweep, defense-in-depth.
+    # Nothing secret survived to rest — denylist, defense-in-depth.
     for secret in (SECRET_PATH, SECRET_PROMPT, SECRET_ERROR):
         assert secret not in persisted
 

@@ -1,6 +1,6 @@
 # cc-otel — Data Dictionary
 
-> Generated **2026-07-28** by `tools.gen_data_dictionary` against `cc_otel`.
+> Generated **2026-07-29** by `tools.gen_data_dictionary` against `cc_otel`.
 > Row counts are a live snapshot; treat them as representative, not exact.
 
 Descriptions come from `meta.column_registry` (the curated catalogue, #16); profiling
@@ -14,8 +14,8 @@ to see what is actually present in the blob reservoir.
 
 | table | rows |
 |---|---:|
-| `raw.metrics` | 1,751,210 |
-| `raw.events` | 350,681 |
+| `raw.metrics` | 1,757,017 |
+| `raw.events` | 355,278 |
 
 ## `raw.metrics`
 
@@ -23,55 +23,55 @@ to see what is actually present in the blob reservoir.
 
 | name | rows | % | first seen | last seen |
 |---|---:|---:|---|---|
-| `claude_code.token.usage` | 354,496 | 20.2% | 2026-05-24 | 2026-07-28 |
-| `claude_code.usage.utilization` | 260,386 | 14.9% | 2026-05-24 | 2026-07-28 |
-| `claude_code.usage.reset_in_seconds` | 260,383 | 14.9% | 2026-05-24 | 2026-07-28 |
+| `claude_code.token.usage` | 357,708 | 20.4% | 2026-05-24 | 2026-07-29 |
+| `claude_code.usage.utilization` | 260,506 | 14.8% | 2026-05-24 | 2026-07-29 |
+| `claude_code.usage.reset_in_seconds` | 260,503 | 14.8% | 2026-05-24 | 2026-07-29 |
 | `claude_code.context.input_tokens` | 131,353 | 7.5% | 2026-05-24 | 2026-07-16 |
 | `claude_code.context.output_tokens` | 131,353 | 7.5% | 2026-05-24 | 2026-07-16 |
 | `claude_code.session.duration_ms` | 131,350 | 7.5% | 2026-05-24 | 2026-07-16 |
 | `claude_code.session.api_duration_ms` | 131,350 | 7.5% | 2026-05-24 | 2026-07-16 |
 | `claude_code.context.used_percentage` | 129,347 | 7.4% | 2026-05-24 | 2026-07-16 |
-| `claude_code.cost.usage` | 88,624 | 5.1% | 2026-05-24 | 2026-07-28 |
-| `claude_code.active_time.total` | 74,558 | 4.3% | 2026-05-24 | 2026-07-28 |
-| `claude_code.lines_of_code.count` | 33,252 | 1.9% | 2026-05-24 | 2026-07-28 |
-| `claude_code.code_edit_tool.decision` | 18,268 | 1.0% | 2026-05-24 | 2026-07-28 |
-| `claude_code.commit.count` | 3,245 | 0.2% | 2026-05-24 | 2026-07-28 |
-| `claude_code.session.count` | 2,828 | 0.2% | 2026-05-24 | 2026-07-28 |
-| `claude_code.pull_request.count` | 417 | 0.0% | 2026-05-24 | 2026-07-28 |
+| `claude_code.cost.usage` | 89,427 | 5.1% | 2026-05-24 | 2026-07-29 |
+| `claude_code.active_time.total` | 75,732 | 4.3% | 2026-05-24 | 2026-07-29 |
+| `claude_code.lines_of_code.count` | 33,476 | 1.9% | 2026-05-24 | 2026-07-29 |
+| `claude_code.code_edit_tool.decision` | 18,383 | 1.0% | 2026-05-24 | 2026-07-29 |
+| `claude_code.commit.count` | 3,260 | 0.2% | 2026-05-24 | 2026-07-29 |
+| `claude_code.session.count` | 2,847 | 0.2% | 2026-05-24 | 2026-07-29 |
+| `claude_code.pull_request.count` | 422 | 0.0% | 2026-05-24 | 2026-07-29 |
 
 ### Promoted columns
 
 | column | type | non-null % | unique % | distinct | description | useful for |
 |---|---|---:|---:|---:|---|---|
-| `ts` | timestamp with time zone | 100.0% | 13.4% | 234,698 | Metric data-point timestamp. | time grain |
+| `ts` | timestamp with time zone | 100.0% | 13.4% | 236,059 | Metric data-point timestamp. | time grain |
 | `metric_name` | text | 100.0% | 0.0% | 15 | OTel instrument name. | signal routing |
 | `metric_type` | text | 100.0% | 0.0% | 2 | Instrument kind: gauge/sum/histogram. | temporality handling |
-| `value` | double precision | 100.0% | 31.4% | 550,084 | Numeric data-point value (delta counters). | all measures |
+| `value` | double precision | 100.0% | 31.4% | 551,699 | Numeric data-point value (delta counters). | all measures |
 | `count` | bigint | 0.0% | — | 0 | Pre-aggregated count on histogram instruments. |  |
 | `value_kind` | text | 100.0% | 0.0% | 2 | Derived: gauge_last/sum_delta/sum_cumulative/hist_sum. | delta-only staging filter |
 | `user_email` | text | 100.0% | 0.0% | 22 | Developer identity (normalized lowercase/trim). | dim_user join |
-| `user_account_id` | text | 33.4% | 0.0% | 23 | Anthropic tagged account id. |  |
-| `organization_id` | text | 32.9% | 0.0% | 3 | Organization UUID. |  |
-| `session_id` | uuid | 100.0% | 0.2% | 3,479 | Claude Code session UUID. | session facts |
+| `user_account_id` | text | 33.7% | 0.0% | 23 | Anthropic tagged account id. |  |
+| `organization_id` | text | 33.1% | 0.0% | 3 | Organization UUID. |  |
+| `session_id` | uuid | 100.0% | 0.2% | 3,502 | Claude Code session UUID. | session facts |
 | `model` | text | 93.4% | 0.0% | 19 | Model id (usage/cost/LOC metrics). | dim_model |
-| `type_label` | text | 26.4% | 0.0% | 8 | Active-time type: user (keyboard) / cli (tools+AI). | active time split |
+| `type_label` | text | 26.6% | 0.0% | 8 | Active-time type: user (keyboard) / cli (tools+AI). | active time split |
 | `tool_name` | text | 1.0% | 0.0% | 2 | Edit/Write/NotebookEdit. | fact_edit_decision |
 | `decision` | text | 1.0% | 0.0% | 2 | accept / reject. | acceptance rate |
 | `source` | text | 1.0% | 0.0% | 6 | Decision source: config/hook/user_*. | auto-vs-human split |
 | `language` | text | 1.0% | 0.1% | 23 | Detected language. | language mix |
 | `usage_window` | text | 29.7% | 0.0% | 3 | Rate-limit window (5h/7d/...). | fact_usage_window |
-| `cc_version` | text | 32.9% | 0.0% | 62 | Claude Code version. | install health |
-| `query_source` | text | 25.3% | 0.0% | 3 | Request origin: main/subagent/auxiliary. |  |
-| `effort` | text | 90.5% | 0.0% | 5 | Reasoning-effort level. |  |
+| `cc_version` | text | 33.1% | 0.0% | 62 | Claude Code version. | install health |
+| `query_source` | text | 25.4% | 0.0% | 3 | Request origin: main/subagent/auxiliary. |  |
+| `effort` | text | 90.4% | 0.0% | 5 | Reasoning-effort level. |  |
 | `speed` | text | 0.0% | — | 0 | fast when fast-mode. |  |
 | `agent_name` | text | 5.2% | 0.0% | 16 | Agent attribution (custom collapses). |  |
-| `skill_name` | text | 9.6% | 0.1% | 118 | Skill attribution. |  |
+| `skill_name` | text | 9.7% | 0.1% | 118 | Skill attribution. |  |
 | `plugin_name` | text | 3.7% | 0.0% | 9 | Plugin attribution. |  |
 | `marketplace_name` | text | 2.8% | 0.0% | 1 | Marketplace attribution. |  |
 | `start_type` | text | 0.2% | 0.1% | 3 | fresh/resume/continue/agents_view. | fact_session |
 | `scope_name` | text | 100.0% | 0.0% | 2 | OTel instrumentation scope. | wrapper-vs-native split |
-| `scope_version` | text | 32.9% | 0.0% | 56 | Instrumentation scope version. |  |
-| `process_owner` | text | 0.0% | — | 0 | OS account the Claude Code process runs under (e.g. a Windows username). | account sharing: a row whose process_owner disagrees with user_email is one person emitting under another person's account |
+| `scope_version` | text | 33.1% | 0.0% | 56 | Instrumentation scope version. |  |
+| `process_owner` | text | 0.0% | 100.0% | 1 | OS account the Claude Code process runs under (e.g. a Windows username). | account sharing: a row whose process_owner disagrees with user_email is one person emitting under another person's account |
 
 ## `raw.events`
 
@@ -79,82 +79,82 @@ to see what is actually present in the blob reservoir.
 
 | name | rows | % | first seen | last seen |
 |---|---:|---:|---|---|
-| `api_request` | 74,397 | 21.2% | 2026-05-24 | 2026-07-28 |
-| `tool_decision` | 68,407 | 19.5% | 2026-05-24 | 2026-07-28 |
-| `tool_result` | 56,045 | 16.0% | 2026-07-14 | 2026-07-28 |
-| `hook_execution_complete` | 52,038 | 14.8% | 2026-05-24 | 2026-07-28 |
-| `hook_execution_start` | 47,889 | 13.7% | 2026-05-24 | 2026-07-28 |
-| `assistant_response` | 33,430 | 9.5% | 2026-06-26 | 2026-07-28 |
-| `plugin_loaded` | 5,634 | 1.6% | 2026-05-24 | 2026-07-28 |
-| `hook_registered` | 4,779 | 1.4% | 2026-05-24 | 2026-07-28 |
-| `user_prompt` | 3,592 | 1.0% | 2026-07-14 | 2026-07-28 |
-| `subagent_completed` | 1,240 | 0.4% | 2026-05-24 | 2026-07-28 |
-| `mcp_server_connection` | 1,199 | 0.3% | 2026-07-14 | 2026-07-28 |
-| `skill_activated` | 916 | 0.3% | 2026-06-09 | 2026-07-28 |
+| `api_request` | 75,312 | 21.2% | 2026-05-24 | 2026-07-29 |
+| `tool_decision` | 69,449 | 19.5% | 2026-05-24 | 2026-07-29 |
+| `tool_result` | 57,083 | 16.1% | 2026-07-14 | 2026-07-29 |
+| `hook_execution_complete` | 52,607 | 14.8% | 2026-05-24 | 2026-07-29 |
+| `hook_execution_start` | 48,458 | 13.6% | 2026-05-24 | 2026-07-29 |
+| `assistant_response` | 33,698 | 9.5% | 2026-06-26 | 2026-07-29 |
+| `plugin_loaded` | 5,651 | 1.6% | 2026-05-24 | 2026-07-29 |
+| `hook_registered` | 4,801 | 1.4% | 2026-05-24 | 2026-07-29 |
+| `user_prompt` | 3,664 | 1.0% | 2026-07-14 | 2026-07-29 |
+| `subagent_completed` | 1,247 | 0.4% | 2026-05-24 | 2026-07-29 |
+| `mcp_server_connection` | 1,206 | 0.3% | 2026-07-14 | 2026-07-29 |
+| `skill_activated` | 940 | 0.3% | 2026-06-09 | 2026-07-29 |
 | `permission_mode_changed` | 402 | 0.1% | 2026-05-25 | 2026-07-28 |
-| `at_mention` | 212 | 0.1% | 2026-07-14 | 2026-07-28 |
+| `at_mention` | 254 | 0.1% | 2026-07-14 | 2026-07-29 |
 | `feedback_survey` | 178 | 0.1% | 2026-05-24 | 2026-07-28 |
-| `internal_error` | 120 | 0.0% | 2026-05-25 | 2026-07-28 |
-| `api_error` | 84 | 0.0% | 2026-05-25 | 2026-07-28 |
+| `internal_error` | 123 | 0.0% | 2026-05-25 | 2026-07-29 |
+| `api_error` | 85 | 0.0% | 2026-05-25 | 2026-07-28 |
 | `compaction` | 57 | 0.0% | 2026-07-16 | 2026-07-28 |
 | `plugin_installed` | 26 | 0.0% | 2026-06-04 | 2026-07-28 |
 | `api_retries_exhausted` | 21 | 0.0% | 2026-06-05 | 2026-07-27 |
-| `auth` | 14 | 0.0% | 2026-07-15 | 2026-07-28 |
+| `auth` | 15 | 0.0% | 2026-07-15 | 2026-07-28 |
 | `api_refusal` | 1 | 0.0% | 2026-07-18 | 2026-07-18 |
 
 ### Promoted columns
 
 | column | type | non-null % | unique % | distinct | description | useful for |
 |---|---|---:|---:|---:|---|---|
-| `event_time` | timestamp with time zone | 100.0% | 90.7% | 317,934 | Log-record timestamp. | time grain |
+| `event_time` | timestamp with time zone | 100.0% | 90.7% | 322,312 | Log-record timestamp. | time grain |
 | `event_name` | text | 100.0% | 0.0% | 22 | Event name. | signal routing |
 | `severity` | text | 0.0% | — | 0 | Log severity text. |  |
 | `body` | text | 100.0% | 0.0% | 22 | OTLP log-record body (event-name string for CC events). |  |
 | `user_email` | text | 100.0% | 0.0% | 22 | Developer identity (normalized). | dim_user join |
 | `user_account_id` | text | 100.0% | 0.0% | 22 | Anthropic tagged account id. |  |
 | `organization_id` | text | 100.0% | 0.0% | 3 | Organization UUID. |  |
-| `session_id` | uuid | 100.0% | 0.7% | 2,624 | Claude Code session UUID. | session facts |
-| `prompt_id` | uuid | 96.0% | 3.1% | 10,575 | Prompt UUID. | prompt correlation |
+| `session_id` | uuid | 100.0% | 0.7% | 2,639 | Claude Code session UUID. | session facts |
+| `prompt_id` | uuid | 96.0% | 3.1% | 10,647 | Prompt UUID. | prompt correlation |
 | `model` | text | 31.1% | 0.0% | 10 | Model id (api_request/assistant_response). | fact_api_usage |
-| `tool_name` | text | 35.5% | 0.0% | 33 | Tool name (tool_decision/tool_result; incl. mcp__*). | bridge_session_mcp |
-| `duration_ms` | bigint | 37.9% | 25.8% | 34,361 | Failed request duration. |  |
-| `input_tokens` | bigint | 21.2% | 2.6% | 1,940 | Prompt tokens. | fact_api_usage |
-| `output_tokens` | bigint | 21.2% | 7.8% | 5,789 | Completion tokens. | fact_api_usage |
-| `cache_creation_tokens` | bigint | 21.2% | 15.5% | 11,544 | Cache-write tokens. | fact_api_usage |
-| `cache_read_tokens` | bigint | 21.2% | 84.1% | 62,541 | Cache-read tokens. | fact_api_usage |
-| `cost_usd` | double precision | 21.2% | 97.4% | 72,453 | Estimated cost. |  |
+| `tool_name` | text | 35.6% | 0.0% | 33 | Tool name (tool_decision/tool_result; incl. mcp__*). | bridge_session_mcp |
+| `duration_ms` | bigint | 38.0% | 25.6% | 34,563 | Failed request duration. |  |
+| `input_tokens` | bigint | 21.2% | 2.6% | 1,977 | Prompt tokens. | fact_api_usage |
+| `output_tokens` | bigint | 21.2% | 7.7% | 5,800 | Completion tokens. | fact_api_usage |
+| `cache_creation_tokens` | bigint | 21.2% | 15.4% | 11,605 | Cache-write tokens. | fact_api_usage |
+| `cache_read_tokens` | bigint | 21.2% | 83.9% | 63,183 | Cache-read tokens. | fact_api_usage |
+| `cost_usd` | double precision | 21.2% | 97.3% | 73,304 | Estimated cost. |  |
 | `cc_version` | text | 100.0% | 0.0% | 61 | Claude Code version. | install health |
 | `event_sequence` | bigint | 100.0% | 3.8% | 13,484 | Per-session event ordinal. |  |
-| `request_id` | text | 30.8% | 69.0% | 74,470 | Anthropic API request id. |  |
+| `request_id` | text | 30.7% | 69.1% | 75,385 | Anthropic API request id. |  |
 | `speed` | text | 21.2% | 0.0% | 1 | fast/normal. |  |
 | `effort` | text | 20.4% | 0.0% | 5 | Reasoning-effort level. | fact_api_usage |
-| `query_source` | text | 30.8% | 0.0% | 22 | Request origin. | fact_api_usage |
-| `prompt_length` | bigint | 1.0% | 22.8% | 819 | Prompt length in chars. | non-empty session |
-| `command_name` | text | 0.2% | 8.1% | 68 | Slash-command name. |  |
+| `query_source` | text | 30.7% | 0.0% | 22 | Request origin. | fact_api_usage |
+| `prompt_length` | bigint | 1.0% | 22.5% | 823 | Prompt length in chars. | non-empty session |
+| `command_name` | text | 0.2% | 7.9% | 68 | Slash-command name. |  |
 | `command_source` | text | 0.2% | 0.2% | 2 | builtin/custom/mcp. |  |
-| `hook_name` | text | 28.5% | 0.1% | 129 | Hook name (hook_execution_*/hook_registered). | bridge_session_hook |
-| `hook_event` | text | 29.9% | 0.0% | 10 | Hook trigger event. |  |
+| `hook_name` | text | 28.4% | 0.1% | 129 | Hook name (hook_execution_*/hook_registered). | bridge_session_hook |
+| `hook_event` | text | 29.8% | 0.0% | 10 | Hook trigger event. |  |
 | `from_mode` | text | 0.1% | 1.0% | 4 | Permission mode before change. |  |
 | `to_mode` | text | 0.1% | 1.0% | 4 | Permission mode after change. |  |
 | `trigger` | text | 0.1% | 1.1% | 5 | Compaction trigger (auto/manual). |  |
-| `skill_name` | text | 8.1% | 0.5% | 132 | Skill name (skill_activated/api_request). | bridge_session_skill |
+| `skill_name` | text | 8.1% | 0.5% | 134 | Skill name (skill_activated/api_request). | bridge_session_skill |
 | `agent_name` | text | 4.7% | 0.1% | 14 | Agent attribution (api_request). | bridge_session_agent |
-| `plugin_name` | text | 5.3% | 0.2% | 41 | Plugin name (plugin_loaded). | bridge_session_plugin |
+| `plugin_name` | text | 5.2% | 0.2% | 41 | Plugin name (plugin_loaded). | bridge_session_plugin |
 | `marketplace_name` | text | 4.0% | 0.1% | 15 | Marketplace attribution. |  |
 | `mcp_server_name` | text | 1.1% | 0.4% | 16 | MCP server attribution (api_request). | bridge_session_mcp |
 | `mcp_tool_name` | text | 1.1% | 0.8% | 29 | MCP tool attribution (api_request). |  |
-| `mention_type` | text | 0.1% | 1.4% | 3 | @-mention target type. |  |
-| `success_bool` | boolean | 16.1% | 0.0% | 2 | Success flag where reported. |  |
-| `tool_use_id` | text | 35.5% | 55.0% | 68,410 | Tool invocation id. |  |
+| `mention_type` | text | 0.1% | 1.2% | 3 | @-mention target type. |  |
+| `success_bool` | boolean | 16.2% | 0.0% | 2 | Success flag where reported. |  |
+| `tool_use_id` | text | 35.6% | 54.9% | 69,453 | Tool invocation id. |  |
 | `decision` | text | 19.5% | 0.0% | 2 | accept / reject (tool_decision). |  |
 | `source` | text | 19.5% | 0.0% | 6 | Decision source (tool_decision). |  |
 | `scope_name` | text | 100.0% | 0.0% | 1 | Instrumentation scope. |  |
 | `scope_version` | text | 100.0% | 0.0% | 55 | Scope version. |  |
 | `severity_number` | smallint | 0.0% | — | 0 | Log severity number. |  |
-| `log_trace_id` | text | 24.7% | 7.6% | 6,618 | Trace id if present. |  |
-| `log_span_id` | text | 24.7% | 28.5% | 24,621 | Span id if present. |  |
-| `dropped_attributes_count` | integer | 21.7% | 0.0% | 1 | Dropped-attribute count. | ingest QA |
-| `process_owner` | text | 0.0% | — | 0 | OS account the Claude Code process runs under (e.g. a Windows username). | account sharing: a row whose process_owner disagrees with user_email is one person emitting under another person's account |
+| `log_trace_id` | text | 24.4% | 7.6% | 6,618 | Trace id if present. |  |
+| `log_span_id` | text | 24.4% | 28.5% | 24,621 | Span id if present. |  |
+| `dropped_attributes_count` | integer | 21.5% | 0.0% | 1 | Dropped-attribute count. | ingest QA |
+| `process_owner` | text | 0.0% | 25.0% | 1 | OS account the Claude Code process runs under (e.g. a Windows username). | account sharing: a row whose process_owner disagrees with user_email is one person emitting under another person's account |
 
 ## Kept & denied attributes (not in Postgres)
 
@@ -166,15 +166,15 @@ to see what is actually present in the blob reservoir.
 | events | `*` | `error` | denied | Error message. |  |
 | events | `*` | `file_path` | denied | File path. |  |
 | events | `*` | `full_command` | denied | Full command line. |  |
-| events | `*` | `tool_parameters.bash_command` | denied | Bash command inside tool_parameters. |  |
-| events | `*` | `tool_parameters.file_path` | denied | File path inside tool_parameters. |  |
-| events | `*` | `tool_parameters.full_command` | denied | Full command inside tool_parameters. |  |
 | events | `api_request_body` | `body` | denied | Raw API request body. |  |
 | events | `api_request_body` | `body_ref` | denied | Raw API request body file ref. |  |
 | events | `api_response_body` | `body` | denied | Raw API response body. |  |
 | events | `api_response_body` | `body_ref` | denied | Raw API response body file ref. |  |
 | events | `assistant_response` | `response` | denied | Assistant response text. |  |
 | events | `feedback_survey` | `response` | denied | Survey free-text response. |  |
+| events | `tool_decision` | `tool_parameters` | denied | Tool args JSON (details-gated). |  |
+| events | `tool_result` | `tool_input` | denied | Tool args JSON (details-gated). |  |
+| events | `tool_result` | `tool_parameters` | denied | Tool args JSON (details-gated). |  |
 | events | `user_prompt` | `prompt` | denied | Prompt text. |  |
 | events | `*` | `attempt` | kept | API attempt number. |  |
 | events | `*` | `client_request_id` | kept | Client request id. |  |
@@ -257,7 +257,6 @@ to see what is actually present in the blob reservoir.
 | events | `tool_result` | `decision_type` | kept | Decision type. |  |
 | events | `tool_result` | `error_type` | kept | Error category (not the message). |  |
 | events | `tool_result` | `mcp_server_scope` | kept | MCP server scope. |  |
-| events | `tool_result` | `tool_input` | kept | Tool args JSON (details-gated). |  |
 | events | `tool_result` | `tool_input_size_bytes` | kept | Tool input size. |  |
 | events | `tool_result` | `tool_result_size_bytes` | kept | Tool result size. |  |
 | metrics | `*` | `app.entrypoint` | kept | Launch surface (opt-in). |  |

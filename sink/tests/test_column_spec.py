@@ -124,8 +124,16 @@ def test_typed_column_sets_match() -> None:
 
 
 def test_redaction_sets_match() -> None:
-    assert cs.denylist() == frozenset({"full_command", "bash_command", "file_path", "error"})
-    assert cs.tool_param_keys() == frozenset({"full_command", "bash_command", "file_path"})
+    assert cs.denylist() == frozenset(
+        {
+            "full_command",
+            "bash_command",
+            "file_path",
+            "error",
+            "tool_input",
+            "tool_parameters",
+        }
+    )
     assert cs.defense_in_depth() == frozenset({"prompt", "response", "body", "body_ref"})
 
 
@@ -138,29 +146,6 @@ def test_duplicate_attr_key_to_different_columns_rejected() -> None:
     )
     with pytest.raises(ValueError, match="multiple columns"):
         cs._check_invariants(bad)
-
-
-def test_malformed_tool_param_sweep_path_rejected() -> None:
-    # A tool_param_sweep path must be tool_parameters.<leaf>; a bare key would
-    # IndexError in tool_param_keys() at import — turn it into a clear failure.
-    bad = COLUMN_SPEC + (
-        ColumnSpec("events", "tool_result", "full_command", "denied", deny_mode="tool_param_sweep"),
-    )
-    with pytest.raises(ValueError, match="tool_parameters"):
-        cs._check_invariants(bad)
-
-
-def test_wellformed_tool_param_sweep_path_accepted() -> None:
-    ok = COLUMN_SPEC + (
-        ColumnSpec(
-            "events",
-            "tool_result",
-            "tool_parameters.some_leaf",
-            "denied",
-            deny_mode="tool_param_sweep",
-        ),
-    )
-    cs._check_invariants(ok)  # no raise
 
 
 def test_kept_row_contradicting_a_promoted_row_in_the_same_signal_rejected() -> None:
@@ -184,7 +169,7 @@ def test_denied_row_contradicting_a_promoted_row_in_the_same_signal_rejected() -
 
 
 def test_denied_row_contradicting_a_promoted_row_in_another_signal_rejected() -> None:
-    # denylist() and tool_param_keys() carry no signal, so redaction is global: a
+    # denylist() carries no signal, so redaction is global: a
     # denied `events` row for `window` would blank raw.metrics.usage_window, which
     # `window` is promoted to under metrics only. Wider reach than the kept case.
     bad = COLUMN_SPEC + (ColumnSpec("events", "some_event", "window", "denied", deny_mode="strip"),)

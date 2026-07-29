@@ -3,13 +3,13 @@
 Runs post-decode, pre-fan-out: the same redacted object feeds both the Postgres
 write and the blob-reservoir write, and the idempotency hash is taken over it.
 
-Three strip families:
+Two strip families:
 
-* **Denylist** — the POC four secret-bearing keys, removed from every attribute
-  list wherever they appear.
-* **tool_parameters sweep** — a recursive strip of the same secret keys nested
-  inside the ``tool_parameters`` attribute on ``tool_result`` / ``tool_decision``
-  events (client may pack raw args there).
+* **Denylist** — the secret-bearing keys, removed from every attribute list
+  wherever they appear. It includes the tool-argument payloads ``tool_parameters``
+  and ``tool_input``, denied whole: the fleet emits them as a JSON ``stringValue``,
+  so the per-leaf sweep of the nested-kvlist shape this pass used to run stripped
+  nothing, while full command lines and absolute paths landed at rest (#369).
 * **Defense-in-depth** — content keys that fleet client gates already suppress
   (``prompt`` / ``response`` / ``body`` / ``body_ref``); stripping a *non-empty*
   one means a client gate drifted, so those strips are counted and warned on.
@@ -25,15 +25,11 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
-from .attrs import event_name as _event_name_of
-from .column_spec import defense_in_depth, denylist, tool_param_keys
+from .column_spec import defense_in_depth, denylist
 
-# The three strip families, derived from the spec's denied rows (by deny_mode).
-# POC four — secret-bearing, stripped wherever seen.
+# The two strip families, derived from the spec's denied rows (by deny_mode).
+# Secret-bearing keys, stripped wherever seen.
 DENYLIST = denylist()
-# Recursive sweep inside tool_parameters (the "error" key is not a tool arg).
-TOOL_PARAM_KEYS = tool_param_keys()
-TOOL_PARAM_EVENTS = frozenset({"tool_result", "tool_decision"})
 # Content keys already suppressed by client gates; a non-empty hit signals drift.
 DEFENSE_IN_DEPTH = defense_in_depth()
 
@@ -62,19 +58,6 @@ def _strip_denylist(attributes: list[dict[str, Any]]) -> None:
     attributes[:] = [a for a in attributes if a.get("key") not in DENYLIST]
 
 
-def _sweep_tool_parameters(value: dict[str, Any]) -> None:
-    """Recursively remove TOOL_PARAM_KEYS from a nested kvlist/array value."""
-    kv = value.get("kvlistValue")
-    if isinstance(kv, dict) and isinstance(kv.get("values"), list):
-        kv["values"] = [e for e in kv["values"] if e.get("key") not in TOOL_PARAM_KEYS]
-        for e in kv["values"]:
-            _sweep_tool_parameters(e.get("value", {}))
-    arr = value.get("arrayValue")
-    if isinstance(arr, dict) and isinstance(arr.get("values"), list):
-        for e in arr["values"]:
-            _sweep_tool_parameters(e)
-
-
 def _walk_attribute_lists(node: Any) -> Iterator[list[dict[str, Any]]]:
     """Yield every ``attributes`` list anywhere in the OTLP tree."""
     if isinstance(node, dict):
@@ -94,10 +77,6 @@ def _iter_log_records(payload: dict[str, Any]) -> Iterator[dict[str, Any]]:
             yield from sl.get("logRecords", []) or []
 
 
-def _event_name(record: dict[str, Any]) -> str | None:
-    return _event_name_of(record.get("attributes"), record.get("name"))
-
-
 def redact(payload: dict[str, Any]) -> RedactionResult:
     """Redact ``payload`` in place, returning it plus the drift-strip count."""
     # 1. Denylist strip on every attribute list, wherever it sits.
@@ -110,13 +89,7 @@ def redact(payload: dict[str, Any]) -> RedactionResult:
         if not isinstance(attributes, list):
             continue
 
-        # 2. Recursive tool_parameters sweep on tool_result / tool_decision.
-        if _event_name(record) in TOOL_PARAM_EVENTS:
-            for a in attributes:
-                if a.get("key") == "tool_parameters":
-                    _sweep_tool_parameters(a.get("value", {}))
-
-        # 3. Defense-in-depth strip; count non-empty removals.
+        # 2. Defense-in-depth strip; count non-empty removals.
         kept: list[dict[str, Any]] = []
         for a in attributes:
             if a.get("key") in DEFENSE_IN_DEPTH:
