@@ -22,7 +22,6 @@ at import (i.e. in every unit-test run), so a malformed row fails fast.
 ``deny_mode`` records how a denied key is stripped by ``redaction``:
 
 * ``strip``            — removed from every attribute list wherever it appears.
-* ``tool_param_sweep`` — removed from nested ``tool_parameters`` on tool events.
 * ``defense_in_depth`` — content key a client gate already suppresses; a
   non-empty hit is counted as gate drift.
 """
@@ -45,7 +44,7 @@ DataType = Literal[
     "DOUBLE PRECISION",
     "BOOLEAN",
 ]
-DenyMode = Literal["strip", "tool_param_sweep", "defense_in_depth"]
+DenyMode = Literal["strip", "defense_in_depth"]
 
 _INT_TYPES: frozenset[str] = frozenset({"BIGINT", "INTEGER", "SMALLINT"})
 
@@ -1919,10 +1918,31 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "events",
         "tool_result",
         "tool_input",
-        "kept",
+        "denied",
+        deny_mode="strip",
         description="Tool args JSON (details-gated).",
-        decided_at="2026-07-13",
-        notes="not in #8 denylist; revisit if PII review flags",
+        decided_at="2026-07-29",
+        notes="#369: full command lines + absolute developer paths; was kept until measured",
+    ),
+    ColumnSpec(
+        "events",
+        "tool_result",
+        "tool_parameters",
+        "denied",
+        deny_mode="strip",
+        description="Tool args JSON (details-gated).",
+        decided_at="2026-07-29",
+        notes="#369: emitted as a JSON string, so the leaf sweep never reached it",
+    ),
+    ColumnSpec(
+        "events",
+        "tool_decision",
+        "tool_parameters",
+        "denied",
+        deny_mode="strip",
+        description="Tool args JSON (details-gated).",
+        decided_at="2026-07-29",
+        notes="#369: emitted as a JSON string, so the leaf sweep never reached it",
     ),
     ColumnSpec(
         "events", "auth", "action", "kept", description="login/logout.", decided_at="2026-07-13"
@@ -2116,36 +2136,6 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
     ),
     ColumnSpec(
         "events",
-        "*",
-        "tool_parameters.full_command",
-        "denied",
-        deny_mode="tool_param_sweep",
-        description="Full command inside tool_parameters.",
-        decided_at="2026-07-13",
-        notes="#8 recursive tool_parameters sweep (tool_result + tool_decision)",
-    ),
-    ColumnSpec(
-        "events",
-        "*",
-        "tool_parameters.bash_command",
-        "denied",
-        deny_mode="tool_param_sweep",
-        description="Bash command inside tool_parameters.",
-        decided_at="2026-07-13",
-        notes="#8 recursive tool_parameters sweep",
-    ),
-    ColumnSpec(
-        "events",
-        "*",
-        "tool_parameters.file_path",
-        "denied",
-        deny_mode="tool_param_sweep",
-        description="File path inside tool_parameters.",
-        decided_at="2026-07-13",
-        notes="#8 recursive tool_parameters sweep",
-    ),
-    ColumnSpec(
-        "events",
         "user_prompt",
         "prompt",
         "denied",
@@ -2304,11 +2294,6 @@ def denylist() -> frozenset[str]:
     return frozenset(r.attr_path for r in _denied("strip"))
 
 
-def tool_param_keys() -> frozenset[str]:
-    """Leaf keys swept from nested ``tool_parameters`` (``tool_param_sweep``)."""
-    return frozenset(r.attr_path.split(".", 1)[1] for r in _denied("tool_param_sweep"))
-
-
 def defense_in_depth() -> frozenset[str]:
     """Content keys a client gate suppresses; a non-empty hit is drift."""
     return frozenset(r.attr_path for r in _denied("defense_in_depth"))
@@ -2422,15 +2407,6 @@ def _check_invariants(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> None:
                 raise ValueError(f"attr {r.attr_path} maps to multiple columns in {r.signal}")
             attr_to_col[ak] = r.column_name
 
-        # invariant 6: tool_param_sweep rows are shaped tool_parameters.<leaf>
-        # (else tool_param_keys() IndexErrors on the split at import).
-        if r.deny_mode == "tool_param_sweep":
-            parts = r.attr_path.split(".", 1)
-            if parts[0] != "tool_parameters" or len(parts) != 2 or not parts[1]:
-                raise ValueError(
-                    f"tool_param_sweep row must be shaped tool_parameters.<leaf>: {r.attr_path}"
-                )
-
     # invariant 4: every named metric grain is in the lint catalog (#168) — the
     # catalog carries metrics with no spec row too (commit/pr/cost), so this is
     # subset, not equality.
@@ -2444,8 +2420,8 @@ def _check_invariants(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> None:
     # is then false. Its reach is the signals whose flat map writes the column:
     # its own, plus metrics/events when the row is the resource mirror the sweep
     # falls back to (``tools._registry``). 'denied' reaches further and is worse:
-    # ``denylist()`` / ``tool_param_keys()`` drop the signal, so redaction strips
-    # the key everywhere and the promoted column silently never populates.
+    # ``denylist()`` drops the signal, so redaction strips the key everywhere and
+    # the promoted column silently never populates.
     promoted: dict[str, set[str]] = {}
     for r in spec:
         if r.status == "promoted":

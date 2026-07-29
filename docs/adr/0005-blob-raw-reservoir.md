@@ -6,7 +6,7 @@ We add an **Azure Blob Storage** container as a redacted-raw OTLP reservoir next
 
 ## Decisions
 
-- **Content = redacted-raw.** The full OTLP body is written with the secret-bearing fields stripped (`full_command`, `bash_command`, `file_path`, `error`; incl. nested in `tool_parameters`) — the redaction logic proven in the POC's `redact.py`, carried into the production sink. Every other key — including all named enums and unknown keys — stays raw, so key-discovery is intact.
+- **Content = redacted-raw.** The full OTLP body is written with the secret-bearing fields stripped (`full_command`, `bash_command`, `file_path`, `error`, and the whole `tool_parameters` / `tool_input` tool-argument payloads) — the redaction logic proven in the POC's `redact.py`, carried into the production sink. Every other key — including all named enums and unknown keys — stays raw, so key-discovery is intact. (The tool-argument payloads were originally swept per nested leaf; the fleet emits them as a JSON string, so the sweep reached nothing and #369 denied both attributes whole.)
 - **Layout.** One gzipped file per collector batch, single container `raw`, Hive partitioning `signal=<metrics|logs>/dt=<YYYY-MM-DD>/` so DuckDB prunes by signal + date (no traces partition — traces are off at the source, ADR-0001).
 - **Writer = sink-side, best-effort.** FastAPI `BackgroundTasks` writes after the 200 response; a blob failure logs a warning and never fails ingest. Keeps the reservoir fully isolated from the source-of-truth path.
 - **Tier/redundancy/retention.** Hot, LRS, keep-forever (no lifecycle). Storage is ~$1–2/mo at this volume, so tiering to Cool/Cold isn't worth the 128 KiB minimum-object floor, retrieval fees, and early-deletion penalties.

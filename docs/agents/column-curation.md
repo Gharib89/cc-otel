@@ -126,10 +126,12 @@ one-off, not a standing tool. Record the backfill window in the registry row's `
 
 When a key becomes `denied`:
 
-1. Add a `denied` spec row with the right `deny_mode` (`strip` / `tool_param_sweep` /
-   `defense_in_depth`) — `redaction.py`'s `DENYLIST` / `TOOL_PARAM_KEYS` /
-   `DEFENSE_IN_DEPTH` derive from it, so there is no separate denylist to edit — then
-   `spec_sync --name <slug>` ships the registry row (promotion-PR bundle, minus DDL).
+1. Add a `denied` spec row with the right `deny_mode` (`strip` / `defense_in_depth`) —
+   `redaction.py`'s `DENYLIST` / `DEFENSE_IN_DEPTH` derive from it, so there is no separate
+   denylist to edit — then `spec_sync --name <slug>` ships the registry row (promotion-PR
+   bundle, minus DDL). Deny the **whole attribute**, never a leaf inside it: the emitted
+   shape of a structured value is the client's choice, and a mode that descends one shape
+   strips nothing when the fleet sends another (#369).
 2. Blobs written before the deploy still hold the key. Rewrite the exposed window in place
    with `tools.scrub` (dry-run first, then `--execute`). Scrub runs each blob back through
    the sink's `redact` and overwrites it; it is idempotent on already-clean blobs and
