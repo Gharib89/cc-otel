@@ -31,8 +31,10 @@ def test_build_joins_registry_with_live_stats(conn):
     # live signal-name counts reflect the inserted rows
     assert "| `claude_code.token.usage` |" in md
     # kept/denied section lists blob-only registry keys
-    assert "## Kept & denied attributes (not in Postgres)" in md
+    heading = "## Kept & denied attributes (not in Postgres)"
+    assert heading in md
     assert "`host.arch`" in md
-    # ...and only those: a promoted resource attr belongs to the profiled tables,
-    # not the blob-only section (service.name promoted in #357).
-    assert "`service.name`" not in md.split("## Kept & denied attributes", 1)[1]
+    # ...and only those: a promoted resource attr belongs to the profiled tables, not the
+    # blob-only section (service.name promoted in #357). Split on the asserted heading, so
+    # a renamed heading fails on the line above rather than silently emptying the tail.
+    assert "`service.name`" not in md.split(heading, 1)[1]

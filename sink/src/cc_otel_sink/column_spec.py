@@ -1441,10 +1441,11 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         description="@-mention target type.",
         decided_at="2026-07-13",
     ),
-    # ===== events: promoted by the #350 curation pass (#357 / #358 / #359) =====
-    #
-    # All kept -> promoted flips, all kind="attr" (no parser edit). Density posture and
-    # the one-attr-path-per-column rule: #354.
+    # The rows below are the #350 curation pass's kept -> promoted flips (#357 / #358 /
+    # #359), all kind="attr" (no parser edit). Density posture and the
+    # one-attr-path-per-column rule: #354. They stay in this section rather than opening
+    # a per-PR one — the sections partition by signal and status, and each row already
+    # carries its own provenance in decided_at/notes.
     ColumnSpec(
         "events",
         "*",
@@ -1972,9 +1973,9 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "kept",
         description="Whether the subagent's model changed mid-run.",
         decided_at="2026-07-29",
-        notes="#370: kept basis UNMEASURED -- surfaced by the post-#369 sweep, after the #351 "
-        "profiling run, so no group measured it. Kept because no report states a rate it is the "
-        "numerator of (#359 near-zero-counter rule); revisit under #366",
+        notes="kept basis constant (#370): `False` on all 794 records in the profiled window "
+        "(promotion-candidate-profile.md, *Settled by the evidence*); re-measured 2026-07-29 over "
+        "2026-07-14..28 -- still one value",
     ),
     ColumnSpec(
         "events",
@@ -2015,9 +2016,8 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "kept",
         description="Where the survey event originated.",
         decided_at="2026-07-29",
-        notes="kept basis thin (#370): surfaced by the post-#369 sweep with no group verdict; the "
-        "whole feedback_survey family is a 28 -> 21 -> 5 funnel answering Anthropic's question "
-        "about survey uptake, not ITWorx's about adoption (#359)",
+        notes="kept basis constant (#370): `sdk_host` on all 10 records in the profiled window "
+        "(promotion-candidate-profile.md, *Settled by the evidence*)",
     ),
     ColumnSpec(
         "events",
@@ -2026,8 +2026,8 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "kept",
         description="Server that originated the survey event.",
         decided_at="2026-07-29",
-        notes="kept basis thin (#370): surfaced by the post-#369 sweep with no group verdict; same "
-        "family reading",
+        notes="kept basis constant (#370): `claude-vscode` on all 10 records in the profiled "
+        "window (promotion-candidate-profile.md, *Settled by the evidence*)",
     ),
     ColumnSpec(
         "events",
@@ -2697,6 +2697,34 @@ def _check_invariants(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> None:
             raise ValueError(f"kept row contradicts a promoted row in {r.signal}: {key}")
         elif r.signal == "resource" and r.attr_path in signal_promoted:
             raise ValueError(f"kept resource row contradicts a promoted signal row: {key}")
+
+    # invariant 9: a promoted resource row projects its column onto both raw tables
+    # (``promoted_columns``), so the projection has to be answerable there. Where an
+    # own-signal row already declares the column, the two must agree on type —
+    # ``spec_raw_columns`` builds one dict per table and would silently take
+    # whichever row came last. Where none does, the resource row is the column's only
+    # source and must be ``derived``: ``attr_columns(signal)`` keys on the row's own
+    # signal, so a resource ``attr`` row writes nothing and the column is minted
+    # always-NULL (#357 ``service_name`` / ``os_type``).
+    own_types: dict[str, str] = {}
+    for r in spec:
+        if r.status == "promoted" and r.signal != "resource" and r.column_name and r.data_type:
+            own_types[r.column_name] = r.data_type
+    for r in spec:
+        if r.status != "promoted" or r.signal != "resource" or r.column_name is None:
+            continue
+        own = own_types.get(r.column_name)
+        if own is None:
+            if r.kind != "derived":
+                raise ValueError(
+                    f"resource-only column {r.column_name} must be kind='derived', "
+                    f"not {r.kind!r} — an attr row writes it on no signal"
+                )
+        elif own != r.data_type:
+            raise ValueError(
+                f"column {r.column_name} type differs between the resource row "
+                f"({r.data_type}) and its signal row ({own})"
+            )
 
 
 _check_invariants()

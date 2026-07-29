@@ -254,6 +254,24 @@ def test_promoted_resource_row_is_a_column_on_both_raw_tables() -> None:
     assert "x_res" in cs.table_columns("events", synthetic)
 
 
+def test_resource_only_attr_column_rejected() -> None:
+    # A resource attr row writes on no signal — attr_columns keys on the row's own
+    # signal — so as a column's only source it would mint an always-NULL column.
+    bad = COLUMN_SPEC + (ColumnSpec("resource", "*", "x.res", "promoted", "x_res", "TEXT"),)
+    with pytest.raises(ValueError, match="must be kind='derived'"):
+        cs._check_invariants(bad)
+
+
+def test_resource_row_disagreeing_on_type_with_its_signal_row_rejected() -> None:
+    # spec_raw_columns builds one dict per table; a type conflict across the two rows
+    # resolves to whichever came last in spec order rather than failing.
+    bad = COLUMN_SPEC + (
+        ColumnSpec("resource", "*", "x.res", "promoted", "tool_name", "BIGINT", "derived"),
+    )
+    with pytest.raises(ValueError, match="type differs between the resource row"):
+        cs._check_invariants(bad)
+
+
 def test_derived_coalesce_dedupes_repeated_sources() -> None:
     # A resource row mirroring an own-signal derived row must not duplicate the
     # source — the union of own-signal and resource rows stays idempotent.
