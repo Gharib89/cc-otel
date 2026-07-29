@@ -1468,7 +1468,8 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         description="Workflow name on workflow-spawned agents.",
         useful_for="dynamic-workflow adoption (a figure, not a slicer)",
         decided_at="2026-07-29",
-        notes="promoted from kept (#357); workflow.run_id stays kept as high-cardinality run identity",
+        notes="promoted from kept (#357); workflow.run_id stays kept as "
+        "high-cardinality run identity",
     ),
     ColumnSpec(
         "events",
@@ -1515,7 +1516,8 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "promoted",
         "mcp_connection_server_scope",
         "TEXT",
-        description="MCP server scope on the connection event (claudeai/dynamic/project/local/user).",
+        description="MCP server scope on the connection event "
+        "(claudeai/dynamic/project/local/user).",
         decided_at="2026-07-29",
         notes="promoted from kept (#358); its own column, not shared with tool_result's "
         "mcp_server_scope -- distinct attr paths split under #354's one-path rule",
@@ -1590,7 +1592,8 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "plugin_scope",
         "TEXT",
         description="Plugin scope (official/user-local).",
-        useful_for="per-seat fact: the same plugin loads official on some seats, user-local on others",
+        useful_for="per-seat fact: the same plugin loads official on some seats, "
+        "user-local on others",
         decided_at="2026-07-29",
         notes="promoted from kept (#358)",
     ),
@@ -1641,7 +1644,8 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         description="Who authorised the tool call (config/hook/user_temporary/...).",
         useful_for="permission friction: user_temporary on 12 of 13 seats",
         decided_at="2026-07-29",
-        notes="promoted from kept (#359); `decision` says accept/reject, nothing said who authorised",
+        notes="promoted from kept (#359); `decision` says accept/reject, "
+        "nothing said who authorised",
     ),
     ColumnSpec(
         "events",
