@@ -114,9 +114,9 @@ access. Commit the regenerated file as step 5 of the promotion PR.
 A column promoted under several registry rows can carry a different meaning per row
 (`duration_ms` is six event families' duration). Where the descriptions genuinely differ
 the cell names each one, prefixed by the narrowest registry label that tells them apart —
-signal name, else attr path, else signal (#368). One wording across every row renders
-bare, so a qualified cell that reads as the same meaning twice is wording drift between
-registry rows, not polysemy: harmonize the rows and the cell collapses.
+signal name, else attr path, else signal, else the whole grain (#368). One wording across
+every row renders bare, so a qualified cell that reads as the same meaning twice is wording
+drift between registry rows, not polysemy: harmonize the rows and the cell collapses.
 
 ## 5. Backfill decision
 
