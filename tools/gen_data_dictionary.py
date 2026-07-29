@@ -65,18 +65,55 @@ def _columns(conn: psycopg.Connection, table: str) -> list[tuple[str, str]]:
         return [(r[0], r[1]) for r in cur.fetchall()]
 
 
+def _qualify(pairs: list[tuple[str, str]]) -> str:
+    """Fold (signal_name, text) pairs for one column into a single cell.
+
+    The registry's grain is ``(signal, signal_name, attr_path)``, so a promoted column
+    can carry a different meaning per event family (`duration_ms`, `trigger`). Grouping
+    is by **text**, not by row: families sharing one wording collapse into a single
+    qualified group, which is what stops the cell growing once per registry row. A
+    column with one distinct meaning renders bare, exactly as it did before #368.
+    """
+    groups: dict[str, set[str]] = {}
+    for signal_name, text in pairs:
+        if text:  # an undescribed family is a registry gap, not a rival meaning
+            groups.setdefault(text, set()).add(signal_name)
+    if len(groups) <= 1:
+        return next(iter(groups), "")
+    ordered = sorted(groups.items(), key=lambda g: min(g[1]))
+    return " / ".join(f"{', '.join(sorted(names))}: {text}" for text, names in ordered)
+
+
+def _fold_descriptions(rows: list[tuple[str, str, str, str]]) -> dict[str, tuple[str, str]]:
+    """(column_name, signal_name, description, useful_for) rows -> per-column cells.
+
+    Pure — the DB round trip lives in ``_registry_descriptions``. ``description`` and
+    ``useful_for`` are folded independently: a column can be polysemous in one and not
+    the other.
+    """
+    per_column: dict[str, list[tuple[str, str, str]]] = {}
+    for column_name, signal_name, description, useful_for in rows:
+        per_column.setdefault(column_name, []).append((signal_name, description, useful_for))
+    return {
+        column: (
+            _qualify([(name, desc) for name, desc, _ in entries]),
+            _qualify([(name, useful) for name, _, useful in entries]),
+        )
+        for column, entries in per_column.items()
+    }
+
+
 def _registry_descriptions(conn: psycopg.Connection, signal: str) -> dict[str, tuple[str, str]]:
     """column_name -> (description, useful_for) for promoted rows of this signal + resource."""
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT DISTINCT ON (column_name) column_name, "
+            "SELECT column_name, signal_name, "
             "coalesce(description, ''), coalesce(useful_for, '') "
             "FROM meta.column_registry "
-            "WHERE status = 'promoted' AND signal IN (%s, 'resource') AND column_name IS NOT NULL "
-            "ORDER BY column_name, signal_name, attr_path",
+            "WHERE status = 'promoted' AND signal IN (%s, 'resource') AND column_name IS NOT NULL",
             (signal,),
         )
-        return {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+        return _fold_descriptions([(r[0], r[1], r[2], r[3]) for r in cur.fetchall()])
 
 
 def _profile_table(
