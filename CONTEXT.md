@@ -70,7 +70,16 @@ _Avoid_: attr map, column table
 `meta.column_registry` — the deployed projection of the **Column spec** in Postgres: every promoted column and known `attrs` key with type, description, what it's useful for, status. Source of truth for the generated data dictionary and the sweep's live-drift check.
 
 **Drift**:
-An `attrs`/`resource` key observed in the raw reservoir but absent from the column registry — the signal that Anthropic added new telemetry. Surfaced on demand by prepared DuckDB queries (`tools/`) over the reservoir; analysis is manual. Postgres cannot detect it — schema-v2 drops the JSONB there.
+An `attrs`/`resource` key observed in the raw reservoir but absent from the column registry — the signal that Anthropic added new telemetry. Surfaced on demand by prepared DuckDB queries (`tools/`) over the reservoir; analysis is manual. Postgres cannot detect it — schema-v2 drops the JSONB there. Concerns *unclassified* keys only; a classified key whose evidence has gone stale is **basis drift**.
+_Avoid_: basis drift (a distinct term, below)
+
+**Kept basis**:
+The reason an attribute key is classified `kept` rather than promoted or denied, drawn from a closed set: **`nature`** (identity or unbounded cardinality — what the key *is*), **`constant`** (one value across the observed window), **`collinear`** (functionally determined by another key), **`thin`** (reaching too few seats to argue a value case). Only `nature` is unfalsifiable; the other three are claims about observed data that a fleet change can invalidate. Every `kept` key carries exactly one.
+_Avoid_: kept reason, keep rationale, classification evidence
+
+**Basis drift**:
+Live reservoir data contradicting a key's **kept basis** — a second value under `constant`, a broken dependency under `collinear`, seat spread under `thin`. Unlike **drift** it concerns keys already classified, so no new key appears; the classification is simply no longer true. Detected on demand against a recent window; `nature` keys are exempt by construction.
+_Avoid_: stale classification, kept-key drift, evidence rot
 
 ### Presentation
 
