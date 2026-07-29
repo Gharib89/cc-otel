@@ -79,16 +79,20 @@ def _columns(conn: psycopg.Connection, table: str) -> list[tuple[str, str]]:
 
 
 # Narrowest-first: a polysemous column's groups are labelled by the first of these that
-# tells them apart. Event family reads best (`api_error: ...`) but is `*` for every
+# tells them apart. Signal name reads best (`api_error: ...`) but is `*` for every
 # resource-shaped attribute, and two source attr paths can share one column — so the
-# ladder falls back until the labels discriminate. The full grain is unique by
-# construction (the registry's primary key), so the last rung always succeeds.
+# ladder falls back until the labels discriminate.
 _QUALIFIERS: tuple[Callable[[RegistryRow], str], ...] = (
     lambda r: r.signal_name,
     lambda r: r.attr_path,
     lambda r: r.signal,
-    lambda r: f"{r.signal}/{r.signal_name}/{r.attr_path}",
 )
+
+
+def _full_grain(row: RegistryRow) -> str:
+    """The registry's grain is unique by construction, so labelling by the whole of it
+    always discriminates — the terminal rung, needed only if all three above collide."""
+    return f"{row.signal}/{row.signal_name}/{row.attr_path}"
 
 
 def _discriminating_qualifier(
@@ -98,14 +102,14 @@ def _discriminating_qualifier(
         labels = [label for rows in groups.values() for label in {qualifier(r) for r in rows}]
         if len(labels) == len(set(labels)):  # no label shared by two groups
             return qualifier
-    return _QUALIFIERS[-1]
+    return _full_grain
 
 
-def _qualify(rows: list[RegistryRow], text: Callable[[RegistryRow], str]) -> str:
+def _qualify(rows: list[RegistryRow], text_of: Callable[[RegistryRow], str]) -> str:
     """Fold one column's registry rows into a single cell for the given text field.
 
     The registry's grain is ``(signal, signal_name, attr_path)``, so a promoted column can
-    carry a different meaning per event family (`duration_ms`, `trigger`) or per source
+    carry a different meaning per signal name (`duration_ms`, `trigger`) or per source
     attribute (`user_account_id`). Grouping is by **text**, not by row: rows sharing one
     wording collapse into a single labelled group, which is what stops the cell growing
     once per registry row. A column with one distinct meaning renders bare, exactly as it
@@ -113,13 +117,13 @@ def _qualify(rows: list[RegistryRow], text: Callable[[RegistryRow], str]) -> str
     """
     groups: dict[str, list[RegistryRow]] = {}
     for row in rows:
-        if text(row):  # an undescribed row is a registry gap, not a rival meaning
-            groups.setdefault(text(row), []).append(row)
+        if text_of(row):  # an undescribed row is a registry gap, not a rival meaning
+            groups.setdefault(text_of(row), []).append(row)
     if len(groups) <= 1:
         return next(iter(groups), "")
     qualifier = _discriminating_qualifier(groups)
     labelled = sorted(
-        ((sorted({qualifier(r) for r in rows}), body) for body, rows in groups.items()),
+        ((sorted({qualifier(r) for r in group_rows}), body) for body, group_rows in groups.items()),
         key=lambda g: g[0][0],
     )
     return " / ".join(f"{', '.join(labels)}: {body}" for labels, body in labelled)
@@ -136,10 +140,10 @@ def _fold_descriptions(rows: list[RegistryRow]) -> dict[str, tuple[str, str]]:
         per_column.setdefault(row.column_name, []).append(row)
     return {
         column: (
-            _qualify(rows, lambda r: r.description),
-            _qualify(rows, lambda r: r.useful_for),
+            _qualify(column_rows, lambda r: r.description),
+            _qualify(column_rows, lambda r: r.useful_for),
         )
-        for column, rows in per_column.items()
+        for column, column_rows in per_column.items()
     }
 
 

@@ -19,8 +19,8 @@ def _row(
     return RegistryRow(column_name, signal, signal_name, attr_path, description, useful_for)
 
 
-def test_fold_qualifies_a_polysemous_column_by_event_family():
-    # `trigger` is promoted under two event families with different meanings (#368);
+def test_fold_qualifies_a_polysemous_column_by_signal_name():
+    # `trigger` is promoted under two signal names with different meanings (#368);
     # collapsing to one of them presented a minority meaning as the whole truth.
     folded = _fold_descriptions(
         [
@@ -35,7 +35,7 @@ def test_fold_qualifies_a_polysemous_column_by_event_family():
     )
 
 
-def test_fold_leaves_a_single_meaning_bare_however_many_families_carry_it():
+def test_fold_leaves_a_single_meaning_bare_however_many_rows_carry_it():
     # The overwhelming majority of promoted columns are in this case; qualifying them
     # would churn every row of the committed dictionary for no added truth.
     folded = _fold_descriptions(
@@ -49,7 +49,7 @@ def test_fold_leaves_a_single_meaning_bare_however_many_families_carry_it():
     assert folded["model"] == ("Model slug.", "")
 
 
-def test_fold_groups_families_that_share_a_meaning_inside_a_polysemous_column():
+def test_fold_groups_signal_names_that_share_a_meaning_inside_a_polysemous_column():
     folded = _fold_descriptions(
         [
             _row("duration_ms", "events", "tool_result", "duration_ms", "Tool execution duration."),
@@ -63,9 +63,9 @@ def test_fold_groups_families_that_share_a_meaning_inside_a_polysemous_column():
     )
 
 
-def test_fold_falls_back_to_attr_path_when_the_event_family_cannot_discriminate():
+def test_fold_falls_back_to_attr_path_when_the_signal_name_cannot_discriminate():
     # Two source attributes promoted into one column: `signal_name` is `*` on both rows,
-    # so an event-family prefix would render a useless `*: ... / *: ...` (#368).
+    # so a signal-name prefix would render a useless `*: ... / *: ...` (#368).
     folded = _fold_descriptions(
         [
             _row("user_account_id", "events", "*", "user.account_id", "Anthropic tagged id."),
@@ -79,8 +79,8 @@ def test_fold_falls_back_to_attr_path_when_the_event_family_cannot_discriminate(
     )
 
 
-def test_fold_falls_back_to_signal_when_neither_family_nor_attr_path_discriminates():
-    # Same attr path, same `*` family, drifting wording across signals — only the signal
+def test_fold_falls_back_to_signal_when_neither_signal_name_nor_attr_path_discriminates():
+    # Same attr path, same `*` signal name, drifting wording across signals — only the signal
     # itself tells the two texts apart.
     folded = _fold_descriptions(
         [
@@ -111,8 +111,8 @@ def test_fold_treats_description_and_useful_for_independently():
 
 
 def test_fold_never_emits_a_prefix_with_nothing_after_it():
-    # An undescribed family is a registry gap, not a competing meaning — it must not
-    # produce a dangling `family: ` in the cell.
+    # An undescribed row is a registry gap, not a competing meaning — it must not
+    # produce a dangling `label: ` in the cell.
     folded = _fold_descriptions(
         [
             _row("effort", "events", "api_request", "effort", "Reasoning-effort level."),
