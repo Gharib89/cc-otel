@@ -94,7 +94,9 @@ Promoting a key (or adding any registry row) ships as **one PR** carrying, toget
 2. **Generate the migration** — `uv run python -m tools.spec_sync --name <slug>` diffs the
    spec against a from-zero DB, writes the `raw.*` DDL + `meta.column_registry` migration
    closing the delta, applies it, and regenerates `db/schema.sql`. (**Needs Docker** — in an
-   unattended run, do this before hand-off.) Renames, type changes, and **in-place `status`
+   unattended run, do this before hand-off. On Windows the migration lands but the
+   `schema.sql` step throws — Python cannot exec a `.sh`; finish it with
+   `bash scripts/dev-migrate.sh` under git-bash.) Renames, type changes, and **in-place `status`
    edits** are refused: the registry diff is a set diff over the whole row, so editing a
    `kept` row to `promoted` reads as a missing row *plus* an orphan row, and the generator
    refuses orphans. Hand-author those as an `UPDATE` with a matching down body, then let

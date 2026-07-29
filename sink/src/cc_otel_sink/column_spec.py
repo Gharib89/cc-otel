@@ -565,8 +565,8 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "kept",
         description="MCP server attribution.",
         decided_at="2026-07-29",
-        notes="#358: exactly redundant with raw.events.api_request -- 20 (server, tool) pairs "
-        "both sides, 0 either-only, cost within 0.04%",
+        notes="kept basis collinear (#358): exactly redundant with raw.events.api_request -- "
+        "20 (server, tool) pairs both sides, 0 either-only, cost within 0.04%",
     ),
     ColumnSpec(
         "metrics",
@@ -575,7 +575,8 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "kept",
         description="MCP tool attribution.",
         decided_at="2026-07-29",
-        notes="#358: same pair; promoting would mint a second, ambiguous MCP-cost path (ADR-0008)",
+        notes="kept basis collinear (#358): same pair; promoting would mint a second, ambiguous "
+        "MCP-cost path (ADR-0008)",
     ),
     ColumnSpec(
         "metrics",
@@ -1805,7 +1806,8 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "kept",
         description="Message UUID.",
         decided_at="2026-07-29",
-        notes="#359: covered by the promoted prompt_id, which reaches all three families",
+        notes="kept basis collinear (#359): covered by the promoted prompt_id, which reaches all "
+        "three families",
     ),
     ColumnSpec(
         "events",
@@ -1814,7 +1816,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "kept",
         description="Message UUID.",
         decided_at="2026-07-29",
-        notes="#359: covered by the promoted prompt_id",
+        notes="kept basis collinear (#359): covered by the promoted prompt_id",
     ),
     ColumnSpec(
         "events",
@@ -1960,8 +1962,8 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "kept",
         description="Model the subagent finished on.",
         decided_at="2026-07-29",
-        notes="#358: api_request already carries `model` alongside the agent-bearing query_source, "
-        "so model-per-agent exists at request grain",
+        notes="kept basis collinear (#358): api_request already carries `model` alongside the "
+        "agent-bearing query_source, so model-per-agent exists at request grain",
     ),
     ColumnSpec(
         "events",
@@ -1970,8 +1972,9 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "kept",
         description="Whether the subagent's model changed mid-run.",
         decided_at="2026-07-29",
-        notes="#370: surfaced by the post-#369 sweep with no group verdict; no report states a rate "
-        "it is the numerator of, so the near-zero-counter rule (#359) lands it kept",
+        notes="#370: kept basis UNMEASURED -- surfaced by the post-#369 sweep, after the #351 "
+        "profiling run, so no group measured it. Kept because no report states a rate it is the "
+        "numerator of (#359 near-zero-counter rule); revisit under #366",
     ),
     ColumnSpec(
         "events",
@@ -2012,8 +2015,9 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "kept",
         description="Where the survey event originated.",
         decided_at="2026-07-29",
-        notes="#370: surfaced by the post-#369 sweep with no group verdict; the whole "
-        "feedback_survey family answers Anthropic's question about survey uptake (#359)",
+        notes="kept basis thin (#370): surfaced by the post-#369 sweep with no group verdict; the "
+        "whole feedback_survey family is a 28 -> 21 -> 5 funnel answering Anthropic's question "
+        "about survey uptake, not ITWorx's about adoption (#359)",
     ),
     ColumnSpec(
         "events",
@@ -2022,7 +2026,8 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "kept",
         description="Server that originated the survey event.",
         decided_at="2026-07-29",
-        notes="#370: surfaced by the post-#369 sweep with no group verdict; same family reading",
+        notes="kept basis thin (#370): surfaced by the post-#369 sweep with no group verdict; same "
+        "family reading",
     ),
     ColumnSpec(
         "events",
@@ -2156,8 +2161,8 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "kept",
         description="Where the tool came from (builtin/mcp/sdk_host_builtin_mcp).",
         decided_at="2026-07-29",
-        notes="#358: redundant with the promoted tool_name='mcp_tool' -- 1,027 rows both ways, "
-        "adds 34 of 49,250 (0.07%)",
+        notes="kept basis collinear (#358): redundant with the promoted tool_name='mcp_tool' -- "
+        "1,027 rows both ways, adds 34 of 49,250 (0.07%)",
     ),
     ColumnSpec(
         "events",

@@ -331,10 +331,8 @@ def _run_author(name: str, *, allow_destructive: bool) -> int:
     dest = _MIGRATIONS_DIR / f"{stamp}_{name}.sql"
     dest.write_text(sql, encoding="utf-8")
     print(f"spec_sync: wrote {dest.relative_to(_REPO_ROOT)}")
-    # Re-apply from zero (incl. the new file) and regenerate schema.sql. Invoked
-    # through `bash` explicitly: Windows cannot exec a .sh directly (WinError 193),
-    # and this authoring loop runs on the operator's machine, not only in CI.
-    subprocess.run(["bash", str(_REPO_ROOT / "scripts" / "dev-migrate.sh")], check=True)
+    # Re-apply from zero (incl. the new file) and regenerate schema.sql.
+    subprocess.run([str(_REPO_ROOT / "scripts" / "dev-migrate.sh")], check=True)
     with _ephemeral_pg.ephemeral_db(_CONTAINER, _MIGRATIONS_DIR) as conn:
         if not compute_delta(conn).empty():
             print("spec_sync: generated migration did not close the delta.", file=sys.stderr)
