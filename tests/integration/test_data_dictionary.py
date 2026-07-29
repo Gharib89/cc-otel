@@ -32,4 +32,7 @@ def test_build_joins_registry_with_live_stats(conn):
     assert "| `claude_code.token.usage` |" in md
     # kept/denied section lists blob-only registry keys
     assert "## Kept & denied attributes (not in Postgres)" in md
-    assert "`service.name`" in md
+    assert "`host.arch`" in md
+    # ...and only those: a promoted resource attr belongs to the profiled tables,
+    # not the blob-only section (service.name promoted in #357).
+    assert "`service.name`" not in md.split("## Kept & denied attributes", 1)[1]
