@@ -926,7 +926,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "promoted",
         "user_email",
         "TEXT",
-        description="Developer identity (normalized).",
+        description="Developer identity (normalized lowercase/trim).",
         useful_for="dim_user join",
         decided_at="2026-07-13",
         notes="identity kept per #6",
