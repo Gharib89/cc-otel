@@ -442,7 +442,31 @@ CREATE TABLE raw.events (
     log_trace_id text,
     log_span_id text,
     dropped_attributes_count integer,
-    process_owner text
+    process_owner text,
+    service_name text,
+    os_type text,
+    terminal_type text,
+    workflow_name text,
+    mcp_connection_server_name text,
+    mcp_connection_status text,
+    mcp_transport_type text,
+    mcp_connection_server_scope text,
+    mcp_server_scope text,
+    agent_type text,
+    subagent_is_async boolean,
+    subagent_tool_uses bigint,
+    subagent_total_tokens bigint,
+    plugin_scope text,
+    plugin_version text,
+    skill_invocation_trigger text,
+    skill_source text,
+    decision_source text,
+    error_type text,
+    status_code smallint,
+    num_hooks smallint,
+    num_success smallint,
+    hook_source text,
+    total_duration_ms bigint
 );
 
 
@@ -559,7 +583,10 @@ CREATE TABLE raw.metrics (
     start_type text,
     scope_name text,
     scope_version text,
-    process_owner text
+    process_owner text,
+    terminal_type text,
+    service_name text,
+    os_type text
 );
 
 
@@ -1681,4 +1708,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260728175738'),
     ('20260729025922'),
     ('20260729030012'),
+    ('20260729102726'),
+    ('20260729103302'),
     ('20260729115029');

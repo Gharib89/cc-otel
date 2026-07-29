@@ -80,9 +80,17 @@ Promoting a key (or adding any registry row) ships as **one PR** carrying, toget
 
 1. **Spec row** — add the `ColumnSpec(...)` to `sink/src/cc_otel_sink/column_spec.py`. A
    plain attribute promotion is `kind="attr"` (the flat `attr_columns` map picks it up with
-   no parser edit); a value read from OTLP structure is `kind="structural"` and a hand
-   coalesce is `kind="derived"` — those two need matching parser code. The import-time
-   invariants reject a malformed row immediately.
+   no parser edit); an ordered coalesce over several attr paths is `kind="derived"`, also
+   parser-free (`derived_coalesce` is generic). Only `kind="structural"` — a value read from
+   OTLP structure rather than the attribute map — needs matching parser code. The
+   import-time invariants reject a malformed row immediately; two are easy to trip:
+   a `kind="attr"` column takes **exactly one attr path per signal** (invariant 8 — where
+   the fleet emits one path across several event families the column is polysemous and the
+   `signal_name` rows document it; where the paths differ they get their own columns), and a
+   `kept`/`denied` row must not contradict a `promoted` one for the same path (invariant 7).
+   A **resource** attribute is registered once as `resource`/`*` and its promoted column
+   lands on **both** raw tables — the sink merges the resource block into each signal's flat
+   namespace, so a resource-only promotion is `kind="derived"` with a single source (#357).
 2. **Generate the migration** — `uv run python -m tools.spec_sync --name <slug>` diffs the
    spec against a from-zero DB, writes the `raw.*` DDL + `meta.column_registry` migration
    closing the delta, applies it, and regenerates `db/schema.sql`. (**Needs Docker** — in an
@@ -91,7 +99,7 @@ Promoting a key (or adding any registry row) ships as **one PR** carrying, toget
    `kept` row to `promoted` reads as a missing row *plus* an orphan row, and the generator
    refuses orphans. Hand-author those as an `UPDATE` with a matching down body, then let
    `--check` prove convergence.
-3. **Parser** (structural/derived columns only) — add the extraction/coalesce code in
+3. **Parser** (`kind="structural"` only) — add the extraction code in
    `sink/src/cc_otel_sink/parser.py`; a fixture test proves every promoted column is
    populated.
 4. **Tests** — sink unit tests covering the new column; integration coverage if it feeds a

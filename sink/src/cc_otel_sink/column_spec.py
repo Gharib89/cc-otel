@@ -437,6 +437,18 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         decided_at="2026-07-13",
         notes="wrapper telemetry (ADR-0003)",
     ),
+    ColumnSpec(
+        "metrics",
+        "*",
+        "terminal.type",
+        "promoted",
+        "terminal_type",
+        "TEXT",
+        description="Terminal app type (terminal / VS Code / non-interactive).",
+        useful_for="surface split; non-interactive is adoption, not noise",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#357): 15 of 19 seats run non-interactive",
+    ),
     # ===== metrics: kept (blob-only) =====
     ColumnSpec(
         "metrics",
@@ -444,14 +456,6 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "user.id",
         "kept",
         description="Anonymous install id.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "metrics",
-        "*",
-        "terminal.type",
-        "kept",
-        description="Terminal app type.",
         decided_at="2026-07-13",
     ),
     ColumnSpec(
@@ -556,6 +560,25 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
     ),
     ColumnSpec(
         "metrics",
+        "claude_code.cost.usage",
+        "mcp_server.name",
+        "kept",
+        description="MCP server attribution.",
+        decided_at="2026-07-29",
+        notes="#358: exactly redundant with raw.events.api_request -- 20 (server, tool) pairs "
+        "both sides, 0 either-only, cost within 0.04%",
+    ),
+    ColumnSpec(
+        "metrics",
+        "claude_code.cost.usage",
+        "mcp_tool.name",
+        "kept",
+        description="MCP tool attribution.",
+        decided_at="2026-07-29",
+        notes="#358: same pair; promoting would mint a second, ambiguous MCP-cost path (ADR-0008)",
+    ),
+    ColumnSpec(
+        "metrics",
         "*",
         "gen_ai.operation.name",
         "kept",
@@ -640,10 +663,14 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
     # The three identity rows below (session.id, user.email, user.account_id) record
     # the ADR-0003 wrapper contract: a wrapper
     # may put identity on the *resource* block rather than the data point, and the
-    # sink reads it through the same merge. They create no column of their own
-    # (spec_raw_columns builds DDL for metrics/events), but without them the sweep's
+    # sink reads it through the same merge. Without them the sweep's
     # one-directional resource/* fallback still reads them unclassified at the
     # resource path (#353).
+    #
+    # A promoted row here owns its column on *both* raw tables (``promoted_columns``);
+    # the identity rows below merely mirror a column an own-signal row already
+    # declares, while service.name and os.type are resource-only and reach the DDL
+    # through this projection alone (#357).
     ColumnSpec(
         "resource",
         "*",
@@ -697,9 +724,14 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "resource",
         "*",
         "service.name",
-        "kept",
-        description="Service name (claude-code).",
-        decided_at="2026-07-13",
+        "promoted",
+        "service_name",
+        "TEXT",
+        "derived",
+        description="Emitting surface: claude-code / claude-code-desktop / cowork.",
+        useful_for="desktop adoption; the only key separating the three surfaces",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#357); resource-only, so kind=derived reaches both raw tables",
     ),
     ColumnSpec(
         "resource",
@@ -714,7 +746,19 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         decided_at="2026-07-13",
         notes="coalesced under attrs app.version",
     ),
-    ColumnSpec("resource", "*", "os.type", "kept", description="OS type.", decided_at="2026-07-13"),
+    ColumnSpec(
+        "resource",
+        "*",
+        "os.type",
+        "promoted",
+        "os_type",
+        "TEXT",
+        "derived",
+        description="OS type; carries the WSL-vs-native-Windows split on its own.",
+        useful_for="fleet composition figure",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#357); wsl.version is exactly collinear with os_type='linux'",
+    ),
     ColumnSpec(
         "resource", "*", "os.version", "kept", description="OS version.", decided_at="2026-07-13"
     ),
@@ -1396,6 +1440,283 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         description="@-mention target type.",
         decided_at="2026-07-13",
     ),
+    # ===== events: promoted by the #350 curation pass (#357 / #358 / #359) =====
+    #
+    # All kept -> promoted flips, all kind="attr" (no parser edit). Density posture and
+    # the one-attr-path-per-column rule: #354.
+    ColumnSpec(
+        "events",
+        "*",
+        "terminal.type",
+        "promoted",
+        "terminal_type",
+        "TEXT",
+        description="Terminal app type (terminal / VS Code / non-interactive).",
+        useful_for="surface split; non-interactive is adoption, not noise",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#357): 15 of 19 seats run non-interactive",
+    ),
+    ColumnSpec(
+        "events",
+        "*",
+        "workflow.name",
+        "promoted",
+        "workflow_name",
+        "TEXT",
+        description="Workflow name on workflow-spawned agents.",
+        useful_for="dynamic-workflow adoption (a figure, not a slicer)",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#357); workflow.run_id stays kept as high-cardinality run identity",
+    ),
+    ColumnSpec(
+        "events",
+        "mcp_server_connection",
+        "server_name",
+        "promoted",
+        "mcp_connection_server_name",
+        "TEXT",
+        description="MCP server display name on the connection event.",
+        useful_for="installed-and-idle MCP servers: ~25 connect, 8 are ever paid for",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#358); a wider population than mcp_server_name, and display "
+        "names not slugs -- a join needs an explicit '.'/' '/':' -> '_' transform",
+    ),
+    ColumnSpec(
+        "events",
+        "mcp_server_connection",
+        "status",
+        "promoted",
+        "mcp_connection_status",
+        "TEXT",
+        description="MCP connection status (connected/disconnected/failed).",
+        useful_for="separates idle from broken -- retire vs fix",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#358); failed on 9 seats, and it carries what error_code cannot",
+    ),
+    ColumnSpec(
+        "events",
+        "mcp_server_connection",
+        "transport_type",
+        "promoted",
+        "mcp_transport_type",
+        "TEXT",
+        description="MCP transport (claudeai-proxy/stdio/ws-ide).",
+        useful_for="hosted vs local; what IS must allow through the network",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#358); server-static, promoted only because no server "
+        "dimension exists today",
+    ),
+    ColumnSpec(
+        "events",
+        "mcp_server_connection",
+        "server_scope",
+        "promoted",
+        "mcp_connection_server_scope",
+        "TEXT",
+        description="MCP server scope on the connection event (claudeai/dynamic/project/local/user).",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#358); its own column, not shared with tool_result's "
+        "mcp_server_scope -- distinct attr paths split under #354's one-path rule",
+    ),
+    ColumnSpec(
+        "events",
+        "tool_result",
+        "mcp_server_scope",
+        "promoted",
+        "mcp_server_scope",
+        "TEXT",
+        description="MCP server scope on the tool-result event.",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#358); shared vocabulary with the connection event's "
+        "server_scope, separate column (#354)",
+    ),
+    ColumnSpec(
+        "events",
+        "subagent_completed",
+        "agent_type",
+        "promoted",
+        "agent_type",
+        "TEXT",
+        description="Subagent type on the completion event.",
+        useful_for="subagent run counts (query_source counts requests, not runs)",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#358); own column, not an alias of agent_name -- #354 "
+        "reversed that reuse: it was a density compromise and density is free here",
+    ),
+    ColumnSpec(
+        "events",
+        "subagent_completed",
+        "is_async",
+        "promoted",
+        "subagent_is_async",
+        "BOOLEAN",
+        description="Background-agent flag.",
+        useful_for="nothing else records background-agent use",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#358)",
+    ),
+    ColumnSpec(
+        "events",
+        "subagent_completed",
+        "total_tool_uses",
+        "promoted",
+        "subagent_tool_uses",
+        "BIGINT",
+        description="Tool calls made by the subagent.",
+        useful_for="irreducible: tool_decision.query_source is NULL on all rows",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#358)",
+    ),
+    ColumnSpec(
+        "events",
+        "subagent_completed",
+        "total_tokens",
+        "promoted",
+        "subagent_total_tokens",
+        "BIGINT",
+        description="Tokens consumed by the subagent run.",
+        useful_for="query_source='agent:custom' collapses every custom agent into one bucket",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#358); own column, never a reuse of input/output_tokens -- "
+        "those are per-request and a SUM across both families would double-count",
+    ),
+    ColumnSpec(
+        "events",
+        "plugin_loaded",
+        "plugin.scope",
+        "promoted",
+        "plugin_scope",
+        "TEXT",
+        description="Plugin scope (official/user-local).",
+        useful_for="per-seat fact: the same plugin loads official on some seats, user-local on others",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#358)",
+    ),
+    ColumnSpec(
+        "events",
+        "plugin_loaded",
+        "plugin.version",
+        "promoted",
+        "plugin_version",
+        "TEXT",
+        description="Plugin version.",
+        useful_for="staleness spread across seats",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#358); 85% fill",
+    ),
+    ColumnSpec(
+        "events",
+        "skill_activated",
+        "invocation_trigger",
+        "promoted",
+        "skill_invocation_trigger",
+        "TEXT",
+        description="Skill invocation trigger (user-slash/claude-proactive/nested-skill).",
+        useful_for="human pull vs model push; a slicer, never a filter baked into a measure",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#358); deliberately not a third vocabulary on `trigger`",
+    ),
+    ColumnSpec(
+        "events",
+        "skill_activated",
+        "skill.source",
+        "promoted",
+        "skill_source",
+        "TEXT",
+        description="Skill source (userSettings/projectSettings/plugin/bundled/builtin).",
+        useful_for="do skills spread through the team or stay personal",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#358); sparsest column in the batch at 0.25% populated, "
+        "four times denser than the shipped mention_type (#354)",
+    ),
+    ColumnSpec(
+        "events",
+        "tool_result",
+        "decision_source",
+        "promoted",
+        "decision_source",
+        "TEXT",
+        description="Who authorised the tool call (config/hook/user_temporary/...).",
+        useful_for="permission friction: user_temporary on 12 of 13 seats",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#359); `decision` says accept/reject, nothing said who authorised",
+    ),
+    ColumnSpec(
+        "events",
+        "tool_result",
+        "error_type",
+        "promoted",
+        "error_type",
+        "TEXT",
+        description="Tool failure category (not the message).",
+        useful_for="the only route to a failure taxonomy -- free-text `error` is denied",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#359); ShellError 1,108 across 15 seats",
+    ),
+    ColumnSpec(
+        "events",
+        "*",
+        "status_code",
+        "promoted",
+        "status_code",
+        "SMALLINT",
+        description="HTTP status code.",
+        useful_for="decomposes fact_api_error_rate: 429 (tier) vs 529 (overload) vs 500 (fault)",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#359); 24 records / 6 seats -- survives the near-zero-counter "
+        "rule because it decomposes a rate the report already publishes",
+    ),
+    ColumnSpec(
+        "events",
+        "*",
+        "num_hooks",
+        "promoted",
+        "num_hooks",
+        "SMALLINT",
+        description="Hooks matched for the event.",
+        useful_for="how much hook machinery the fleet runs",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#359); populates across hook_execution_start / "
+        "hook_execution_complete / hook_registered, not one family",
+    ),
+    ColumnSpec(
+        "events",
+        "hook_execution_complete",
+        "num_success",
+        "promoted",
+        "num_success",
+        "SMALLINT",
+        description="Hooks that succeeded.",
+        useful_for="with num_hooks, states the failure count exactly",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#359); the failure *mode* split stays kept -- "
+        "num_hooks - num_success equals the three mode counters on all 17,077 records",
+    ),
+    ColumnSpec(
+        "events",
+        "*",
+        "hook_source",
+        "promoted",
+        "hook_source",
+        "TEXT",
+        description="Where the hook came from (settings/pluginHook/...).",
+        useful_for="attributes hook load to plugins, which the plugin columns cannot",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#359); populates across three hook families",
+    ),
+    ColumnSpec(
+        "events",
+        "hook_execution_complete",
+        "total_duration_ms",
+        "promoted",
+        "total_duration_ms",
+        "BIGINT",
+        description="Total time across the hooks run for one event.",
+        useful_for="hook overhead: bridge_session_hook has executions and no time",
+        decided_at="2026-07-29",
+        notes="promoted from kept (#359); own column, not an alias of duration_ms -- #354 "
+        "reversed that reuse. A sum over N hooks is not one operation's latency",
+    ),
     # ===== events: kept (blob-only) =====
     ColumnSpec(
         "events",
@@ -1403,14 +1724,6 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "user.id",
         "kept",
         description="Anonymous install id.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "*",
-        "terminal.type",
-        "kept",
-        description="Terminal app type.",
         decided_at="2026-07-13",
     ),
     ColumnSpec(
@@ -1432,14 +1745,6 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
     ),
     ColumnSpec(
         "events", "*", "attempt", "kept", description="API attempt number.", decided_at="2026-07-13"
-    ),
-    ColumnSpec(
-        "events",
-        "*",
-        "status_code",
-        "kept",
-        description="HTTP status code.",
-        decided_at="2026-07-13",
     ),
     ColumnSpec(
         "events",
@@ -1470,22 +1775,11 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "events", "*", "safe_mode", "kept", description="Safe-mode flag.", decided_at="2026-07-13"
     ),
     ColumnSpec(
-        "events", "*", "hook_source", "kept", description="Hook source.", decided_at="2026-07-13"
-    ),
-    ColumnSpec(
         "events",
         "*",
         "managed_only",
         "kept",
         description="Managed-only flag.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "*",
-        "num_hooks",
-        "kept",
-        description="Hook count for the event.",
         decided_at="2026-07-13",
     ),
     ColumnSpec(
@@ -1506,11 +1800,21 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
     ),
     ColumnSpec(
         "events",
-        "hook_execution_complete",
-        "num_success",
+        "assistant_response",
+        "message.uuid",
         "kept",
-        description="Successful hooks.",
-        decided_at="2026-07-13",
+        description="Message UUID.",
+        decided_at="2026-07-29",
+        notes="#359: covered by the promoted prompt_id, which reaches all three families",
+    ),
+    ColumnSpec(
+        "events",
+        "user_prompt",
+        "message.uuid",
+        "kept",
+        description="Message UUID.",
+        decided_at="2026-07-29",
+        notes="#359: covered by the promoted prompt_id",
     ),
     ColumnSpec(
         "events",
@@ -1538,14 +1842,6 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
     ),
     ColumnSpec(
         "events",
-        "hook_execution_complete",
-        "total_duration_ms",
-        "kept",
-        description="Total hook duration.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
         "hook_registered",
         "hook_matcher",
         "kept",
@@ -1559,22 +1855,6 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "hook_type",
         "kept",
         description="Hook type.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "plugin_loaded",
-        "plugin.version",
-        "kept",
-        description="Plugin version.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "plugin_loaded",
-        "plugin.scope",
-        "kept",
-        description="Plugin scope.",
         decided_at="2026-07-13",
     ),
     ColumnSpec(
@@ -1652,57 +1932,9 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
     ColumnSpec(
         "events",
         "skill_activated",
-        "skill.source",
-        "kept",
-        description="Skill source.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "skill_activated",
-        "invocation_trigger",
-        "kept",
-        description="Skill invocation trigger.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "skill_activated",
         "skill.kind",
         "kept",
         description="Skill kind (workflow).",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "subagent_completed",
-        "is_async",
-        "kept",
-        description="Async subagent flag.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "subagent_completed",
-        "total_tokens",
-        "kept",
-        description="Subagent total tokens.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "subagent_completed",
-        "total_tool_uses",
-        "kept",
-        description="Subagent tool-use count.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "subagent_completed",
-        "agent_type",
-        "kept",
-        description="Subagent type.",
         decided_at="2026-07-13",
     ),
     ColumnSpec(
@@ -1720,6 +1952,26 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "kept",
         description="Built-in subagent flag.",
         decided_at="2026-07-13",
+    ),
+    ColumnSpec(
+        "events",
+        "subagent_completed",
+        "final_model",
+        "kept",
+        description="Model the subagent finished on.",
+        decided_at="2026-07-29",
+        notes="#358: api_request already carries `model` alongside the agent-bearing query_source, "
+        "so model-per-agent exists at request grain",
+    ),
+    ColumnSpec(
+        "events",
+        "subagent_completed",
+        "model_swapped",
+        "kept",
+        description="Whether the subagent's model changed mid-run.",
+        decided_at="2026-07-29",
+        notes="#370: surfaced by the post-#369 sweep with no group verdict; no report states a rate "
+        "it is the numerator of, so the near-zero-counter rule (#359) lands it kept",
     ),
     ColumnSpec(
         "events",
@@ -1752,6 +2004,25 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "kept",
         description="Survey override flag.",
         decided_at="2026-07-13",
+    ),
+    ColumnSpec(
+        "events",
+        "feedback_survey",
+        "event_origin",
+        "kept",
+        description="Where the survey event originated.",
+        decided_at="2026-07-29",
+        notes="#370: surfaced by the post-#369 sweep with no group verdict; the whole "
+        "feedback_survey family answers Anthropic's question about survey uptake (#359)",
+    ),
+    ColumnSpec(
+        "events",
+        "feedback_survey",
+        "event_origin_server",
+        "kept",
+        description="Server that originated the survey event.",
+        decided_at="2026-07-29",
+        notes="#370: surfaced by the post-#369 sweep with no group verdict; same family reading",
     ),
     ColumnSpec(
         "events",
@@ -1821,30 +2092,6 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
     ColumnSpec(
         "events",
         "mcp_server_connection",
-        "status",
-        "kept",
-        description="Connection status.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "mcp_server_connection",
-        "transport_type",
-        "kept",
-        description="Transport type.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "mcp_server_connection",
-        "server_scope",
-        "kept",
-        description="Server scope.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "mcp_server_connection",
         "error_code",
         "kept",
         description="Connection error code.",
@@ -1856,14 +2103,6 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "is_plugin",
         "kept",
         description="Plugin-provided MCP flag.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "mcp_server_connection",
-        "server_name",
-        "kept",
-        description="MCP server name (details).",
         decided_at="2026-07-13",
     ),
     ColumnSpec(
@@ -1885,33 +2124,9 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
     ColumnSpec(
         "events",
         "tool_result",
-        "error_type",
-        "kept",
-        description="Error category (not the message).",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "tool_result",
         "decision_type",
         "kept",
         description="Decision type.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "tool_result",
-        "decision_source",
-        "kept",
-        description="Decision source.",
-        decided_at="2026-07-13",
-    ),
-    ColumnSpec(
-        "events",
-        "tool_result",
-        "mcp_server_scope",
-        "kept",
-        description="MCP server scope.",
         decided_at="2026-07-13",
     ),
     ColumnSpec(
@@ -1933,6 +2148,16 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         description="Tool args JSON (details-gated).",
         decided_at="2026-07-29",
         notes="#369: emitted as a JSON string, so the leaf sweep never reached it",
+    ),
+    ColumnSpec(
+        "events",
+        "tool_decision",
+        "tool_source",
+        "kept",
+        description="Where the tool came from (builtin/mcp/sdk_host_builtin_mcp).",
+        decided_at="2026-07-29",
+        notes="#358: redundant with the promoted tool_name='mcp_tool' -- 1,027 rows both ways, "
+        "adds 34 of 49,250 (0.07%)",
     ),
     ColumnSpec(
         "events",
@@ -2033,15 +2258,6 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "workflow.run_id",
         "kept",
         description="Workflow run id (wf_...) on workflow-spawned agents.",
-        decided_at="2026-07-13",
-        notes="v2.1.202+",
-    ),
-    ColumnSpec(
-        "events",
-        "*",
-        "workflow.name",
-        "kept",
-        description="Workflow name (custom unless details).",
         decided_at="2026-07-13",
         notes="v2.1.202+",
     ),
@@ -2250,15 +2466,35 @@ def derived_coalesce(
     return out
 
 
+def promoted_columns(
+    signal: Signal, spec: tuple[ColumnSpec, ...] = COLUMN_SPEC
+) -> tuple[ColumnSpec, ...]:
+    """Promoted rows owning a column on ``raw.<signal>``, in spec order.
+
+    A promoted ``resource`` row counts for **both** raw tables. A resource
+    attribute is registered once, as ``resource``/``*`` (the curation runbook's
+    rule), and the sink merges the resource block into each signal's flat
+    namespace — so ``derived_coalesce`` writes it for metrics and events alike and
+    the DDL has to carry it on both (#357 ``service_name`` / ``os_type``).
+    """
+    return tuple(
+        r
+        for r in spec
+        if r.status == "promoted"
+        and r.column_name is not None
+        and r.signal in (signal, "resource")
+    )
+
+
 def table_columns(signal: Signal, spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> tuple[str, ...]:
     """Distinct promoted column names for a signal's raw table, in spec order."""
     seen: set[str] = set()
     out: list[str] = []
-    for r in spec:
-        if r.signal == signal and r.status == "promoted" and r.column_name is not None:
-            if r.column_name not in seen:
-                seen.add(r.column_name)
-                out.append(r.column_name)
+    for r in promoted_columns(signal, spec):
+        assert r.column_name is not None  # promoted_columns filters on it
+        if r.column_name not in seen:
+            seen.add(r.column_name)
+            out.append(r.column_name)
     return tuple(out)
 
 
@@ -2369,6 +2605,7 @@ def _check_invariants(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> None:
     seen: set[tuple[str, str, str]] = set()
     col_types: dict[tuple[str, str], str] = {}
     attr_to_col: dict[tuple[str, str], str] = {}
+    col_to_attr: dict[tuple[str, str], str] = {}
     for r in spec:
         key = (r.signal, r.signal_name, r.attr_path)
         if key in seen:  # invariant 1: grain uniqueness
@@ -2406,6 +2643,22 @@ def _check_invariants(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> None:
             if prev_col is not None and prev_col != r.column_name:
                 raise ValueError(f"attr {r.attr_path} maps to multiple columns in {r.signal}")
             attr_to_col[ak] = r.column_name
+
+        # invariant 8: the reverse of 5 — a kind="attr" column has exactly one attr
+        # path per signal (#354's one-path rule). Two paths on one column is silent
+        # last-spec-row-wins in ``_apply_promoted``'s key-by-key pass the moment a
+        # record carries both; density is never a reason to alias. Only ``derived``
+        # is exempt — multi-source coalesce is what that kind is for.
+        if r.status == "promoted" and r.kind == "attr":
+            assert r.column_name is not None  # invariant 2 above
+            ck = (r.signal, r.column_name)
+            prev_attr = col_to_attr.get(ck)
+            if prev_attr is not None and prev_attr != r.attr_path:
+                raise ValueError(
+                    f"column {r.column_name} fed by multiple attr paths in {r.signal}: "
+                    f"{prev_attr}, {r.attr_path}"
+                )
+            col_to_attr[ck] = r.attr_path
 
     # invariant 4: every named metric grain is in the lint catalog (#168) — the
     # catalog carries metrics with no spec row too (commit/pr/cost), so this is

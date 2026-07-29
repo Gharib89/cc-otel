@@ -44,6 +44,8 @@ from cc_otel_sink.column_spec import (
     METRIC_NAMES,
     ColumnSpec,
     RegistryRow,
+    Signal,
+    promoted_columns,
     registry_rows,
 )
 
@@ -92,12 +94,20 @@ def spec_registry_rows(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> set[Regist
     return set(registry_rows(spec))
 
 
-def spec_raw_columns(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> dict[str, dict[str, str]]:
-    """``{table: {column: pg_type}}`` the spec expects in the ``raw.*`` DDL."""
-    out: dict[str, dict[str, str]] = {"metrics": {}, "events": {}}
-    for r in spec:
-        if r.status == "promoted" and r.signal in out and r.column_name and r.data_type:
-            out[r.signal][r.column_name] = _PG_TYPE[r.data_type]
+def spec_raw_columns(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> dict[Signal, dict[str, str]]:
+    """``{table: {column: pg_type}}`` the spec expects in the ``raw.*`` DDL.
+
+    ``promoted_columns`` owns which rows reach a table — notably that a promoted
+    ``resource`` row lands on both.
+    """
+    tables: tuple[Signal, ...] = ("metrics", "events")
+    out: dict[Signal, dict[str, str]] = {}
+    for table in tables:
+        out[table] = {
+            r.column_name: _PG_TYPE[r.data_type]
+            for r in promoted_columns(table, spec)
+            if r.column_name and r.data_type
+        }
     return out
 
 
@@ -185,9 +195,9 @@ def compute_delta(
     return delta
 
 
-def _spec_ddl_type(spec: tuple[ColumnSpec, ...], signal: str, column: str) -> str:
-    for r in spec:
-        if r.signal == signal and r.column_name == column and r.data_type:
+def _spec_ddl_type(spec: tuple[ColumnSpec, ...], signal: Signal, column: str) -> str:
+    for r in promoted_columns(signal, spec):
+        if r.column_name == column and r.data_type:
             return r.data_type
     raise ValueError(f"no spec data_type for raw.{signal}.{column}")
 
@@ -321,8 +331,10 @@ def _run_author(name: str, *, allow_destructive: bool) -> int:
     dest = _MIGRATIONS_DIR / f"{stamp}_{name}.sql"
     dest.write_text(sql, encoding="utf-8")
     print(f"spec_sync: wrote {dest.relative_to(_REPO_ROOT)}")
-    # Re-apply from zero (incl. the new file) and regenerate schema.sql.
-    subprocess.run([str(_REPO_ROOT / "scripts" / "dev-migrate.sh")], check=True)
+    # Re-apply from zero (incl. the new file) and regenerate schema.sql. Invoked
+    # through `bash` explicitly: Windows cannot exec a .sh directly (WinError 193),
+    # and this authoring loop runs on the operator's machine, not only in CI.
+    subprocess.run(["bash", str(_REPO_ROOT / "scripts" / "dev-migrate.sh")], check=True)
     with _ephemeral_pg.ephemeral_db(_CONTAINER, _MIGRATIONS_DIR) as conn:
         if not compute_delta(conn).empty():
             print("spec_sync: generated migration did not close the delta.", file=sys.stderr)
