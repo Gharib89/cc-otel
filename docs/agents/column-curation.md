@@ -111,6 +111,13 @@ columns from `raw.*`, and a kept/denied section (metadata only — those keys ha
 column, so use `sweep` to see their live blob presence). Pure-Postgres; needs no blob
 access. Commit the regenerated file as step 5 of the promotion PR.
 
+A column promoted under several registry rows can carry a different meaning per row
+(`duration_ms` is six event families' duration). Where the descriptions genuinely differ
+the cell names each one, prefixed by the narrowest registry label that tells them apart —
+event family, else attr path, else signal (#368). One wording across every row renders
+bare, so a qualified cell that reads as the same meaning twice is wording drift between
+registry rows, not polysemy: harmonize the rows and the cell collapses.
+
 ## 5. Backfill decision
 
 Default is **forward-only**: a newly promoted column is populated for new ingests only;
