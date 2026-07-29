@@ -2485,9 +2485,7 @@ def promoted_columns(
     return tuple(
         r
         for r in spec
-        if r.status == "promoted"
-        and r.column_name is not None
-        and r.signal in (signal, "resource")
+        if r.status == "promoted" and r.column_name is not None and r.signal in (signal, "resource")
     )
 
 
