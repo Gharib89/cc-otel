@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,6 +26,18 @@ import psycopg
 from cc_otel_sink.config import load_settings
 
 from .signals import SIGNALS
+
+
+@dataclass(frozen=True)
+class RegistryRow:
+    """One promoted ``meta.column_registry`` row, at the registry's own grain."""
+
+    column_name: str
+    signal: str
+    signal_name: str
+    attr_path: str
+    description: str
+    useful_for: str
 
 
 @dataclass(frozen=True)
@@ -65,18 +78,86 @@ def _columns(conn: psycopg.Connection, table: str) -> list[tuple[str, str]]:
         return [(r[0], r[1]) for r in cur.fetchall()]
 
 
+# Narrowest-first: a polysemous column's groups are labelled by the first of these that
+# tells them apart. Signal name reads best (`api_error: ...`) but is `*` for every
+# resource-shaped attribute, and two source attr paths can share one column — so the
+# ladder falls back until the labels discriminate.
+_QUALIFIERS: tuple[Callable[[RegistryRow], str], ...] = (
+    lambda r: r.signal_name,
+    lambda r: r.attr_path,
+    lambda r: r.signal,
+)
+
+
+def _full_grain(row: RegistryRow) -> str:
+    """The registry's grain is unique by construction, so labelling by the whole of it
+    always discriminates — the terminal rung, needed only if all three above collide."""
+    return f"{row.signal}/{row.signal_name}/{row.attr_path}"
+
+
+def _discriminating_qualifier(
+    groups: dict[str, list[RegistryRow]],
+) -> Callable[[RegistryRow], str]:
+    for qualifier in _QUALIFIERS:
+        labels = [label for rows in groups.values() for label in {qualifier(r) for r in rows}]
+        if len(labels) == len(set(labels)):  # no label shared by two groups
+            return qualifier
+    return _full_grain
+
+
+def _qualify(rows: list[RegistryRow], text_of: Callable[[RegistryRow], str]) -> str:
+    """Fold one column's registry rows into a single cell for the given text field.
+
+    The registry's grain is ``(signal, signal_name, attr_path)``, so a promoted column can
+    carry a different meaning per signal name (`duration_ms`, `trigger`) or per source
+    attribute (`user_account_id`). Grouping is by **text**, not by row: rows sharing one
+    wording collapse into a single labelled group, which is what stops the cell growing
+    once per registry row. A column with one distinct meaning renders bare, exactly as it
+    did before #368.
+    """
+    groups: dict[str, list[RegistryRow]] = {}
+    for row in rows:
+        if text_of(row):  # an undescribed row is a registry gap, not a rival meaning
+            groups.setdefault(text_of(row), []).append(row)
+    if len(groups) <= 1:
+        return next(iter(groups), "")
+    qualifier = _discriminating_qualifier(groups)
+    labelled = sorted(
+        ((sorted({qualifier(r) for r in group_rows}), body) for body, group_rows in groups.items()),
+        key=lambda g: g[0][0],
+    )
+    return " / ".join(f"{', '.join(labels)}: {body}" for labels, body in labelled)
+
+
+def _fold_descriptions(rows: list[RegistryRow]) -> dict[str, tuple[str, str]]:
+    """Registry rows -> ``column_name -> (description, useful_for)`` cells.
+
+    Pure — the DB round trip lives in ``_registry_descriptions``. The two text fields are
+    folded independently: a column can be polysemous in one and not the other.
+    """
+    per_column: dict[str, list[RegistryRow]] = {}
+    for row in rows:
+        per_column.setdefault(row.column_name, []).append(row)
+    return {
+        column: (
+            _qualify(column_rows, lambda r: r.description),
+            _qualify(column_rows, lambda r: r.useful_for),
+        )
+        for column, column_rows in per_column.items()
+    }
+
+
 def _registry_descriptions(conn: psycopg.Connection, signal: str) -> dict[str, tuple[str, str]]:
     """column_name -> (description, useful_for) for promoted rows of this signal + resource."""
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT DISTINCT ON (column_name) column_name, "
+            "SELECT column_name, signal, signal_name, attr_path, "
             "coalesce(description, ''), coalesce(useful_for, '') "
             "FROM meta.column_registry "
-            "WHERE status = 'promoted' AND signal IN (%s, 'resource') AND column_name IS NOT NULL "
-            "ORDER BY column_name, signal_name, attr_path",
+            "WHERE status = 'promoted' AND signal IN (%s, 'resource') AND column_name IS NOT NULL",
             (signal,),
         )
-        return {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+        return _fold_descriptions([RegistryRow(*r) for r in cur.fetchall()])
 
 
 def _profile_table(
