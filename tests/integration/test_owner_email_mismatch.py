@@ -24,10 +24,16 @@ AGREEING = [
 ]
 
 
-def emit_metric(conn: psycopg.Connection, session_id: str, email: str, owner: str | None) -> None:
+def emit_metric(
+    conn: psycopg.Connection,
+    session_id: str,
+    email: str,
+    owner: str | None,
+    ts: str = "2026-07-20T10:00:00Z",
+) -> None:
     ins_metric(
         conn,
-        ts="2026-07-20T10:00:00Z",
+        ts=ts,
         metric_name="claude_code.session.count",
         metric_type="sum",
         value=1,
@@ -80,6 +86,19 @@ def test_two_mismatching_sessions_are_two_findings(conn):
     emit_metric(conn, S2, "engy.salem@itworx.com", "DESKTOP-4F2K1")
 
     assert [d["session_id"] for _, d in findings(conn)] == sorted([S1, S2])
+
+
+def test_a_session_crossing_midnight_stays_one_finding(conn):
+    # Session grain, not session-day: the two records are one process, so they are one
+    # statement, dated from the first.
+    emit_metric(conn, S1, "hadeel.sharaf@itworx.com", "Administrator", ts="2026-07-20T23:50:00Z")
+    emit_metric(conn, S1, "hadeel.sharaf@itworx.com", "Administrator", ts="2026-07-21T00:10:00Z")
+
+    rows = findings(conn)
+    assert len(rows) == 1
+    row_count, details = rows[0]
+    assert row_count == 2
+    assert details["activity_date"] == "2026-07-20"
 
 
 def test_the_five_real_agreeing_pairs_stay_silent(conn):

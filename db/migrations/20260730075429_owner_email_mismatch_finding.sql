@@ -317,7 +317,9 @@ BEGIN
     --
     -- Session grain, not seat: the value is session-constant, so one session is a complete
     -- statement, while a seat-grain "never matches" is unsayable for the seats the attribute
-    -- never reaches — absence there is emitter behaviour, not evidence.
+    -- never reaches — absence there is emitter behaviour, not evidence. Session grain also
+    -- means a session crossing midnight stays one finding, so activity_date is MIN(): the date
+    -- the mismatch was first seen, not the only date it ran on.
     --
     -- Personal addresses are excluded, not reported: a First.Last machine account can never
     -- equal one, so an unscoped rule would fire forever on an expected condition, and ADR-0011's
