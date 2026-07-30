@@ -25,8 +25,11 @@ def test_spec_raw_columns_map_spec_types_to_pg_types() -> None:
     assert cols["events"]["input_tokens"] == "bigint"
     assert cols["events"]["success_bool"] == "boolean"
     assert cols["events"]["session_id"] == "uuid"
-    # resource-only rows never create a raw table column.
-    assert "service_name" not in cols["metrics"] and "service_name" not in cols["events"]
+    # A promoted resource row creates the column on *both* raw tables: the sink merges
+    # the resource block into each signal's flat namespace, so it is written for
+    # metrics and events alike (#357 service_name / os_type).
+    assert cols["metrics"]["service_name"] == "text"
+    assert cols["events"]["service_name"] == "text"
 
 
 def test_spec_registry_rows_cover_every_spec_row() -> None:
