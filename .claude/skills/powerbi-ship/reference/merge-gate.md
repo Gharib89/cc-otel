@@ -5,6 +5,12 @@ open live in Desktop on the worktree copy — make the call a fast yes by pairin
 the summary with the final screenshots so the human knows exactly which pages
 to inspect.
 
+**Write it uncompressed.** A session-wide output style (a compressed/terse mode
+armed by a hook, a brevity instruction) does **not** apply to this summary. It is
+the evidence a human approves an irreversible squash-merge on, so it gets full
+sentences and the whole template below — no dropped articles, no fragments, no
+omitted rows. Same for the disposition lines it carries.
+
 ## Sequence
 
 1. Collect the **auto-review** and dispose of every finding (below).
