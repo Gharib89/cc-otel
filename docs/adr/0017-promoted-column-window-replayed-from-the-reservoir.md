@@ -26,9 +26,13 @@ report would be unable to show the very things the curation effort promoted.
 - **Correctness rests on three measured invariants, not on the tool's docstring.** `tools.replay`
   deletes raw rows by **event time** and re-POSTs blobs by **ingest-date partition**, so the two
   addressings only agree if the data says they do. Before any mutation:
-  - **Skew is zero.** Across every `dt` partition in the window, **0** records carry an event time
-    before the window start. Records inside a partition whose event time predates the deleted range
-    would be re-inserted *beside* rows that were never deleted — the duplication mode this rules out.
+  - **Skew is zero at the window's outer edge, and non-zero at every day boundary inside it.** No
+    record in any in-window partition carries an event time before Jul 17, so the first partition
+    re-inserts nothing beside rows the delete never reached. Within the window it is the opposite:
+    `dt=2026-07-24` holds 15,775 metrics records while event-day Jul 24 totals 15,747 — 28 records
+    that ingested on Jul 24 carrying a Jul 23 event time, and a comparable straddle at every other
+    midnight. **That is the measurement that forces a whole-window delete** (see below); an
+    outer-edge zero says nothing about the interior.
   - **Reconciliation is exact.** Blob-derived rows equal raw rows on all 12 frozen days, both
     signals. The replay restores precisely what it deletes; no row in the window came from a batch
     with no blob.
@@ -36,16 +40,29 @@ report would be unable to show the very things the curation effort promoted.
     clears — equals `sha256(canonical_bytes(redact(payload)))`, the hash the sink re-claims. Had the
     two diverged (a plausible outcome after #369 denied `tool_parameters`, changing what redaction
     strips), a re-POST would have hit a hash the delete never cleared and been a silent no-op.
-- **Day-by-day passes, not one whole-window invocation.** One `--since D --until D --execute` per
-  day. A single whole-range pass deletes everything up front and then re-POSTs for the length of the
-  window; any batch ingested inside that gap has its rows deleted and never restored. Per-day passes
-  bound the exposure to one partition, and a **frozen** partition (`dt` < today) can never gain
-  another blob, so for those days the exposure is nil rather than merely small. Only the live day
-  races ingest: it runs last and repeats until its blob-derived and raw counts agree.
-- **Days run in parallel, licensed by the zero-skew measurement.** With no cross-partition skew,
-  day passes share no rows and their order carries no meaning; four concurrent workers cut the
-  wall-clock roughly fourfold. Had skew been non-zero, the passes would have had to run ascending so
-  each day restored what the previous deleted.
+- **One whole-window delete, then every blob — not a pass per day.** A pass for day D deletes
+  event-day D but re-POSTs partition `dt=D`, whose straddle records carry event-day **D-1**. Those
+  rows were never deleted, so the pass duplicates them; run the neighbouring day afterwards and it
+  deletes them without restoring them, because they live in a partition it does not read. Per-day
+  passes therefore compose **only** in strictly ascending order, where each day's delete precedes
+  the next day's insert — and that serialises the slowest phase of the job. A single
+  `[Jul 17, Jul 31)` delete followed by all 21,855 blobs has no boundary to get wrong at any order
+  or concurrency.
+
+  This was learned the expensive way: the first execution ran per-day passes across four parallel
+  workers, on a zero-skew measurement that only covered the window's outer edge. It left ~150 rows
+  of 565k duplicated or missing at day boundaries, and was corrected by the whole-window pass, after
+  which all 13 frozen days matched their pre-replay counts exactly, both signals.
+- **The whole-window delete is what races live ingest, and the live day absorbs it.** A batch landing
+  between the pass's blob listing and its delete has its rows removed while its blob is not in the
+  re-POST set — and its ledger hash survives, so a plain re-POST would be a no-op. Measured after
+  the corrective pass: Jul 30 short by 275 metrics / 183 events, Jul 29 exact. Live-day passes repair
+  it — safe here because `dt=2026-07-30` carries no Jul 29 straddle (event-day Jul 29 totals exactly
+  the `dt=07-29` partition) — but they converge to a **floor, not to zero**: each pass restores its
+  predecessor's losses and incurs its own race, so the residual settles at roughly one pass-duration
+  of ingest. Measured across three further passes: 275/183, then 105/55, then **69 metrics / 39
+  events** (0.5% / 0.35% of the live day). Reconciling the live day exactly means replaying it once
+  it is frozen, not repeating passes while it is live.
 - **The replay sink is the deployed image, run locally with the reservoir deliberately
   unconfigured.** `CC_OTEL_BLOB_*` unset makes `BlobReservoir.from_settings` return a
   `NullReservoir`. Left set, each of the ~18k re-POSTs would write a **new** blob under *today's*
@@ -84,5 +101,13 @@ report would be unable to show the very things the curation effort promoted.
 - **The marts refresh is hourly (pg_cron).** A refresh landing mid-replay reads a partially restored
   window and produces one short snapshot; the next refresh corrects it. The replay ends with an
   explicit `marts.refresh_all()` rather than waiting for the cron.
+- **The live day carries an accepted 69-metrics / 39-events shortfall** until it is replayed frozen.
+  Every frozen day in the window reconciles exactly (delta +0 against the pre-replay snapshot, both
+  signals); only 2026-07-30 does not, and no per-day count anywhere in the window is *above* its
+  pre-replay value, so nothing was duplicated.
+- **`workflow_name` is emitted by the fleet, contrary to #373's premise.** 216 rows, one distinct
+  value (`databricks-q-scoring`), one session, 2026-07-25 — an ITWorx developer's own GitHub Actions
+  run, not this repo's CI. The replay is what made the column provable at all; `status_code` likewise
+  resolved to 35 rows / 4 distinct.
 - **ADR-0002 stands for production.** Nothing here backfills prod, and nothing here licenses
   translating old-schema history into a fresh schema — the two things ADR-0002 actually rejects.
