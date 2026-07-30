@@ -192,8 +192,9 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "process_owner",
         "TEXT",
         description="OS account the Claude Code process runs under (e.g. a Windows username).",
-        useful_for="account sharing: a row whose process_owner disagrees with user_email is "
-        "one person emitting under another person's account",
+        useful_for="owner_email_mismatch: a session whose process_owner disagrees with the "
+        "local-part of an ITWorx user_email. An observation, not an account-sharing control "
+        "— the CLI never emits process.owner, so 99.6% of records are blind to it (#364)",
         decided_at="2026-07-28",
         notes="promoted, not denied: discloses strictly less than the promoted user.email (#353)",
     ),
@@ -716,8 +717,9 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "process_owner",
         "TEXT",
         description="OS account the Claude Code process runs under (e.g. a Windows username).",
-        useful_for="account sharing: a row whose process_owner disagrees with user_email is "
-        "one person emitting under another person's account",
+        useful_for="owner_email_mismatch: a session whose process_owner disagrees with the "
+        "local-part of an ITWorx user_email. An observation, not an account-sharing control "
+        "— the CLI never emits process.owner, so 99.6% of records are blind to it (#364)",
         decided_at="2026-07-28",
         notes="promoted, not denied: discloses strictly less than the promoted user.email (#353)",
     ),
@@ -984,8 +986,9 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "process_owner",
         "TEXT",
         description="OS account the Claude Code process runs under (e.g. a Windows username).",
-        useful_for="account sharing: a row whose process_owner disagrees with user_email is "
-        "one person emitting under another person's account",
+        useful_for="owner_email_mismatch: a session whose process_owner disagrees with the "
+        "local-part of an ITWorx user_email. An observation, not an account-sharing control "
+        "— the CLI never emits process.owner, so 99.6% of records are blind to it (#364)",
         decided_at="2026-07-28",
         notes="promoted, not denied: discloses strictly less than the promoted user.email (#353)",
     ),
