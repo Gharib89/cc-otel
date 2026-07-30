@@ -15,7 +15,22 @@ from tools.spec_sync import (
     spec_registry_rows,
 )
 
-_ROW = ("metrics", "*", "x.y", "promoted", "xy", "TEXT", "desc", None, "2026-07-13", None)
+# The 12-field RegistryRow: the trailing pair is kept_basis / basis_partner (#366),
+# NULL on a promoted row.
+_ROW = (
+    "metrics",
+    "*",
+    "x.y",
+    "promoted",
+    "xy",
+    "TEXT",
+    "desc",
+    None,
+    "2026-07-13",
+    None,
+    None,
+    None,
+)
 
 
 def test_spec_raw_columns_map_spec_types_to_pg_types() -> None:
@@ -74,9 +89,18 @@ def test_generate_migration_gates_column_drop_behind_flag() -> None:
 
 
 def test_sql_literal_escapes_quotes() -> None:
-    delta = Delta(missing_rows=[_ROW[:6] + ("it's a note", None, "2026-07-13", None)])
+    delta = Delta(missing_rows=[_ROW[:6] + ("it's a note", None, "2026-07-13", None, None, None)])
     sql = generate_migration("x", delta)
     assert "'it''s a note'" in sql
+
+
+def test_generated_insert_carries_the_kept_basis_columns() -> None:
+    # A generated row insert has to name the basis columns, or a new kept row would
+    # land NULL and trip column_registry_kept_basis_chk (#366).
+    kept = _ROW[:4] + (None, None, "desc", None, "2026-07-30", None, "collinear", "os.type")
+    sql = generate_migration("x", Delta(missing_rows=[("resource", "*", "z", "kept") + kept[4:]]))
+    assert "kept_basis, basis_partner" in sql
+    assert "'collinear', 'os.type'" in sql
 
 
 # --- mart-literal lint (#168) -------------------------------------------------

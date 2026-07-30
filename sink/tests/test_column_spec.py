@@ -189,7 +189,9 @@ def test_kept_row_contradicting_a_promoted_row_in_the_same_signal_rejected() -> 
     # event name — a `kept` row ("no Postgres column") for the same path states
     # something false. This is the class that let events/compaction/trigger sit
     # `kept` while raw.events.trigger carried 57 compaction rows (#353).
-    bad = COLUMN_SPEC + (ColumnSpec("events", "some_event", "prompt_length", "kept"),)
+    bad = COLUMN_SPEC + (
+        ColumnSpec("events", "some_event", "prompt_length", "kept", kept_basis="nature"),
+    )
     with pytest.raises(ValueError, match="contradicts a promoted row in events"):
         cs._check_invariants(bad)
 
@@ -216,9 +218,100 @@ def test_denied_row_contradicting_a_promoted_row_in_another_signal_rejected() ->
 def test_kept_resource_row_contradicting_a_promoted_signal_row_rejected() -> None:
     # Cross-signal form of the same lie, reachable through the sweep's resource/*
     # fallback: the resource row denies a column metrics/events actually write.
-    bad = COLUMN_SPEC + (ColumnSpec("resource", "*", "prompt_length", "kept"),)
+    bad = COLUMN_SPEC + (ColumnSpec("resource", "*", "prompt_length", "kept", kept_basis="nature"),)
     with pytest.raises(ValueError, match="resource row contradicts"):
         cs._check_invariants(bad)
+
+
+def test_kept_row_without_a_basis_rejected() -> None:
+    # The durable half of #366: `tools.basis_drift` re-checks the claims that exist, so
+    # what stops a *new* unwatched claim is the spec refusing to import without a basis.
+    bad = COLUMN_SPEC + (ColumnSpec("events", "some_event", "brand_new_key", "kept"),)
+    with pytest.raises(ValueError, match="kept row missing kept_basis"):
+        cs._check_invariants(bad)
+
+
+def test_basis_on_a_non_kept_row_rejected() -> None:
+    # A basis explains why a key is *not* a column; on a promoted or denied row it is a
+    # stale leftover from a status change, and the drift tool would never read it.
+    bad = COLUMN_SPEC + (
+        ColumnSpec(
+            "events",
+            "some_event",
+            "brand_new_key",
+            "denied",
+            deny_mode="strip",
+            kept_basis="nature",
+        ),
+    )
+    with pytest.raises(ValueError, match="denied row must not set kept_basis"):
+        cs._check_invariants(bad)
+
+
+def test_collinear_row_without_a_partner_rejected() -> None:
+    # `collinear` is the one basis with a machine predicate, and the predicate is
+    # "partner value determines this key" — there is nothing to evaluate without one.
+    bad = COLUMN_SPEC + (
+        ColumnSpec("events", "some_event", "brand_new_key", "kept", kept_basis="collinear"),
+    )
+    with pytest.raises(ValueError, match="collinear row missing basis_partner"):
+        cs._check_invariants(bad)
+
+
+def test_self_partner_rejected() -> None:
+    # A key is trivially determined by itself: every partner-value group would hold
+    # exactly one value, so the drift check would pass vacuously forever.
+    bad = COLUMN_SPEC + (
+        ColumnSpec(
+            "events",
+            "some_event",
+            "brand_new_key",
+            "kept",
+            kept_basis="collinear",
+            basis_partner="brand_new_key",
+        ),
+    )
+    with pytest.raises(ValueError, match="basis_partner is the row's own attr_path"):
+        cs._check_invariants(bad)
+
+
+def test_partner_without_collinear_rejected() -> None:
+    # Only `collinear` gives a partner meaning; `redundant` carries its cross-grain
+    # argument in `notes` precisely because no same-record partner names it.
+    bad = COLUMN_SPEC + (
+        ColumnSpec(
+            "events",
+            "some_event",
+            "brand_new_key",
+            "kept",
+            kept_basis="redundant",
+            basis_partner="tool_name",
+        ),
+    )
+    with pytest.raises(ValueError, match="basis_partner set without"):
+        cs._check_invariants(bad)
+
+
+def test_every_kept_row_declares_a_basis_and_only_kept_rows_do() -> None:
+    # The live spec, not a synthetic one: 103 kept rows after #378's promotion bundle.
+    kept = [r for r in COLUMN_SPEC if r.status == "kept"]
+    assert kept, "spec has no kept rows — the guard below would be vacuous"
+    assert all(r.kept_basis is not None for r in kept)
+    assert all(r.kept_basis is None for r in COLUMN_SPEC if r.status != "kept")
+    # os.type is promoted (#357) — a partner is deliberately not a foreign key, so its
+    # own status is irrelevant, but it must at least be a path the same record carries.
+    for r in COLUMN_SPEC:
+        if r.kept_basis == "collinear":
+            assert r.basis_partner and r.basis_partner != r.attr_path
+
+
+def test_registry_rows_project_the_basis() -> None:
+    # The drift tool and the data dictionary read the basis off the deployed registry,
+    # not off this module, so it has to survive the projection (unlike kind/deny_mode).
+    by_key = {(r[0], r[1], r[2]): r for r in cs.registry_rows()}
+    assert by_key[("resource", "*", "os.version")][-2:] == ("collinear", "os.type")
+    assert by_key[("resource", "*", "host.arch")][-2:] == ("constant", None)
+    assert by_key[("events", "*", "user.id")][-2:] == ("nature", None)
 
 
 def test_two_attr_paths_on_one_attr_column_rejected() -> None:

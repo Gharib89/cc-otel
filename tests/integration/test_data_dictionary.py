@@ -38,3 +38,10 @@ def test_build_joins_registry_with_live_stats(conn):
     # blob-only section (service.name promoted in #357). Split on the asserted heading, so
     # a renamed heading fails on the line above rather than silently emptying the tail.
     assert "`service.name`" not in md.split(heading, 1)[1]
+    # every kept row publishes its basis, and a collinear row names its partner (#366) —
+    # this is where the reasoning stops living only in docs/research/ and becomes published
+    kept_denied = md.split(heading, 1)[1]
+    assert "| constant |" in kept_denied  # host.arch
+    assert "| collinear(os.type) |" in kept_denied  # os.version / wsl.version
+    # a denied row has no basis to publish
+    assert "| denied | — |" in kept_denied

@@ -24,6 +24,29 @@ at import (i.e. in every unit-test run), so a malformed row fails fast.
 * ``strip``            — removed from every attribute list wherever it appears.
 * ``defense_in_depth`` — content key a client gate already suppresses; a
   non-empty hit is counted as gate drift.
+
+``kept_basis`` records *why* a key is ``kept`` rather than promoted or denied
+(#366) — the closed set in ``CONTEXT.md``'s **Kept basis** entry:
+
+* ``nature``    — identity or unbounded cardinality: what the key *is*.
+* ``constant``  — one value across the observed window.
+* ``collinear`` — functionally determined by ``basis_partner``, an attr path on
+  the same record at the same grain.
+* ``thin``      — reaching too few seats to argue a value case.
+* ``redundant`` — the information is already carried elsewhere in the schema,
+  possibly at another grain (so no same-record partner names it).
+
+Only ``nature`` is unfalsifiable; the rest are claims about observed data that a
+fleet change can invalidate, and ``tools.basis_drift`` re-derives ``constant`` /
+``collinear`` / ``thin`` against a recent window. ``redundant`` carries its
+argument in ``notes`` — a cross-grain claim no single record can answer — so the
+tool reports it as unevaluated rather than pretending to check it.
+
+The NOT-NULL-iff-``kept`` invariant below is the durable half of #366: from that
+migration on, a new ``kept`` row without a basis fails at import and in the
+registry CHECK. It is what stops new unwatched claims from being created, so do
+not relax it as an inconvenience — the tool only catches the claims that already
+exist.
 """
 
 from __future__ import annotations
@@ -45,6 +68,7 @@ DataType = Literal[
     "BOOLEAN",
 ]
 DenyMode = Literal["strip", "defense_in_depth"]
+KeptBasis = Literal["nature", "constant", "collinear", "thin", "redundant"]
 
 _INT_TYPES: frozenset[str] = frozenset({"BIGINT", "INTEGER", "SMALLINT"})
 
@@ -59,6 +83,8 @@ class ColumnSpec:
     data_type: DataType | None = None
     kind: Kind = "attr"  # how a promoted column is populated (see module docstring)
     deny_mode: DenyMode | None = None  # denied only
+    kept_basis: KeptBasis | None = None  # kept only (see module docstring)
+    basis_partner: str | None = None  # collinear only: the determining attr path
     description: str = ""
     useful_for: str | None = None
     decided_at: str = ""  # ISO date
@@ -456,17 +482,25 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "user.id",
         "kept",
+        kept_basis="nature",
         description="Anonymous install id.",
         decided_at="2026-07-13",
     ),
     ColumnSpec(
-        "metrics", "*", "host.name", "kept", description="Hostname.", decided_at="2026-07-13"
+        "metrics",
+        "*",
+        "host.name",
+        "kept",
+        kept_basis="nature",
+        description="Hostname.",
+        decided_at="2026-07-13",
     ),
     ColumnSpec(
         "metrics",
         "*",
         "app.entrypoint",
         "kept",
+        kept_basis="nature",
         description="Launch surface (opt-in).",
         decided_at="2026-07-13",
     ),
@@ -475,6 +509,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "context_window_size",
         "kept",
+        kept_basis="nature",
         description="Context window size.",
         decided_at="2026-07-13",
         notes="wrapper telemetry",
@@ -484,6 +519,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "fast_mode",
         "kept",
+        kept_basis="nature",
         description="Fast-mode flag.",
         decided_at="2026-07-13",
         notes="wrapper telemetry",
@@ -493,6 +529,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "thinking_enabled",
         "kept",
+        kept_basis="nature",
         description="Thinking-enabled flag.",
         decided_at="2026-07-13",
         notes="wrapper telemetry",
@@ -502,6 +539,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "output_style",
         "kept",
+        kept_basis="nature",
         description="Output style.",
         decided_at="2026-07-13",
         notes="wrapper telemetry",
@@ -511,6 +549,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "repo.owner",
         "kept",
+        kept_basis="nature",
         description="Repo owner.",
         decided_at="2026-07-13",
         notes="wrapper telemetry",
@@ -520,6 +559,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "repo.name",
         "kept",
+        kept_basis="nature",
         description="Repo name.",
         decided_at="2026-07-13",
         notes="wrapper telemetry",
@@ -529,6 +569,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "session_name",
         "kept",
+        kept_basis="nature",
         description="Session label.",
         decided_at="2026-07-13",
         notes="wrapper telemetry",
@@ -538,6 +579,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "workspace.host_paths",
         "kept",
+        kept_basis="thin",
         description="Desktop workspace dirs.",
         decided_at="2026-07-13",
     ),
@@ -546,6 +588,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "claude_code.token.usage",
         "mcp_server.name",
         "kept",
+        kept_basis="nature",
         description="MCP server attribution.",
         decided_at="2026-07-13",
         notes="not promoted on metrics; api_request carries it for bridges",
@@ -555,6 +598,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "claude_code.token.usage",
         "mcp_tool.name",
         "kept",
+        kept_basis="nature",
         description="MCP tool attribution.",
         decided_at="2026-07-13",
         notes="not promoted on metrics",
@@ -564,6 +608,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "claude_code.cost.usage",
         "mcp_server.name",
         "kept",
+        kept_basis="redundant",
         description="MCP server attribution.",
         decided_at="2026-07-29",
         notes="kept basis collinear (#358): exactly redundant with raw.events.api_request -- "
@@ -574,6 +619,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "claude_code.cost.usage",
         "mcp_tool.name",
         "kept",
+        kept_basis="redundant",
         description="MCP tool attribution.",
         decided_at="2026-07-29",
         notes="kept basis collinear (#358): same pair; promoting would mint a second, ambiguous "
@@ -584,6 +630,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "gen_ai.operation.name",
         "kept",
+        kept_basis="nature",
         description="GenAI operation.",
         decided_at="2026-07-13",
         notes="non-Claude-Code (GitHub Copilot); not modeled",
@@ -593,6 +640,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "gen_ai.provider.name",
         "kept",
+        kept_basis="nature",
         description="GenAI provider.",
         decided_at="2026-07-13",
         notes="non-Claude-Code (GitHub Copilot); not modeled",
@@ -602,6 +650,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "gen_ai.request.model",
         "kept",
+        kept_basis="nature",
         description="GenAI request model.",
         decided_at="2026-07-13",
         notes="non-Claude-Code (GitHub Copilot); not modeled",
@@ -611,6 +660,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "gen_ai.response.model",
         "kept",
+        kept_basis="nature",
         description="GenAI response model.",
         decided_at="2026-07-13",
         notes="non-Claude-Code (GitHub Copilot); not modeled",
@@ -620,6 +670,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "gen_ai.tool.name",
         "kept",
+        kept_basis="nature",
         description="GenAI tool.",
         decided_at="2026-07-13",
         notes="non-Claude-Code (GitHub Copilot); not modeled",
@@ -629,6 +680,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "gen_ai.token.type",
         "kept",
+        kept_basis="nature",
         description="GenAI token type.",
         decided_at="2026-07-13",
         notes="non-Claude-Code (GitHub Copilot); not modeled",
@@ -638,6 +690,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "outcome",
         "kept",
+        kept_basis="nature",
         description="Connection outcome.",
         decided_at="2026-07-13",
         notes="non-Claude-Code (GitHub Copilot); not modeled",
@@ -647,6 +700,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "transport",
         "kept",
+        kept_basis="nature",
         description="Transport.",
         decided_at="2026-07-13",
         notes="non-Claude-Code (GitHub Copilot); not modeled",
@@ -656,6 +710,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "error.type",
         "kept",
+        kept_basis="nature",
         description="Error type enum.",
         decided_at="2026-07-13",
         notes="non-Claude-Code (GitHub Copilot); not modeled",
@@ -763,24 +818,40 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         notes="promoted from kept (#357); wsl.version is exactly collinear with os_type='linux'",
     ),
     ColumnSpec(
-        "resource", "*", "os.version", "kept", description="OS version.", decided_at="2026-07-13"
+        "resource",
+        "*",
+        "os.version",
+        "kept",
+        kept_basis="collinear",
+        basis_partner="os.type",
+        description="OS version.",
+        decided_at="2026-07-13",
     ),
     ColumnSpec(
         "resource",
         "*",
         "host.arch",
         "kept",
+        kept_basis="constant",
         description="Host architecture.",
         decided_at="2026-07-13",
     ),
     ColumnSpec(
-        "resource", "*", "wsl.version", "kept", description="WSL version.", decided_at="2026-07-13"
+        "resource",
+        "*",
+        "wsl.version",
+        "kept",
+        kept_basis="collinear",
+        basis_partner="os.type",
+        description="WSL version.",
+        decided_at="2026-07-13",
     ),
     ColumnSpec(
         "resource",
         "*",
         "claude.deployment_mode",
         "kept",
+        kept_basis="constant",
         description="Deployment mode (e.g. 1p test rows).",
         decided_at="2026-07-13",
     ),
@@ -789,6 +860,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "department",
         "kept",
+        kept_basis="nature",
         description="Org department (OTEL_RESOURCE_ATTRIBUTES).",
         decided_at="2026-07-13",
         notes="org dims come from Azure SQL (#9), not the pipeline",
@@ -798,6 +870,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "region",
         "kept",
+        kept_basis="nature",
         description="Org region.",
         decided_at="2026-07-13",
         notes="org dims come from Azure SQL (#9)",
@@ -807,6 +880,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "cost_center",
         "kept",
+        kept_basis="nature",
         description="Org cost center.",
         decided_at="2026-07-13",
         notes="org dims come from Azure SQL (#9)",
@@ -816,6 +890,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "company",
         "kept",
+        kept_basis="nature",
         description="Org company.",
         decided_at="2026-07-13",
         notes="org dims come from Azure SQL (#9)",
@@ -825,6 +900,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "team",
         "kept",
+        kept_basis="nature",
         description="Org team.",
         decided_at="2026-07-13",
         notes="org dims come from Azure SQL (#9)",
@@ -1732,6 +1808,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "user.id",
         "kept",
+        kept_basis="nature",
         description="Anonymous install id.",
         decided_at="2026-07-13",
     ),
@@ -1740,6 +1817,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "event.timestamp",
         "kept",
+        kept_basis="nature",
         description="ISO event timestamp.",
         decided_at="2026-07-13",
         notes="we use timeUnixNano for event_time",
@@ -1749,17 +1827,25 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "client_request_id",
         "kept",
+        kept_basis="nature",
         description="Client request id.",
         decided_at="2026-07-13",
     ),
     ColumnSpec(
-        "events", "*", "attempt", "kept", description="API attempt number.", decided_at="2026-07-13"
+        "events",
+        "*",
+        "attempt",
+        "kept",
+        kept_basis="nature",
+        description="API attempt number.",
+        decided_at="2026-07-13",
     ),
     ColumnSpec(
         "events",
         "*",
         "stop_reason",
         "kept",
+        kept_basis="nature",
         description="Model stop reason.",
         decided_at="2026-07-13",
     ),
@@ -1768,6 +1854,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "workspace.host_paths",
         "kept",
+        kept_basis="thin",
         description="Desktop workspace dirs.",
         decided_at="2026-07-13",
     ),
@@ -1776,18 +1863,26 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "cost_usd_micros",
         "kept",
+        kept_basis="nature",
         description="Cost in micros.",
         decided_at="2026-07-13",
         notes="we use cost_usd",
     ),
     ColumnSpec(
-        "events", "*", "safe_mode", "kept", description="Safe-mode flag.", decided_at="2026-07-13"
+        "events",
+        "*",
+        "safe_mode",
+        "kept",
+        kept_basis="constant",
+        description="Safe-mode flag.",
+        decided_at="2026-07-13",
     ),
     ColumnSpec(
         "events",
         "*",
         "managed_only",
         "kept",
+        kept_basis="constant",
         description="Managed-only flag.",
         decided_at="2026-07-13",
     ),
@@ -1796,6 +1891,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "plugin_id_hash",
         "kept",
+        kept_basis="nature",
         description="Plugin id hash.",
         decided_at="2026-07-13",
     ),
@@ -1804,6 +1900,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "assistant_response",
         "response_length",
         "kept",
+        kept_basis="nature",
         description="Response length in chars.",
         decided_at="2026-07-13",
     ),
@@ -1812,6 +1909,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "assistant_response",
         "message.uuid",
         "kept",
+        kept_basis="redundant",
         description="Message UUID.",
         decided_at="2026-07-29",
         notes="kept basis collinear (#359): covered by the promoted prompt_id, which reaches all "
@@ -1822,6 +1920,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "user_prompt",
         "message.uuid",
         "kept",
+        kept_basis="redundant",
         description="Message UUID.",
         decided_at="2026-07-29",
         notes="kept basis collinear (#359): covered by the promoted prompt_id",
@@ -1831,6 +1930,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "hook_execution_complete",
         "num_blocking",
         "kept",
+        kept_basis="nature",
         description="Blocking hooks.",
         decided_at="2026-07-13",
     ),
@@ -1839,6 +1939,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "hook_execution_complete",
         "num_non_blocking_error",
         "kept",
+        kept_basis="nature",
         description="Non-blocking hook errors.",
         decided_at="2026-07-13",
     ),
@@ -1847,6 +1948,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "hook_execution_complete",
         "num_cancelled",
         "kept",
+        kept_basis="nature",
         description="Cancelled hooks.",
         decided_at="2026-07-13",
     ),
@@ -1855,6 +1957,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "hook_registered",
         "hook_matcher",
         "kept",
+        kept_basis="nature",
         description="Hook matcher pattern.",
         decided_at="2026-07-13",
         notes="details-gated",
@@ -1864,6 +1967,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "hook_registered",
         "hook_type",
         "kept",
+        kept_basis="constant",
         description="Hook type.",
         decided_at="2026-07-13",
     ),
@@ -1872,6 +1976,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "plugin_loaded",
         "enabled_via",
         "kept",
+        kept_basis="constant",
         description="Plugin enablement source.",
         decided_at="2026-07-13",
     ),
@@ -1880,6 +1985,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "plugin_loaded",
         "has_hooks",
         "kept",
+        kept_basis="nature",
         description="Plugin declares hooks.",
         decided_at="2026-07-13",
     ),
@@ -1888,6 +1994,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "plugin_loaded",
         "has_mcp",
         "kept",
+        kept_basis="nature",
         description="Plugin declares MCP.",
         decided_at="2026-07-13",
     ),
@@ -1896,6 +2003,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "plugin_loaded",
         "host_owned_mcp",
         "kept",
+        kept_basis="constant",
         description="Host-owned MCP flag.",
         decided_at="2026-07-13",
     ),
@@ -1904,6 +2012,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "plugin_loaded",
         "skill_path_count",
         "kept",
+        kept_basis="nature",
         description="Skill path count.",
         decided_at="2026-07-13",
     ),
@@ -1912,6 +2021,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "plugin_loaded",
         "command_path_count",
         "kept",
+        kept_basis="nature",
         description="Command path count.",
         decided_at="2026-07-13",
     ),
@@ -1920,6 +2030,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "plugin_loaded",
         "agent_path_count",
         "kept",
+        kept_basis="nature",
         description="Agent path count.",
         decided_at="2026-07-13",
     ),
@@ -1928,6 +2039,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "plugin_installed",
         "install.trigger",
         "kept",
+        kept_basis="nature",
         description="Install trigger (cli/ui).",
         decided_at="2026-07-13",
     ),
@@ -1936,6 +2048,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "plugin_installed",
         "marketplace.is_official",
         "kept",
+        kept_basis="nature",
         description="Official-marketplace flag.",
         decided_at="2026-07-13",
     ),
@@ -1944,6 +2057,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "skill_activated",
         "skill.kind",
         "kept",
+        kept_basis="constant",
         description="Skill kind (workflow).",
         decided_at="2026-07-13",
     ),
@@ -1952,6 +2066,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "subagent_completed",
         "agent.source",
         "kept",
+        kept_basis="nature",
         description="Subagent source.",
         decided_at="2026-07-13",
     ),
@@ -1960,6 +2075,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "subagent_completed",
         "is_built_in",
         "kept",
+        kept_basis="nature",
         description="Built-in subagent flag.",
         decided_at="2026-07-13",
     ),
@@ -1968,6 +2084,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "subagent_completed",
         "final_model",
         "kept",
+        kept_basis="redundant",
         description="Model the subagent finished on.",
         decided_at="2026-07-29",
         notes="kept basis collinear (#358): api_request already carries `model` alongside the "
@@ -1978,6 +2095,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "subagent_completed",
         "model_swapped",
         "kept",
+        kept_basis="constant",
         description="Whether the subagent's model changed mid-run.",
         decided_at="2026-07-29",
         notes="kept basis constant (#370): `False` on all 794 records in the profiled window "
@@ -1989,6 +2107,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "feedback_survey",
         "event_type",
         "kept",
+        kept_basis="nature",
         description="Survey event type.",
         decided_at="2026-07-13",
     ),
@@ -1997,6 +2116,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "feedback_survey",
         "appearance_id",
         "kept",
+        kept_basis="nature",
         description="Survey appearance id.",
         decided_at="2026-07-13",
     ),
@@ -2005,6 +2125,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "feedback_survey",
         "survey_type",
         "kept",
+        kept_basis="constant",
         description="Survey type.",
         decided_at="2026-07-13",
     ),
@@ -2013,6 +2134,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "feedback_survey",
         "enabled_via_override",
         "kept",
+        kept_basis="constant",
         description="Survey override flag.",
         decided_at="2026-07-13",
     ),
@@ -2021,6 +2143,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "feedback_survey",
         "event_origin",
         "kept",
+        kept_basis="constant",
         description="Where the survey event originated.",
         decided_at="2026-07-29",
         notes="kept basis constant (#370): `sdk_host` on all 10 records in the profiled window "
@@ -2031,6 +2154,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "feedback_survey",
         "event_origin_server",
         "kept",
+        kept_basis="constant",
         description="Server that originated the survey event.",
         decided_at="2026-07-29",
         notes="kept basis constant (#370): `claude-vscode` on all 10 records in the profiled "
@@ -2041,6 +2165,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "internal_error",
         "error_name",
         "kept",
+        kept_basis="nature",
         description="Error class name (no message).",
         decided_at="2026-07-13",
     ),
@@ -2049,6 +2174,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "internal_error",
         "error_code",
         "kept",
+        kept_basis="nature",
         description="errno (e.g. ENOENT).",
         decided_at="2026-07-13",
     ),
@@ -2057,6 +2183,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "api_retries_exhausted",
         "total_attempts",
         "kept",
+        kept_basis="constant",
         description="Total attempts.",
         decided_at="2026-07-13",
     ),
@@ -2065,6 +2192,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "api_retries_exhausted",
         "total_retry_duration_ms",
         "kept",
+        kept_basis="nature",
         description="Total retry duration.",
         decided_at="2026-07-13",
     ),
@@ -2073,6 +2201,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "api_refusal",
         "category",
         "kept",
+        kept_basis="nature",
         description="Refusal category enum.",
         decided_at="2026-07-13",
         notes="enum kept per #8",
@@ -2082,6 +2211,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "api_refusal",
         "has_category",
         "kept",
+        kept_basis="nature",
         description="Refusal has-category flag.",
         decided_at="2026-07-13",
     ),
@@ -2090,6 +2220,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "api_refusal",
         "has_explanation",
         "kept",
+        kept_basis="nature",
         description="Refusal has-explanation flag.",
         decided_at="2026-07-13",
     ),
@@ -2098,6 +2229,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "api_refusal",
         "server_fallback_hop",
         "kept",
+        kept_basis="constant",
         description="Server fallback hop.",
         decided_at="2026-07-13",
     ),
@@ -2106,6 +2238,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "mcp_server_connection",
         "error_code",
         "kept",
+        kept_basis="nature",
         description="Connection error code.",
         decided_at="2026-07-13",
     ),
@@ -2114,6 +2247,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "mcp_server_connection",
         "is_plugin",
         "kept",
+        kept_basis="nature",
         description="Plugin-provided MCP flag.",
         decided_at="2026-07-13",
     ),
@@ -2122,6 +2256,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "tool_result",
         "tool_input_size_bytes",
         "kept",
+        kept_basis="nature",
         description="Tool input size.",
         decided_at="2026-07-13",
     ),
@@ -2130,6 +2265,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "tool_result",
         "tool_result_size_bytes",
         "kept",
+        kept_basis="nature",
         description="Tool result size.",
         decided_at="2026-07-13",
     ),
@@ -2138,6 +2274,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "tool_result",
         "decision_type",
         "kept",
+        kept_basis="constant",
         description="Decision type.",
         decided_at="2026-07-13",
     ),
@@ -2166,6 +2303,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "tool_decision",
         "tool_source",
         "kept",
+        kept_basis="redundant",
         description="Where the tool came from (builtin/mcp/sdk_host_builtin_mcp).",
         decided_at="2026-07-29",
         notes="kept basis collinear (#358): redundant with the promoted tool_name='mcp_tool' -- "
@@ -2182,16 +2320,29 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         notes="#369: emitted as a JSON string, so the leaf sweep never reached it",
     ),
     ColumnSpec(
-        "events", "auth", "action", "kept", description="login/logout.", decided_at="2026-07-13"
+        "events",
+        "auth",
+        "action",
+        "kept",
+        kept_basis="constant",
+        description="login/logout.",
+        decided_at="2026-07-13",
     ),
     ColumnSpec(
-        "events", "auth", "auth_method", "kept", description="Auth method.", decided_at="2026-07-13"
+        "events",
+        "auth",
+        "auth_method",
+        "kept",
+        kept_basis="constant",
+        description="Auth method.",
+        decided_at="2026-07-13",
     ),
     ColumnSpec(
         "events",
         "auth",
         "error_category",
         "kept",
+        kept_basis="nature",
         description="Auth error category (no message).",
         decided_at="2026-07-13",
     ),
@@ -2200,6 +2351,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "compaction",
         "pre_tokens",
         "kept",
+        kept_basis="nature",
         description="Pre-compaction tokens.",
         decided_at="2026-07-13",
     ),
@@ -2208,6 +2360,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "compaction",
         "post_tokens",
         "kept",
+        kept_basis="nature",
         description="Post-compaction tokens.",
         decided_at="2026-07-13",
     ),
@@ -2216,6 +2369,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "compaction",
         "precompute_reuse",
         "kept",
+        kept_basis="nature",
         description="Precompute-reuse outcome.",
         decided_at="2026-07-13",
     ),
@@ -2224,6 +2378,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "hook_plugin_metrics",
         "plugin_id",
         "kept",
+        kept_basis="nature",
         description="Plugin id (name@marketplace).",
         decided_at="2026-07-13",
     ),
@@ -2233,6 +2388,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "user.groups",
         "kept",
+        kept_basis="nature",
         description="IdP group membership (gateway sessions).",
         decided_at="2026-07-13",
         notes="gateway-oidc identity",
@@ -2242,6 +2398,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "identity.source",
         "kept",
+        kept_basis="nature",
         description="Identity source (e.g. gateway-oidc).",
         decided_at="2026-07-13",
         notes="gateway sessions",
@@ -2251,6 +2408,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "user.groups",
         "kept",
+        kept_basis="nature",
         description="IdP group membership (gateway sessions).",
         decided_at="2026-07-13",
         notes="gateway-oidc identity",
@@ -2260,6 +2418,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "identity.source",
         "kept",
+        kept_basis="nature",
         description="Identity source (e.g. gateway-oidc).",
         decided_at="2026-07-13",
         notes="gateway sessions",
@@ -2269,6 +2428,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "*",
         "workflow.run_id",
         "kept",
+        kept_basis="nature",
         description="Workflow run id (wf_...) on workflow-spawned agents.",
         decided_at="2026-07-13",
         notes="v2.1.202+",
@@ -2278,6 +2438,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "api_request_body",
         "body_length",
         "kept",
+        kept_basis="nature",
         description="Raw API request body length.",
         decided_at="2026-07-13",
     ),
@@ -2286,6 +2447,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "api_request_body",
         "body_truncated",
         "kept",
+        kept_basis="nature",
         description="Raw API request body truncated flag.",
         decided_at="2026-07-13",
     ),
@@ -2294,6 +2456,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "api_response_body",
         "body_length",
         "kept",
+        kept_basis="nature",
         description="Raw API response body length.",
         decided_at="2026-07-13",
     ),
@@ -2302,6 +2465,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "api_response_body",
         "body_truncated",
         "kept",
+        kept_basis="nature",
         description="Raw API response body truncated flag.",
         decided_at="2026-07-13",
     ),
@@ -2310,6 +2474,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "hook_execution_start",
         "hook_definitions",
         "kept",
+        kept_basis="nature",
         description="Hook definitions (detailed-beta/details gated).",
         decided_at="2026-07-13",
     ),
@@ -2318,6 +2483,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         "hook_execution_complete",
         "hook_definitions",
         "kept",
+        kept_basis="nature",
         description="Hook definitions (detailed-beta/details gated).",
         decided_at="2026-07-13",
     ),
@@ -2545,15 +2711,30 @@ def defense_in_depth() -> frozenset[str]:
     return frozenset(r.attr_path for r in _denied("defense_in_depth"))
 
 
-RegistryRow = tuple[str, str, str, str, str | None, str | None, str, str | None, str, str | None]
+RegistryRow = tuple[
+    str,
+    str,
+    str,
+    str,
+    str | None,
+    str | None,
+    str,
+    str | None,
+    str,
+    str | None,
+    str | None,
+    str | None,
+]
 
 
 def registry_rows(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> tuple[RegistryRow, ...]:
     """Project spec rows to the ``meta.column_registry`` column order.
 
     ``kind`` and ``deny_mode`` are sink-side and are not projected — the registry
-    is the deployed projection of the spec, not a full mirror. ``tools.spec_sync``
-    diffs this against the live registry.
+    is the deployed projection of the spec, not a full mirror. ``kept_basis`` and
+    ``basis_partner`` *are* projected: the drift tool and the generated data
+    dictionary both read them off the deployed registry, not off this module
+    (#366). ``tools.spec_sync`` diffs this against the live registry.
     """
     return tuple(
         (
@@ -2567,6 +2748,8 @@ def registry_rows(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> tuple[RegistryR
             r.useful_for,
             r.decided_at,
             r.notes,
+            r.kept_basis,
+            r.basis_partner,
         )
         for r in spec
     )
@@ -2635,6 +2818,27 @@ def _check_invariants(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> None:
                 raise ValueError(f"denied row missing deny_mode: {key}")
             if r.status == "kept" and r.deny_mode is not None:
                 raise ValueError(f"kept row must not set deny_mode: {key}")
+
+        # invariant 10: every kept row declares a basis, and only a kept row does
+        # (mirrors column_registry_kept_basis_chk). This is the durable half of #366 —
+        # ``tools.basis_drift`` only re-checks claims that exist, so what stops a *new*
+        # unwatched claim is this refusing to import without one.
+        if r.status == "kept":
+            if r.kept_basis is None:
+                raise ValueError(f"kept row missing kept_basis: {key}")
+        elif r.kept_basis is not None:
+            raise ValueError(f"{r.status} row must not set kept_basis: {key}")
+
+        # invariant 11: a partner is what `collinear` means and is meaningless without
+        # it (mirrors column_registry_basis_partner_chk). A self-partner would make the
+        # dependency vacuously true — every partner-value group holds one value, its own.
+        if r.kept_basis == "collinear":
+            if r.basis_partner is None:
+                raise ValueError(f"collinear row missing basis_partner: {key}")
+            if r.basis_partner == r.attr_path:
+                raise ValueError(f"basis_partner is the row's own attr_path: {key}")
+        elif r.basis_partner is not None:
+            raise ValueError(f"basis_partner set without kept_basis='collinear': {key}")
 
         # invariant 3: same column within one signal => same data_type (coalesce groups)
         if r.column_name is not None and r.data_type is not None:
