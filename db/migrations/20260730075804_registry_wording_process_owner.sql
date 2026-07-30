@@ -11,7 +11,8 @@
 -- generate_migration refuses orphans (#377).
 
 UPDATE meta.column_registry
-SET useful_for = 'owner_email_mismatch: a session whose process_owner disagrees with the '
+SET
+    useful_for = 'owner_email_mismatch: a session whose process_owner disagrees with the '
     'local-part of an ITWorx user_email. An observation, not an account-sharing control '
     '— the CLI never emits process.owner, so 99.6% of records are blind to it (#364)'
 WHERE attr_path = 'process.owner';
@@ -19,6 +20,7 @@ WHERE attr_path = 'process.owner';
 -- migrate:down
 
 UPDATE meta.column_registry
-SET useful_for = 'account sharing: a row whose process_owner disagrees with user_email is '
+SET
+    useful_for = 'account sharing: a row whose process_owner disagrees with user_email is '
     'one person emitting under another person''s account'
 WHERE attr_path = 'process.owner';
