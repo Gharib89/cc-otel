@@ -33,7 +33,7 @@ $script:CoreRequiredKeys = @(
     'AZURE_APP_OBJECT_ID', 'AZURE_SP_OBJECT_ID', 'RESOURCE_GROUP',
     'OPERATOR_INITIALS', 'DATABASE_URL', 'PG_ADMIN_PASSWORD',
     'CC_OTEL_INGEST_PASSWORD', 'CC_OTEL_READ_PASSWORD', 'FLEET_TOKENS',
-    'GHCR_USERNAME', 'GHCR_TOKEN'
+    'GHCR_USERNAME', 'GHCR_TOKEN', 'PG_FIREWALL_RULES'
 )
 
 function Get-BootstrapRequiredKey {
@@ -120,6 +120,7 @@ function Get-DerivedBootstrapConfig {
         Initials        = $initials
         DatabaseUrl     = Get-DotEnvValue -Raw $Raw -Key 'DATABASE_URL'
         PgAdminPassword = Get-DotEnvValue -Raw $Raw -Key 'PG_ADMIN_PASSWORD'
+        PgFirewallRules = Get-DotEnvValue -Raw $Raw -Key 'PG_FIREWALL_RULES'
         IngestPassword  = Get-DotEnvValue -Raw $Raw -Key 'CC_OTEL_INGEST_PASSWORD'
         ReadPassword    = Get-DotEnvValue -Raw $Raw -Key 'CC_OTEL_READ_PASSWORD'
         FleetTokens     = Get-DotEnvValue -Raw $Raw -Key 'FLEET_TOKENS'

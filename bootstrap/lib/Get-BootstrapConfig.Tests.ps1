@@ -26,6 +26,7 @@ CC_OTEL_READ_PASSWORD=readpw
 FLEET_TOKENS=["tok"]
 GHCR_USERNAME=ghuser
 GHCR_TOKEN=ghtok
+PG_FIREWALL_RULES=[{"name":"Vpn1","startIpAddress":"10.0.0.1","endIpAddress":"10.0.0.2"}]
 '@
 }
 
@@ -57,6 +58,12 @@ Describe 'Get-BootstrapRequiredKey' {
         $keys | Should -Contain 'GHCR_TOKEN'
         $keys | Should -Contain 'DATABASE_URL'
     }
+    It 'requires PG_FIREWALL_RULES so a deploy cannot silently drop the VPN rules' {
+        # The ranges are uncommitted (ADR-0018); the bicepparam default is an empty
+        # array, so an unset key deploys IaC that no longer describes the live
+        # firewall. Required here is the only thing that catches it.
+        Get-BootstrapRequiredKey | Should -Contain 'PG_FIREWALL_RULES'
+    }
 }
 
 Describe 'Get-BootstrapConfig - derived values' {
@@ -70,6 +77,13 @@ Describe 'Get-BootstrapConfig - derived values' {
         $script:cfg.ResourceGroup  | Should -Be 'rg-cc-otel-interim'
         $script:cfg.AppObjectId    | Should -Be 'app-obj'
         $script:cfg.GhcrToken      | Should -Be 'ghtok'
+    }
+    It 'surfaces PG_FIREWALL_RULES so the deploy step can export it to Bicep' {
+        # readEnvironmentVariable reads the az child process environment, so the
+        # value has to reach Invoke-StepDeploy's $secretEnv - a required .env key
+        # that never gets exported still deploys an empty rule array.
+        $script:cfg.PgFirewallRules |
+            Should -Be '[{"name":"Vpn1","startIpAddress":"10.0.0.1","endIpAddress":"10.0.0.2"}]'
     }
     It 'derives the flexible-server name ccotel-pg-<env>' {
         $script:cfg.ServerName | Should -Be 'ccotel-pg-interim'
