@@ -272,6 +272,20 @@ def test_resource_row_disagreeing_on_type_with_its_signal_row_rejected() -> None
         cs._check_invariants(bad)
 
 
+def test_resource_row_agreeing_with_only_one_signal_row_rejected() -> None:
+    # The resource row projects onto both raw tables, so it has to agree with both
+    # own-signal rows. A per-column lookup keyed on column_name alone keeps whichever
+    # signal came last in spec order and would clear a row that still conflicts with
+    # the other table.
+    bad = COLUMN_SPEC + (
+        ColumnSpec("metrics", "*", "x.both", "promoted", "x_both", "BIGINT"),
+        ColumnSpec("events", "*", "x.both", "promoted", "x_both", "TEXT"),
+        ColumnSpec("resource", "*", "x.res", "promoted", "x_both", "TEXT", "derived"),
+    )
+    with pytest.raises(ValueError, match="type differs between the resource row"):
+        cs._check_invariants(bad)
+
+
 def test_derived_coalesce_dedupes_repeated_sources() -> None:
     # A resource row mirroring an own-signal derived row must not duplicate the
     # source — the union of own-signal and resource rows stays idempotent.

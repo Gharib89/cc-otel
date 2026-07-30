@@ -2708,25 +2708,29 @@ def _check_invariants(spec: tuple[ColumnSpec, ...] = COLUMN_SPEC) -> None:
     # source and must be ``derived``: ``attr_columns(signal)`` keys on the row's own
     # signal, so a resource ``attr`` row writes nothing and the column is minted
     # always-NULL (#357 ``service_name`` / ``os_type``).
-    own_types: dict[str, str] = {}
+    # Keyed by (signal, column_name), not column_name alone: the projection lands on
+    # both tables, so it has to agree with both own-signal rows — a single-key lookup
+    # keeps whichever signal came last in spec order.
+    own_types: dict[tuple[str, str], str] = {}
     for r in spec:
         if r.status == "promoted" and r.signal != "resource" and r.column_name and r.data_type:
-            own_types[r.column_name] = r.data_type
+            own_types[(r.signal, r.column_name)] = r.data_type
     for r in spec:
         if r.status != "promoted" or r.signal != "resource" or r.column_name is None:
             continue
-        own = own_types.get(r.column_name)
-        if own is None:
+        owns = {sig: t for (sig, col), t in own_types.items() if col == r.column_name}
+        if not owns:
             if r.kind != "derived":
                 raise ValueError(
                     f"resource-only column {r.column_name} must be kind='derived', "
                     f"not {r.kind!r} — an attr row writes it on no signal"
                 )
-        elif own != r.data_type:
-            raise ValueError(
-                f"column {r.column_name} type differs between the resource row "
-                f"({r.data_type}) and its signal row ({own})"
-            )
+        for sig, own in sorted(owns.items()):
+            if own != r.data_type:
+                raise ValueError(
+                    f"column {r.column_name} type differs between the resource row "
+                    f"({r.data_type}) and its {sig} row ({own})"
+                )
 
 
 _check_invariants()
