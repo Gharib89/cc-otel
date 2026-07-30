@@ -302,8 +302,7 @@ def render(
         "|---|---|---|---|---|---|---|",
     ]
     out += [
-        f"| {sig} | `{name}` | `{path}` | {status} | {_basis(basis, partner)} | "
-        f"{desc} | {useful} |"
+        f"| {sig} | `{name}` | `{path}` | {status} | {_basis(basis, partner)} | {desc} | {useful} |"
         for sig, name, path, status, desc, useful, basis, partner in kept_denied
     ]
     out.append("")
