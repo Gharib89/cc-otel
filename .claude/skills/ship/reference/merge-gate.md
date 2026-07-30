@@ -4,6 +4,12 @@ This is the merge gate — the one guaranteed human stop (rationale in the auton
 contract in SKILL.md). Your job is to make that call a 10-second yes/no by laying
 out everything they'd want to check.
 
+**Write it uncompressed.** A session-wide output style (a compressed/terse mode
+armed by a hook, a brevity instruction) does **not** apply to this summary. It is
+the evidence a human approves an irreversible squash-merge on, so it gets full
+sentences and the whole template below — no dropped articles, no fragments, no
+omitted rows. Same for the disposition lines it carries.
+
 ## Post this summary, then stop
 
 ```
