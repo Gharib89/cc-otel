@@ -67,18 +67,18 @@ _Avoid_: blob config, storage adapter
 _Avoid_: attr map, column table
 
 **Column registry**:
-`meta.column_registry` — the deployed projection of the **Column spec** in Postgres: every promoted column and known `attrs` key with type, description, what it's useful for, status. Source of truth for the generated data dictionary and the sweep's live-drift check.
+`meta.column_registry` — the deployed projection of the **Column spec** in Postgres: every promoted column and known `attrs` key with type, description, what it's useful for, status, and — for a `kept` key — its **kept basis**. Source of truth for the generated data dictionary, the sweep's live-drift check, and the basis-drift check.
 
 **Drift**:
 An `attrs`/`resource` key observed in the raw reservoir but absent from the column registry — the signal that Anthropic added new telemetry. Surfaced on demand by prepared DuckDB queries (`tools/`) over the reservoir; analysis is manual. Postgres cannot detect it — schema-v2 drops the JSONB there. Concerns *unclassified* keys only; a classified key whose evidence has gone stale is **basis drift**.
 _Avoid_: basis drift (a distinct term, below)
 
 **Kept basis**:
-The reason an attribute key is classified `kept` rather than promoted or denied, drawn from a closed set: **`nature`** (identity or unbounded cardinality — what the key *is*), **`constant`** (one value across the observed window), **`collinear`** (functionally determined by another key), **`thin`** (reaching too few seats to argue a value case). Only `nature` is unfalsifiable; the other three are claims about observed data that a fleet change can invalidate. Every `kept` key carries exactly one.
+The reason an attribute key is classified `kept` rather than promoted or denied, drawn from a closed set: **`nature`** (identity or unbounded cardinality — what the key *is*), **`constant`** (one value across the observed window), **`collinear`** (functionally determined by a named partner key on the same record), **`thin`** (reaching too few seats to argue a value case), **`redundant`** (the information is already carried elsewhere in the schema, possibly at another grain). Only `nature` is unfalsifiable by construction; the rest are claims about observed data that a fleet change can invalidate, and `constant` / `collinear` / `thin` have machine predicates that re-derive them. `redundant` is a cross-grain claim no single record answers, so it carries its argument in the registry row's `notes` and is re-checked by hand. Every `kept` key carries exactly one.
 _Avoid_: kept reason, keep rationale, classification evidence
 
 **Basis drift**:
-Live reservoir data contradicting a key's **kept basis** — a second value under `constant`, a broken dependency under `collinear`, seat spread under `thin`. Unlike **drift** it concerns keys already classified, so no new key appears; the classification is simply no longer true. Detected on demand against a recent window; `nature` keys are exempt by construction.
+Live reservoir data contradicting a key's **kept basis** — a second value under `constant`, a broken dependency under `collinear`, seat spread under `thin`. Unlike **drift** it concerns keys already classified, so no new key appears; the classification is simply no longer true. Detected on demand against a recent window by `tools.basis_drift`; `nature` and `redundant` keys are exempt (the first cannot drift, the second has no single-record predicate).
 _Avoid_: stale classification, kept-key drift, evidence rot
 
 ### Presentation

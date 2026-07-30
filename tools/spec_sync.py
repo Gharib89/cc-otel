@@ -79,6 +79,8 @@ _REGISTRY_COLS = (
     "useful_for",
     "decided_at",
     "notes",
+    "kept_basis",
+    "basis_partner",
 )
 
 
@@ -122,7 +124,22 @@ def db_registry_rows(conn: psycopg.Connection) -> set[RegistryRow]:
     out: set[RegistryRow] = set()
     for row in rows:
         decided = row[8].isoformat() if row[8] is not None else ""
-        out.add((row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], decided, row[9]))
+        out.add(
+            (
+                row[0],
+                row[1],
+                row[2],
+                row[3],
+                row[4],
+                row[5],
+                row[6],
+                row[7],
+                decided,
+                row[9],
+                row[10],
+                row[11],
+            )
+        )
     return out
 
 

@@ -143,7 +143,7 @@ def _profile() -> TableProfile:
 def test_render_has_sections_and_column_row():
     md = render(
         [_profile()],
-        [("resource", "*", "host.name", "kept", "Hostname.", "")],
+        [("resource", "*", "host.name", "kept", "Hostname.", "", "nature", None)],
         database="cc_otel",
         generated="2026-07-16",
     )
@@ -159,7 +159,23 @@ def test_render_has_sections_and_column_row():
     assert "| `effort` | text | 0.0% | — | 0 |" in md
     # kept/denied section lists the blob-only key
     assert "## Kept & denied attributes (not in Postgres)" in md
-    assert "| resource | `*` | `host.name` | kept | Hostname. |  |" in md
+    assert "| resource | `*` | `host.name` | kept | nature | Hostname. |  |" in md
     # exactly one trailing newline — main() writes this verbatim, and a trailing
     # blank line would be stripped again by the end-of-file-fixer on every commit
     assert md.endswith("|\n") and not md.endswith("\n\n")
+
+
+def test_kept_basis_column_renders_the_partner_and_omits_it_for_denied():
+    # This column is where a kept row's reasoning becomes published rather than living
+    # only in docs/research/promotion-candidate-profile.md (#366).
+    md = render(
+        [_profile()],
+        [
+            ("resource", "*", "os.version", "kept", "OS version.", "", "collinear", "os.type"),
+            ("events", "*", "error", "denied", "Error text.", "", None, None),
+        ],
+        database="cc_otel",
+        generated="2026-07-30",
+    )
+    assert "| resource | `*` | `os.version` | kept | collinear(os.type) |" in md
+    assert "| events | `*` | `error` | denied | — |" in md

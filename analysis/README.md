@@ -91,5 +91,8 @@ uv run --group analysis marimo export html analysis/overview.py -o overview.html
   a snapshot needs sharing.
 - **No new abstraction** — notebooks reuse the `tools/` reservoir helpers
   (`configure_duckdb`, `partition_glob` / `compacted_url`, `extract_key_paths`,
-  `load_registry`); the only shared code is `analysis/_common.py`
-  (`read_payloads`), unit-tested in `analysis/tests/`.
+  `load_registry`) plus `tools/_payload.py` (`read_payloads`, `Profile`), which
+  moved out of `analysis/_common.py` when `tools.basis_drift` needed the same
+  aggregation (#366) and is unit-tested in `tools/tests/test_payload.py`.
+  `analysis/_common.py` re-exports those names, so notebook imports are unchanged;
+  what stays its own is `load_env`, the marimo-kernel env loader.

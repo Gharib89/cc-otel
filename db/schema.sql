@@ -1341,6 +1341,10 @@ CREATE TABLE meta.column_registry (
     useful_for text,
     decided_at date,
     notes text,
+    kept_basis text,
+    basis_partner text,
+    CONSTRAINT column_registry_basis_partner_chk CHECK ((((NOT (kept_basis IS DISTINCT FROM 'collinear'::text)) AND (basis_partner IS NOT NULL)) OR ((kept_basis IS DISTINCT FROM 'collinear'::text) AND (basis_partner IS NULL)))),
+    CONSTRAINT column_registry_kept_basis_chk CHECK ((((status = 'kept'::text) AND (kept_basis IS NOT NULL) AND (kept_basis = ANY (ARRAY['nature'::text, 'constant'::text, 'collinear'::text, 'thin'::text, 'redundant'::text]))) OR ((status <> 'kept'::text) AND (kept_basis IS NULL)))),
     CONSTRAINT column_registry_promoted_chk CHECK ((((status = 'promoted'::text) AND (column_name IS NOT NULL) AND (data_type IS NOT NULL)) OR ((status <> 'promoted'::text) AND (column_name IS NULL) AND (data_type IS NULL)))),
     CONSTRAINT column_registry_signal_chk CHECK ((signal = ANY (ARRAY['metrics'::text, 'events'::text, 'resource'::text]))),
     CONSTRAINT column_registry_status_chk CHECK ((status = ANY (ARRAY['promoted'::text, 'kept'::text, 'denied'::text])))
@@ -1756,4 +1760,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260729105303'),
     ('20260729115029'),
     ('20260730075429'),
-    ('20260730075804');
+    ('20260730075804'),
+    ('20260730081110');

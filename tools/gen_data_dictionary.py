@@ -210,15 +210,25 @@ def _profile_table(
     return TableProfile(table=table, total_rows=total, signal_counts=signal_counts, columns=columns)
 
 
-def _kept_denied(conn: psycopg.Connection) -> list[tuple[str, str, str, str, str, str]]:
+KeptDeniedRow = tuple[str, str, str, str, str, str, str | None, str | None]
+
+
+def _kept_denied(conn: psycopg.Connection) -> list[KeptDeniedRow]:
     with conn.cursor() as cur:
         cur.execute(
             "SELECT signal, signal_name, attr_path, status, "
-            "coalesce(description, ''), coalesce(useful_for, '') "
+            "coalesce(description, ''), coalesce(useful_for, ''), kept_basis, basis_partner "
             "FROM meta.column_registry WHERE status IN ('kept', 'denied') "
             "ORDER BY signal, status, signal_name, attr_path"
         )
         return cur.fetchall()
+
+
+def _basis(kept_basis: str | None, partner: str | None) -> str:
+    """Render a kept basis for the table — ``collinear`` names its partner (#366)."""
+    if kept_basis is None:
+        return "—"  # a denied row has no basis
+    return f"{kept_basis}({partner})" if partner else kept_basis
 
 
 def _pct(v: float | None) -> str:
@@ -227,7 +237,7 @@ def _pct(v: float | None) -> str:
 
 def render(
     profiles: list[TableProfile],
-    kept_denied: list[tuple[str, str, str, str, str, str]],
+    kept_denied: list[KeptDeniedRow],
     database: str,
     generated: str,
 ) -> str:
@@ -283,12 +293,17 @@ def render(
         "",
         "`kept` = blob reservoir only; `denied` = stripped by the sink wherever seen.",
         "",
-        "| signal | signal name | attr path | status | description | useful for |",
-        "|---|---|---|---|---|---|",
+        "**basis** is why a key is `kept` rather than promoted (#366): `nature` (identity or",
+        "unbounded cardinality), `constant`, `collinear(partner)`, `thin`, or `redundant`.",
+        "`nature` and `redundant` carry no machine predicate; `uv run python -m tools.basis_drift`",
+        "re-checks the other three against a recent window.",
+        "",
+        "| signal | signal name | attr path | status | basis | description | useful for |",
+        "|---|---|---|---|---|---|---|",
     ]
     out += [
-        f"| {sig} | `{name}` | `{path}` | {status} | {desc} | {useful} |"
-        for sig, name, path, status, desc, useful in kept_denied
+        f"| {sig} | `{name}` | `{path}` | {status} | {_basis(basis, partner)} | {desc} | {useful} |"
+        for sig, name, path, status, desc, useful, basis, partner in kept_denied
     ]
     out.append("")
     return "\n".join(out)

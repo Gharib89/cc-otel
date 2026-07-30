@@ -183,6 +183,12 @@ Caveat: constant over eleven days and twenty seats is evidence, not a guarantee.
 change (managed settings, safe mode, a second auth method) would make several of these vary,
 and a `kept` key does not resurface in `tools.sweep` once classified.
 
+**Resolved (#366).** Each of these seventeen now carries `kept_basis = 'constant'` on its
+registry row, and `tools.basis_drift` re-derives that claim against a recent window — a second
+distinct value exits 1 and names the key. `sweep` still cannot see them; the caveat above stands
+for *that* tool only. `claude.deployment_mode` is `constant` and `wsl.version` is
+`collinear` on `os.type`, the presence dependency the paragraph above describes.
+
 ## Full evidence table
 
 96 decision rows — every `kept` or `unclassified` key path in the window, collapsed to its

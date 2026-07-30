@@ -55,6 +55,7 @@ uv run python -m tools.roster_load --file <csv> --as-of YYYY-MM-DD  # dry-run an
 uv run python -m tools.roster_load --file <csv> --as-of YYYY-MM-DD --execute [--force]  # land the drop in ref, then refresh the seat marts + dim_date (--force overrides the as-of/truncation guards)
 uv run python -m tools.compact               # dry-run the reservoir compaction catch-up: frozen partitions with no parquet counterpart (ADR-0015)
 uv run python -m tools.compact --execute     # build + upload one parquet per (signal, day); --rebuild re-derives existing counterparts (needed after tools.scrub)
+uv run python -m tools.basis_drift [--days 7|--since|--until]  # re-check each kept row's kept_basis against a recent window; exit 1 on basis drift (#366)
 scripts/ship/local-gate.sh   # path-aware local mirror of CI (JSON verdict; the ship skill's phase-5 gate)
 psql "$DATABASE_URL"         # ad-hoc DB access (Azure otel real data / cc_otel)
 ```
@@ -90,7 +91,7 @@ Migration-authoring loop, the throwaway-container rationale, and the `.env` cave
 |---|---|
 | `db/` | dbmate migrations + `schema.sql` + `views/marts/` canonical mart definitions |
 | `bootstrap/` | env bring-up runbook + PowerShell scripts (operator-run) |
-| `tools/` | Curation + ops tooling over the blob reservoir (sweep, data dictionary, replay, scrub, compact) + reference-data ingest (`roster_load.py`) + CI gate-path derivation (`gate_paths.py`) |
+| `tools/` | Curation + ops tooling over the blob reservoir (sweep, basis drift, data dictionary, replay, scrub, compact) + reference-data ingest (`roster_load.py`) + CI gate-path derivation (`gate_paths.py`) |
 | `analysis/` | marimo + DuckDB notebook lab over the blob reservoir (on-demand local EDA, `--group analysis`; #87) |
 | `scripts/` | skill-sync + cloud-ship bootstrap + dev-migrate + `ship/` (the ship skill's deterministic mechanics: preflight, isolate, claim, local-gate, ci-wait, merge) + `backfill/` (one-shot POC→interim backfill, ADR-0006) |
 | `.claude/skills/` | tracked agent skills (vendored + project-native) |

@@ -5,6 +5,7 @@ tools live in `tools/` and run as modules from the repo root:
 
 ```sh
 uv run python -m tools.sweep --days 7
+uv run python -m tools.basis_drift --days 7        # re-check the kept classifications
 uv run python -m tools.spec_sync --check           # gate: spec <-> migrations converge
 uv run python -m tools.spec_sync --name <slug>     # author: spec delta -> new migration
 uv run python -m tools.gen_data_dictionary
@@ -22,8 +23,9 @@ projection; `tools.spec_sync` proves the two converge (CI `integration` job +
 All read the sink's own config: `DATABASE_URL` plus `CC_OTEL_BLOB_CONNECTION_STRING` or
 `CC_OTEL_BLOB_ACCOUNT_URL` (+ `CC_OTEL_BLOB_CONTAINER`, default `raw`). Point them at an
 environment by exporting that environment's values (interim/prod secrets live in ACA /
-GitHub, not in a committed env file). `sweep` reads blobs with DuckDB's Azure extension;
-`scrub`/`replay` use the blob SDK; `compact` uses both; `replay` re-POSTs to a reachable sink URL.
+GitHub, not in a committed env file). `sweep` and `basis_drift` read blobs with DuckDB's Azure
+extension; `scrub`/`replay` use the blob SDK; `compact` uses both; `replay` re-POSTs to a
+reachable sink URL.
 
 The reservoir is Hive-partitioned `signal=<metrics|logs>/dt=<YYYY-MM-DD>/…json.gz` — the
 partition uses the OTLP **route** names `metrics`/`logs`, while the registry's signal
@@ -31,9 +33,11 @@ dimension is `metrics`/`events`/`resource`; the sweep maps between them.
 
 Beside it sits the **compacted reservoir** (`CC_OTEL_BLOB_COMPACTED_CONTAINER`, ADR-0015): one
 parquet per `(signal, day)` at the same Hive path, written on demand by `tools.compact` and
-preferred by the `analysis/` notebooks. It is **derived, additive and rebuildable** — `sweep`,
-`scrub` and `replay` address `raw` only, which stays the source of truth. It touches curation in
-exactly one place: the deny flow in step 6.
+preferred by the `analysis/` notebooks and by `tools.basis_drift`. It is **derived, additive and
+rebuildable** — `sweep`, `scrub` and `replay` address `raw` only, which stays the source of
+truth. It touches curation in two places: the deny flow in step 6, and `basis_drift`'s window
+read (which falls back to `raw` per partition, so a pending compaction catch-up only costs it
+time).
 
 ## 1. Sweep — find unclassified keys
 
@@ -58,6 +62,23 @@ and `attr_columns` drops `signal_name`), so a resource attribute seen at
 needing a second verdict. The fallback does **not** run the other way: a genuinely new key
 at the resource path still surfaces. Register a resource attribute once, as `resource`/`*`.
 
+## 1b. Basis drift — re-check the keys already classified
+
+`sweep` concerns **unclassified** keys only. A key classified `kept` never resurfaces there
+however far its live distribution drifts from the evidence the classification rested on — the
+sweep's extraction returns key paths with no values, so it cannot see cardinality at all. That
+gap is **basis drift** (CONTEXT.md), and `tools.basis_drift` closes it: it re-derives each
+`kept` row's basis from a recent window and exits 1 on any contradiction. Details and the
+per-basis predicates: [`tools/README.md`](../../tools/README.md).
+
+Two rules when it fires:
+
+- **Drift is a promotion-flow ticket, not an edit.** If a `constant` key now takes two values,
+  the key may deserve a column — that is a new issue for step 3, never a status change smuggled
+  into the same PR.
+- **`thin` is skipped below 10 reporting seats** and the run says so. A skip is not a pass;
+  widen the window.
+
 ## 2. Classification obligation
 
 Every value-bearing key that reaches the pipeline must have exactly one
@@ -66,7 +87,13 @@ Every value-bearing key that reaches the pipeline must have exactly one
 - **`promoted`** — worth a typed column in `raw.metrics`/`raw.events`; carries
   `column_name` + `data_type`. Feeds staging/marts.
 - **`kept`** — retained in the blob reservoir only, no Postgres column. The default for
-  low-value or high-cardinality keys.
+  low-value or high-cardinality keys. A `kept` row must also declare a **kept basis**
+  (`kept_basis`, and `basis_partner` when it is `collinear`) — *why* it is kept: `nature`,
+  `constant`, `collinear`, `thin`, or `redundant` (**Kept basis** in CONTEXT.md). The registry
+  CHECK enforces it, so a `kept` row without one fails its migration. Only `nature` and
+  `redundant` carry no machine predicate; step 1b re-checks the rest. That is not the same as
+  unfalsifiable: `nature` cannot drift, but `redundant` is a cross-grain claim no single record
+  answers, so it is re-checked by hand when the schema that carries the information moves.
 - **`denied`** — stripped by the sink wherever seen; never at rest. For secret-bearing or
   PII keys (#8).
 
@@ -83,11 +110,14 @@ Promoting a key (or adding any registry row) ships as **one PR** carrying, toget
    no parser edit); an ordered coalesce over several attr paths is `kind="derived"`, also
    parser-free (`derived_coalesce` is generic). Only `kind="structural"` — a value read from
    OTLP structure rather than the attribute map — needs matching parser code. The
-   import-time invariants reject a malformed row immediately; two are easy to trip:
+   import-time invariants reject a malformed row immediately; three are easy to trip:
    a `kind="attr"` column takes **exactly one attr path per signal** (invariant 8 — where
    the fleet emits one path across several event families the column is polysemous and the
-   `signal_name` rows document it; where the paths differ they get their own columns), and a
-   `kept`/`denied` row must not contradict a `promoted` one for the same path (invariant 7).
+   `signal_name` rows document it; where the paths differ they get their own columns), a
+   `kept`/`denied` row must not contradict a `promoted` one for the same path (invariant 7),
+   and a `kept` row — and only a `kept` row — carries a `kept_basis`, with a `basis_partner`
+   iff that basis is `collinear` (invariants 10/11). Promoting a key therefore *drops* its
+   basis; leaving one behind fails the import.
    A **resource** attribute is registered once as `resource`/`*` and its promoted column
    lands on **both** raw tables — the sink merges the resource block into each signal's flat
    namespace, so a resource-only promotion is `kind="derived"` with a single source (#357).
