@@ -4,4 +4,6 @@ The production Azure Postgres database starts empty on a redesigned schema — s
 
 **Superseded for the interim environment by ADR-0006** — interim is backfilled with mapped POC history; production still starts fresh per this ADR.
 
+**Amended by ADR-0017 for the interim curation window** — interim's own redacted reservoir blobs are re-driven through the current sink so newly promoted columns carry history from 2026-07-17, which is neither a POC backfill nor an old-schema translation. Production still starts fresh.
+
 **The "no cost columns in marts" clause is superseded by ADR-0007** — `cost_usd` is promoted into `marts.fact_api_usage` as API-equivalent value consumed (per decision #158). The rest of schema-v2 stands.

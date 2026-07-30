@@ -203,6 +203,29 @@ Without `--execute` it reports the blob / hash / raw-row counts in the window an
 the time window generously — raw rows are keyed by event time, so ingest-vs-event skew at
 the edges is expected.
 
+**Run the target sink with the reservoir unconfigured.** Unset `CC_OTEL_BLOB_ACCOUNT_URL` /
+`CC_OTEL_BLOB_CONNECTION_STRING` on the *sink* process (the replay itself still needs them,
+to read). A sink with blob settings writes a **new** blob per re-POST under *today's* `dt=`,
+so a 18k-blob replay near-doubles the reservoir and poisons the compacted parquet
+(ADR-0015). Nothing in the tool prevents this.
+
+**One pass per day, not one pass per window.** A whole-range `--execute` deletes everything
+up front and re-POSTs for as long as the window takes; a batch ingested inside that gap is
+deleted and never restored. Per-day passes bound the exposure to one partition, and a
+partition older than today can never gain another blob. Run the live day last and repeat it
+until its blob-derived and raw row counts agree.
+
+**Measure before mutating** — the event-time delete and the `dt`-partition re-POST only line
+up if the data says they do. ADR-0017 records the three checks a replay rests on (zero
+pre-window skew inside in-window partitions, blob-vs-raw row reconciliation per day, and
+`sha256(gunzip(blob))` equal to the hash the sink re-claims) and what each one rules out.
+
+On Windows the sink cannot run natively — uvicorn's `ProactorEventLoop` is incompatible with
+psycopg's async pool. Run the deployed image instead:
+`docker run -d -p 8080:8080 -e CC_OTEL_SINK_HOST=0.0.0.0 -e DATABASE_URL=... ghcr.io/gharib89/cc-otel-sink:<sha>`,
+and confirm `docker ps` shows `0.0.0.0:8080->8080/tcp` — an unpublished port plus a stray
+local listener answers `/healthz` from the wrong process.
+
 ## `tools.roster_load` — land an IS seat-roster drop (destructive)
 
 IS emails a roster CSV roughly every two weeks. Each file lands as one **roster drop**: a
