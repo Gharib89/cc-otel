@@ -81,7 +81,7 @@ distribution drifts. That is what `basis_drift` is for.
 ## `tools.basis_drift` — re-check the `kept` classifications
 
 Every `kept` registry row carries a **kept basis** (`meta.column_registry.kept_basis`): why the
-key is kept rather than promoted. Two of the five are unfalsifiable; the other three are claims
+key is kept rather than promoted. Two of the five carry no machine predicate; the other three are claims
 about observed data that a fleet change can invalidate, and this re-derives them from a recent
 window. Nothing is stored as a baseline — a number recorded today is the exact staleness this
 tool exists to catch.

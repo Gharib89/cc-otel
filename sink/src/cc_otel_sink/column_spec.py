@@ -611,7 +611,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         kept_basis="redundant",
         description="MCP server attribution.",
         decided_at="2026-07-29",
-        notes="kept basis collinear (#358): exactly redundant with raw.events.api_request -- "
+        notes="kept basis redundant (#358): exactly redundant with raw.events.api_request -- "
         "20 (server, tool) pairs both sides, 0 either-only, cost within 0.04%",
     ),
     ColumnSpec(
@@ -622,7 +622,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         kept_basis="redundant",
         description="MCP tool attribution.",
         decided_at="2026-07-29",
-        notes="kept basis collinear (#358): same pair; promoting would mint a second, ambiguous "
+        notes="kept basis redundant (#358): same pair; promoting would mint a second, ambiguous "
         "MCP-cost path (ADR-0008)",
     ),
     ColumnSpec(
@@ -1912,7 +1912,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         kept_basis="redundant",
         description="Message UUID.",
         decided_at="2026-07-29",
-        notes="kept basis collinear (#359): covered by the promoted prompt_id, which reaches all "
+        notes="kept basis redundant (#359): covered by the promoted prompt_id, which reaches all "
         "three families",
     ),
     ColumnSpec(
@@ -1923,7 +1923,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         kept_basis="redundant",
         description="Message UUID.",
         decided_at="2026-07-29",
-        notes="kept basis collinear (#359): covered by the promoted prompt_id",
+        notes="kept basis redundant (#359): covered by the promoted prompt_id",
     ),
     ColumnSpec(
         "events",
@@ -2087,7 +2087,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         kept_basis="redundant",
         description="Model the subagent finished on.",
         decided_at="2026-07-29",
-        notes="kept basis collinear (#358): api_request already carries `model` alongside the "
+        notes="kept basis redundant (#358): api_request already carries `model` alongside the "
         "agent-bearing query_source, so model-per-agent exists at request grain",
     ),
     ColumnSpec(
@@ -2306,7 +2306,7 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         kept_basis="redundant",
         description="Where the tool came from (builtin/mcp/sdk_host_builtin_mcp).",
         decided_at="2026-07-29",
-        notes="kept basis collinear (#358): redundant with the promoted tool_name='mcp_tool' -- "
+        notes="kept basis redundant (#358): redundant with the promoted tool_name='mcp_tool' -- "
         "1,027 rows both ways, adds 34 of 49,250 (0.07%)",
     ),
     ColumnSpec(

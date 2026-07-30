@@ -59,6 +59,14 @@ WHERE (signal, signal_name, attr_path) IN (
     ('metrics', 'claude_code.cost.usage', 'mcp_tool.name')
 );
 
+-- The six rows above landed (#378) with notes opening "kept basis collinear" -- the label
+-- contradicted the basis assigned here, and `notes` is projected into the registry, so the
+-- correction has to travel with it. Only the label token moves; each note's argument already
+-- reads as redundancy. `replace` is a no-op on a row whose text does not carry it.
+UPDATE meta.column_registry
+SET notes = replace(notes, 'kept basis collinear (#', 'kept basis redundant (#')
+WHERE kept_basis = 'redundant';
+
 -- thin (2): reaches too few seats to argue a value case.
 UPDATE meta.column_registry SET kept_basis = 'thin'
 WHERE (signal, signal_name, attr_path) IN (
@@ -75,13 +83,21 @@ ADD CONSTRAINT column_registry_kept_basis_chk CHECK (
     OR (status <> 'kept' AND kept_basis IS NULL)
 );
 
+-- `IS NOT DISTINCT FROM`, not `=`: a CHECK passes when its expression is TRUE *or NULL*, and
+-- `kept_basis = 'collinear'` is NULL on a denied row, which would let an orphan basis_partner
+-- through the whole disjunction. The two forms are exact complements, so nothing is NULL here.
 ALTER TABLE meta.column_registry
 ADD CONSTRAINT column_registry_basis_partner_chk CHECK (
-    (kept_basis = 'collinear' AND basis_partner IS NOT NULL)
+    (kept_basis IS NOT DISTINCT FROM 'collinear' AND basis_partner IS NOT NULL)
     OR (kept_basis IS DISTINCT FROM 'collinear' AND basis_partner IS NULL)
 );
 
 -- migrate:down
+
+-- Before kept_basis goes: the notes revert reads it.
+UPDATE meta.column_registry
+SET notes = replace(notes, 'kept basis redundant (#', 'kept basis collinear (#')
+WHERE kept_basis = 'redundant';
 
 ALTER TABLE meta.column_registry DROP CONSTRAINT column_registry_basis_partner_chk;
 ALTER TABLE meta.column_registry DROP CONSTRAINT column_registry_kept_basis_chk;

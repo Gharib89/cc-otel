@@ -91,7 +91,9 @@ Every value-bearing key that reaches the pipeline must have exactly one
   (`kept_basis`, and `basis_partner` when it is `collinear`) — *why* it is kept: `nature`,
   `constant`, `collinear`, `thin`, or `redundant` (**Kept basis** in CONTEXT.md). The registry
   CHECK enforces it, so a `kept` row without one fails its migration. Only `nature` and
-  `redundant` are unfalsifiable; step 1b re-checks the rest.
+  `redundant` carry no machine predicate; step 1b re-checks the rest. That is not the same as
+  unfalsifiable: `nature` cannot drift, but `redundant` is a cross-grain claim no single record
+  answers, so it is re-checked by hand when the schema that carries the information moves.
 - **`denied`** — stripped by the sink wherever seen; never at rest. For secret-bearing or
   PII keys (#8).
 

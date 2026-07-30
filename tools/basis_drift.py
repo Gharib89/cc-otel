@@ -109,7 +109,7 @@ class Violation(NamedTuple):
 
 
 def _capped_add(seen: set[str | None], value: str | None) -> None:
-    if value in seen or len(seen) < EVIDENCE_CAP:
+    if len(seen) < EVIDENCE_CAP:
         seen.add(value)
 
 
@@ -129,6 +129,7 @@ class BasisProfile:
     dependency: dict[Claim, dict[str | None, set[str | None]]] = field(default_factory=dict)
     seats: set[str] = field(default_factory=set)
     records: int = 0
+    checkable: list[Claim] = field(init=False, default_factory=list)
 
     def __post_init__(self) -> None:
         self.checkable = [c for c in self.claims if c.basis in CHECKABLE]
@@ -153,8 +154,11 @@ class BasisProfile:
                             attrs.get(claim.partner), set()
                         )
                         _capped_add(group, value)
-                    elif value is not None and seat:
-                        self.key_seats.setdefault(claim, set()).add(seat)
+                    elif claim.basis == "thin":
+                        if value is not None and seat:
+                            self.key_seats.setdefault(claim, set()).add(seat)
+                    else:  # see the matching branch in `evaluate`
+                        raise ValueError(f"no accumulator for checkable basis {claim.basis!r}")
 
 
 @dataclass
@@ -219,7 +223,7 @@ def evaluate(profile: BasisProfile) -> Report:
                 )
                 evidence = f"partner {claim.partner!r} no longer determines it: {detail}"
 
-        else:
+        elif claim.basis == "thin":
             carrying = len(profile.key_seats.get(claim, set()))
             if reporting_seats and carrying / reporting_seats >= THIN_SHARE:
                 pct = round(100 * carrying / reporting_seats)
@@ -227,6 +231,9 @@ def evaluate(profile: BasisProfile) -> Report:
                     f"reaches {carrying} of {reporting_seats} reporting seats ({pct}%), "
                     f"at or above the {round(100 * THIN_SHARE)}% share"
                 )
+
+        else:  # a basis added to CHECKABLE without a predicate here, not silently thin's
+            raise ValueError(f"no predicate for checkable basis {claim.basis!r}")
 
         if evidence is not None:
             violations.append(
