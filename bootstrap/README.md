@@ -62,7 +62,7 @@ The default spine runs in this order. `mode` is how the step behaves:
 | `rbac` | Grant the deploy principal Contributor on the RG | auto |
 | `seed-images` | Detect the `:latest` images; halt+instruct on a virgin registry (needs Docker) | conditional |
 | `sync-secrets` | Fan `.env.<env>` out to the prefixed GitHub secrets | auto |
-| `deploy` | Deploy the Bicep template (`CapacityNotAvailable` retry/zone note below) | auto |
+| `deploy` | Deploy the Bicep template (`CapacityNotAvailable` retry/zone note below). **On a live environment, follow it with `roll-image`** — the params pin `:latest`, so this step replaces the running SHA-tagged revision, and a stale `:latest` 500s on every OTLP request until the SHA revision is rolled back on | auto |
 | `open-ip` | Open the operator firewall rule; **stays open** (no auto-close) | auto |
 | `pg-cron-gate` | Assert `pg_cron` is preloaded and `cron.database_name=cc_otel` is applied (restart if pending) **before** migrating | gate |
 | `migrate` | `dbmate up` | auto |
@@ -120,6 +120,11 @@ CC_OTEL_READ_PASSWORD="..."            # Power BI login password (db-logins step
 FLEET_TOKENS='["<bearer-token>"]'
 GHCR_USERNAME="<github-username>"
 GHCR_TOKEN="<ghcr-classic-pat>"        # from gate G2
+
+# --- firewall (Bicep input, NOT pushed to GitHub) ---
+# ITWorx VPN egress ranges, uncommitted because this repo is public (ADR-0018).
+# JSON array appended to the AllowAllAzureServices rule in iac/params/<env>.bicepparam.
+PG_FIREWALL_RULES='[{"name":"ITWorxVpn1","startIpAddress":"...","endIpAddress":"..."}]'
 ```
 
 The loader derives the flexible-server name (`ccotel-pg-<env>`), the secret prefix

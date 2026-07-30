@@ -400,12 +400,18 @@ function Invoke-StepDeploy {
     # call omitting --url would silently target this deploy-step export.
     # Omitting them makes Bicep fall back to '' and Azure rejects the empty ACA
     # secrets (ContainerAppSecretInvalid).
+    # PG_FIREWALL_RULES is not a secret, but it rides the same mechanism: the VPN
+    # ranges are uncommitted (ADR-0018), so Bicep only sees them if they are in
+    # this process. Omitting it deploys an empty rule array - and because
+    # resource-group deploys are incremental, the live rules would survive while
+    # silently leaving the template.
     $secretEnv = [ordered]@{
         FLEET_TOKENS      = $Config.FleetTokens
         DATABASE_URL      = $Config.DatabaseUrl
         GHCR_USERNAME     = $Config.GhcrUsername
         GHCR_TOKEN        = $Config.GhcrToken
         PG_ADMIN_PASSWORD = $Config.PgAdminPassword
+        PG_FIREWALL_RULES = $Config.PgFirewallRules
     }
     $prior = [ordered]@{}
     foreach ($name in $secretEnv.Keys) { $prior[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
