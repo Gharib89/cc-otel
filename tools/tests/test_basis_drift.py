@@ -197,7 +197,7 @@ def test_constant_and_collinear_are_evaluated_below_the_seat_floor() -> None:
     assert len(violations) == 1  # ...but constant still fired
 
 
-# --- the unfalsifiable bases --------------------------------------------------
+# --- the bases with no machine predicate --------------------------------------
 
 
 def test_nature_and_redundant_are_never_evaluated() -> None:

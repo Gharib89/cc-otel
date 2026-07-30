@@ -36,11 +36,13 @@ at import (i.e. in every unit-test run), so a malformed row fails fast.
 * ``redundant`` — the information is already carried elsewhere in the schema,
   possibly at another grain (so no same-record partner names it).
 
-Only ``nature`` is unfalsifiable; the rest are claims about observed data that a
-fleet change can invalidate, and ``tools.basis_drift`` re-derives ``constant`` /
-``collinear`` / ``thin`` against a recent window. ``redundant`` carries its
-argument in ``notes`` — a cross-grain claim no single record can answer — so the
-tool reports it as unevaluated rather than pretending to check it.
+``nature`` and ``redundant`` carry no machine predicate; the other three are
+claims about observed data that a fleet change can invalidate, and
+``tools.basis_drift`` re-derives ``constant`` / ``collinear`` / ``thin`` against a
+recent window. The two exemptions are not the same claim: ``nature`` cannot drift
+at all, while ``redundant`` is falsifiable but only across grains, so it carries
+its argument in ``notes`` and the tool reports it as unevaluated rather than
+pretending to check it.
 
 The NOT-NULL-iff-``kept`` invariant below is the durable half of #366: from that
 migration on, a new ``kept`` row without a basis fails at import and in the
