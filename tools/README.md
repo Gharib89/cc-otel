@@ -203,6 +203,39 @@ Without `--execute` it reports the blob / hash / raw-row counts in the window an
 the time window generously — raw rows are keyed by event time, so ingest-vs-event skew at
 the edges is expected.
 
+**Run the target sink with the reservoir unconfigured.** Unset `CC_OTEL_BLOB_ACCOUNT_URL` /
+`CC_OTEL_BLOB_CONNECTION_STRING` on the *sink* process (the replay itself still needs them,
+to read). A sink with blob settings writes a **new** blob per re-POST under *today's* `dt=`,
+so a 18k-blob replay near-doubles the reservoir and poisons the compacted parquet
+(ADR-0015). Nothing in the tool prevents this.
+
+**One pass for the whole window, not a pass per day.** A day pass deletes event-day D but
+re-POSTs partition `dt=D`, whose midnight-straddle records carry event-day **D-1** — rows the
+delete never touched, so the pass duplicates them, and the neighbouring day's pass later
+deletes them without restoring them (they live in a partition it does not read). Day passes
+compose only in strictly ascending order, which serialises the slowest phase of the job; one
+whole-range delete followed by every blob has no boundary to get wrong. ADR-0017 records the
+~150 rows this cost when it was learned the other way round.
+
+The whole-range delete is what races live ingest: a batch landing between the blob listing and
+the delete loses its rows while its blob sits outside the re-POST set, and its ledger hash
+survives, so a bare re-POST no-ops. Finish with a pass over the live day alone — first confirming
+that partition carries no straddle from the previous day, or the repair reintroduces the boundary
+bug. Repeating it converges to a floor, not to zero: each pass restores its predecessor's losses
+and incurs its own, so the residual settles at about one pass-duration of ingest (69 metrics / 39
+events in #379). Replaying the day once frozen is what closes the gap exactly.
+
+**Measure before mutating** — the event-time delete and the `dt`-partition re-POST only line
+up if the data says they do. ADR-0017 records the three checks a replay rests on (skew at the
+window's outer edge *and* at each interior day boundary, blob-vs-raw row reconciliation per
+day, and `sha256(gunzip(blob))` equal to the hash the sink re-claims) and what each rules out.
+
+On Windows the sink cannot run natively — uvicorn's `ProactorEventLoop` is incompatible with
+psycopg's async pool. Run the deployed image instead:
+`docker run -d -p 8080:8080 -e CC_OTEL_SINK_HOST=0.0.0.0 -e DATABASE_URL=... ghcr.io/gharib89/cc-otel-sink:<sha>`,
+and confirm `docker ps` shows `0.0.0.0:8080->8080/tcp` — an unpublished port plus a stray
+local listener answers `/healthz` from the wrong process.
+
 ## `tools.roster_load` — land an IS seat-roster drop (destructive)
 
 IS emails a roster CSV roughly every two weeks. Each file lands as one **roster drop**: a

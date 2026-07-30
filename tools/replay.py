@@ -11,6 +11,10 @@ then re-POST each blob to the sink (``/v1/metrics`` or ``/v1/logs`` per its part
 Raw rows are keyed by event time, not blob path, so a window is a *time range* — pick it
 generously; ingest-time vs event-time skew at the edges is expected.
 
+The target sink must run with the blob reservoir **unconfigured**, or every re-POST writes a
+fresh blob under today's partition and the reservoir near-doubles (ADR-0017); this tool reads
+blobs, it never expects the sink to write them back.
+
 Destructive; dry-run by default. Pass ``--execute`` to delete + re-POST.
 
     uv run python -m tools.replay --since 2026-07-10 --until 2026-07-11        # dry-run
