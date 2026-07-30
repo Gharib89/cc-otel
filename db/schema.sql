@@ -381,6 +381,48 @@ BEGIN
       AND NOT EXISTS (SELECT 1 FROM ref.seat_roster_snapshot s
                       WHERE s.user_email = t.user_email)
     GROUP BY t.user_email;
+
+    -- DQ (#372, decided in #364): a session whose process_owner disagrees with the local-part
+    -- of its ITWorx user_email. process.owner is a Claude Code Desktop / Cowork resource
+    -- attribute — the CLI never emits it — so this observes the ~0.4% of records that carry
+    -- it and is structurally blind to the surface the rest of the fleet works on. It is an
+    -- observation that one person may be emitting under another's account, not a fleet-wide
+    -- control.
+    --
+    -- Session grain, not seat: the value is session-constant, so one session is a complete
+    -- statement, while a seat-grain "never matches" is unsayable for the seats the attribute
+    -- never reaches — absence there is emitter behaviour, not evidence.
+    --
+    -- Personal addresses are excluded, not reported: a First.Last machine account can never
+    -- equal one, so an unscoped rule would fire forever on an expected condition, and ADR-0011's
+    -- alias machinery already owns that reading. No allowlist for shared or service accounts —
+    -- Administrator, a hostname, or an unrelated personal name are plain mismatches, and that is
+    -- the case this exists for.
+    INSERT INTO marts.dq_finding (finding_type, row_count, details)
+    SELECT 'owner_email_mismatch', COUNT(*),
+           jsonb_build_object(
+               'session_id', o.session_id,
+               'activity_date', MIN(o.activity_date),
+               'process_owner', o.process_owner,
+               'user_email', o.user_email,
+               'record_count', COUNT(*)
+           )
+    FROM (
+        -- Both raw tables: process.owner is a resource attribute, so it rides either signal,
+        -- and one session ordinarily splits across them. UNION ALL because the grouping below
+        -- counts records, not distinct rows.
+        SELECT session_id, ts::date AS activity_date, process_owner, user_email
+        FROM raw.metrics
+        WHERE session_id IS NOT NULL
+        UNION ALL
+        SELECT session_id, event_time::date AS activity_date, process_owner, user_email
+        FROM raw.events
+        WHERE session_id IS NOT NULL
+    ) o
+    WHERE o.process_owner IS NOT NULL
+      AND o.user_email LIKE '%@itworx.com'
+      AND lower(trim(o.process_owner)) <> split_part(lower(trim(o.user_email)), '@', 1)
+    GROUP BY o.session_id, o.process_owner, o.user_email;
 END
 $_$;
 
@@ -1710,4 +1752,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260729030012'),
     ('20260729102726'),
     ('20260729105303'),
-    ('20260729115029');
+    ('20260729115029'),
+    ('20260730075429'),
+    ('20260730075804');
