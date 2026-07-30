@@ -1,6 +1,6 @@
 # Curation & ops tooling — operator runbook
 
-Six command-line tools for curating and operating the redacted-blob reservoir (the
+Seven command-line tools for curating and operating the redacted-blob reservoir (the
 `raw` container), the column registry, and the seat-roster reference data. They are
 **manual / on-demand** — never wired into CI or the sink. This is the human operator guide;
 the agent-facing curation workflow lives in
@@ -9,6 +9,7 @@ the agent-facing curation workflow lives in
 | tool | what it does | destructive? |
 |---|---|---|
 | `tools.sweep` | list blob attribute key paths not yet in the column registry (+ redaction leaks) | no |
+| `tools.basis_drift` | re-check every `kept` classification's **kept basis** against a recent window | no |
 | `tools.gen_data_dictionary` | regenerate `docs/data-dictionary.md` from Postgres + the registry | no |
 | `tools.scrub` | re-redact a window of blobs **in place** after a new `denied` classification | **yes** (overwrites blobs) |
 | `tools.replay` | rebuild a window of raw → staging → marts by re-POSTing blobs through the sink | **yes** (deletes raw rows, re-POSTs) |
@@ -19,18 +20,19 @@ the agent-facing curation workflow lives in
 
 1. **`uv sync`** — installs the workspace so `uv run python -m tools.<name>` resolves.
 2. **`az login`** — the blob tools authenticate off your `az` session via
-   `DefaultAzureCredential`: `scrub` / `replay` use it directly; `sweep` fetches one token
-   from it and hands that to DuckDB's Azure extension (`access_token` provider); `compact`
+   `DefaultAzureCredential`: `scrub` / `replay` use it directly; `sweep` and `basis_drift`
+   fetch one token from it and hand that to DuckDB's Azure extension (`access_token`
+   provider); `compact`
    does both (DuckDB reads raw, the SDK writes the parquet). Log in as an identity that holds
    the RBAC below on the storage account.
 3. **Environment** — the tools read the same settings the sink uses. Export or put in `.env`:
 
    | var | needed by | value |
    |---|---|---|
-   | `DATABASE_URL` | sweep, gen_data_dictionary, replay, roster_load | Postgres connection string |
-   | `CC_OTEL_BLOB_ACCOUNT_URL` | sweep, scrub, replay, compact | `https://<account>.blob.core.windows.net` |
-   | `CC_OTEL_BLOB_CONTAINER` | sweep, scrub, replay, compact | container name (default `raw`) |
-   | `CC_OTEL_BLOB_COMPACTED_CONTAINER` | compact | the derived container, `compacted` (ADR-0015); unset ⇒ `compact` refuses to run |
+   | `DATABASE_URL` | sweep, basis_drift, gen_data_dictionary, replay, roster_load | Postgres connection string |
+   | `CC_OTEL_BLOB_ACCOUNT_URL` | sweep, basis_drift, scrub, replay, compact | `https://<account>.blob.core.windows.net` |
+   | `CC_OTEL_BLOB_CONTAINER` | sweep, basis_drift, scrub, replay, compact | container name (default `raw`) |
+   | `CC_OTEL_BLOB_COMPACTED_CONTAINER` | compact, basis_drift | the derived container, `compacted` (ADR-0015); unset ⇒ `compact` refuses to run, and `basis_drift` reads raw throughout (~30x slower) |
 
    `.env.interim` already carries `CC_OTEL_BLOB_ACCOUNT_URL`, `CC_OTEL_BLOB_CONTAINER` and
    `CC_OTEL_BLOB_COMPACTED_CONTAINER`.
@@ -44,13 +46,14 @@ Grant the role on the storage account (or the named container) to the identity y
 | tool | blob role | why |
 |---|---|---|
 | `tools.sweep` | **Storage Blob Data Reader** | reads blobs via DuckDB |
+| `tools.basis_drift` | **Storage Blob Data Reader** on `raw` + `compacted` | reads both via DuckDB (prefers the parquet) |
 | `tools.gen_data_dictionary` | *(none — Postgres only)* | never touches blobs |
 | `tools.replay` | **Storage Blob Data Reader** | downloads blobs to re-POST; never rewrites them |
 | `tools.scrub` | **Storage Blob Data Contributor** | overwrites blobs in place |
 | `tools.compact` | **Storage Blob Data Reader** on `raw` + **Storage Blob Data Contributor** on `compacted` | reads raw via DuckDB, writes only the derived container |
 | `tools.roster_load` | *(none — Postgres only)* | never touches blobs (ADR-0009 keeps no file copy) |
 
-> Progress: sweep / scrub / replay / compact print a throttled `label: n[/total]` line to **stderr**
+> Progress: sweep / basis_drift / scrub / replay / compact print a throttled `label: n[/total]` line to **stderr**
 > every ~2s over long windows so a big run is visibly alive. stdout stays pipe-clean.
 
 ## `tools.sweep` — find unclassified keys & redaction leaks
@@ -71,6 +74,51 @@ uv run python -m tools.sweep --since 2026-07-01 --until 2026-07-07 --signal logs
   non-empty list means the sink's redaction missed one — investigate (#8), then `scrub`.
 
 Both empty = the window is fully curated and clean.
+
+`sweep` only sees **unclassified** keys — a `kept` key never resurfaces there however far its
+distribution drifts. That is what `basis_drift` is for.
+
+## `tools.basis_drift` — re-check the `kept` classifications
+
+Every `kept` registry row carries a **kept basis** (`meta.column_registry.kept_basis`): why the
+key is kept rather than promoted. Two of the five are unfalsifiable; the other three are claims
+about observed data that a fleet change can invalidate, and this re-derives them from a recent
+window. Nothing is stored as a baseline — a number recorded today is the exact staleness this
+tool exists to catch.
+
+```sh
+uv run python -m tools.basis_drift --days 7
+uv run python -m tools.basis_drift --since 2026-07-18 --until 2026-07-28
+```
+
+| basis | predicate | drift means |
+|---|---|---|
+| `nature` | *(never evaluated)* | identity or unbounded cardinality — cannot drift |
+| `constant` | cardinality of **present** values `== 1` | a second distinct value appeared |
+| `collinear` | `basis_partner` → key functional dependency, **counting absence as a value** | some partner-value group holds ≥ 2 distinct values |
+| `thin` | seats carrying the key `< 50%` of the window's reporting seats | the key reaches half the fleet |
+| `redundant` | *(never evaluated)* | the claim is cross-grain, so no single record answers it — the argument lives in `notes` |
+
+`constant` ignoring absence while `collinear` counts it is **deliberate**, not an oversight: it
+is what lets one `collinear` rule cover both a value dependency (`os.type='windows'` →
+`os.version='10.0.26200'`) and a presence dependency (`wsl.version` present iff
+`os.type='linux'`).
+
+**Exit code is the report**: `0` clean, `1` any drift — the repo's `--check` idiom, so a
+scheduled routine can act on it without a rewrite. Drift is not a status change: if a key really
+has drifted, that is a new ticket for the promotion flow, never an edit to its `kept` row in the
+same PR.
+
+> `thin` is **not evaluated** when the window has fewer than 10 reporting seats, and the run says
+> so, naming the observed population. Both sides of the seat share shrink with the window, so 2
+> seats of 4 reads 50% for a key that reaches one seat in twenty. `constant` and `collinear` need
+> no such guard — they require a single counterexample, so a short window can miss drift but
+> never invent it.
+
+Not in CI, and deliberately not folded into `spec_sync --check`: it needs blob credentials and a
+multi-minute window read, while `spec_sync --check` is definitional and needs no reservoir. What
+*is* enforced everywhere is the registry CHECK — a new `kept` row without a basis fails its
+migration.
 
 ## `tools.gen_data_dictionary` — regenerate the data dictionary
 
