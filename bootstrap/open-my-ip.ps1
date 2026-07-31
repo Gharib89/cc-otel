@@ -40,11 +40,13 @@ function Get-FirewallRuleStartIp {
     <# .SYNOPSIS Start IP of an existing rule, or $null when the rule is absent. #>
     [OutputType([string])]
     param(
+        [Parameter(Mandatory)][string]$SubscriptionId,
         [Parameter(Mandatory)][string]$ResourceGroup,
         [Parameter(Mandatory)][string]$ServerName,
         [Parameter(Mandatory)][string]$RuleName
     )
-    $ip = az postgres flexible-server firewall-rule show --resource-group $ResourceGroup `
+    $ip = az postgres flexible-server firewall-rule show --subscription $SubscriptionId `
+        --resource-group $ResourceGroup `
         --server-name $ServerName --name $RuleName --query 'startIpAddress' --output tsv 2>$null
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($ip)) { return $null }
     return $ip.Trim()
@@ -54,13 +56,15 @@ function Set-FirewallRule {
     <# .SYNOPSIS Create/update the rule to a single IP (create converges in place). #>
     [CmdletBinding(SupportsShouldProcess)]
     param(
+        [Parameter(Mandatory)][string]$SubscriptionId,
         [Parameter(Mandatory)][string]$ResourceGroup,
         [Parameter(Mandatory)][string]$ServerName,
         [Parameter(Mandatory)][string]$RuleName,
         [Parameter(Mandatory)][string]$IpAddress
     )
     if (-not $PSCmdlet.ShouldProcess("$ServerName/$RuleName", "allow $IpAddress")) { return }
-    az postgres flexible-server firewall-rule create --resource-group $ResourceGroup `
+    az postgres flexible-server firewall-rule create --subscription $SubscriptionId `
+        --resource-group $ResourceGroup `
         --server-name $ServerName --name $RuleName `
         --start-ip-address $IpAddress --end-ip-address $IpAddress --output none
     if ($LASTEXITCODE -ne 0) { throw "Firewall rule create failed (az exit $LASTEXITCODE)." }
@@ -81,15 +85,16 @@ function Invoke-OpenMyIp {
     $cfg = Get-BootstrapConfig -Environment $Environment
     if ([string]::IsNullOrWhiteSpace($IpAddress)) { $IpAddress = Get-MyPublicIp }
 
-    $current = Get-FirewallRuleStartIp -ResourceGroup $cfg.ResourceGroup -ServerName $cfg.ServerName -RuleName $cfg.RuleName
+    $current = Get-FirewallRuleStartIp -SubscriptionId $cfg.SubscriptionId -ResourceGroup $cfg.ResourceGroup `
+        -ServerName $cfg.ServerName -RuleName $cfg.RuleName
     if ($current -eq $IpAddress) {
         Write-BootstrapLog "Rule '$($cfg.RuleName)' on $($cfg.ServerName) already allows $IpAddress (no-op)."
         return 0
     }
 
     # Open owns the decision; force so the write can't be independently declined.
-    Set-FirewallRule -ResourceGroup $cfg.ResourceGroup -ServerName $cfg.ServerName -RuleName $cfg.RuleName `
-        -IpAddress $IpAddress -Confirm:$false
+    Set-FirewallRule -SubscriptionId $cfg.SubscriptionId -ResourceGroup $cfg.ResourceGroup `
+        -ServerName $cfg.ServerName -RuleName $cfg.RuleName -IpAddress $IpAddress -Confirm:$false
     Write-BootstrapLog "Opened '$($cfg.RuleName)' on $($cfg.ServerName) for $IpAddress."
     return 0
 }

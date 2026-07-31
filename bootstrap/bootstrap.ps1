@@ -260,12 +260,14 @@ function Get-PgParameter {
     <# .SYNOPSIS A server parameter field (value / isConfigPendingRestart) via az. #>
     [OutputType([string])]
     param(
+        [Parameter(Mandatory)][string]$SubscriptionId,
         [Parameter(Mandatory)][string]$ResourceGroup,
         [Parameter(Mandatory)][string]$ServerName,
         [Parameter(Mandatory)][string]$Name,
         [Parameter(Mandatory)][string]$Query
     )
-    $val = az postgres flexible-server parameter show --resource-group $ResourceGroup `
+    $val = az postgres flexible-server parameter show --subscription $SubscriptionId `
+        --resource-group $ResourceGroup `
         --server-name $ServerName --name $Name --query $Query --output tsv 2>$null
     if ($LASTEXITCODE -ne 0) { throw "Could not read server parameter '$Name' (is the server reachable?)." }
     return ([string]$val).Trim()
@@ -275,11 +277,13 @@ function Invoke-PostgresRestart {
     <# .SYNOPSIS Restart the flexible server (applies restart-only config). #>
     [CmdletBinding(SupportsShouldProcess)]
     param(
+        [Parameter(Mandatory)][string]$SubscriptionId,
         [Parameter(Mandatory)][string]$ResourceGroup,
         [Parameter(Mandatory)][string]$ServerName
     )
     if (-not $PSCmdlet.ShouldProcess($ServerName, 'restart')) { return }
-    az postgres flexible-server restart --resource-group $ResourceGroup --name $ServerName --output none
+    az postgres flexible-server restart --subscription $SubscriptionId `
+        --resource-group $ResourceGroup --name $ServerName --output none
     if ($LASTEXITCODE -ne 0) { throw "Server restart failed (az exit $LASTEXITCODE)." }
 }
 
@@ -417,7 +421,8 @@ function Invoke-StepDeploy {
     foreach ($name in $secretEnv.Keys) { $prior[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
     try {
         foreach ($name in $secretEnv.Keys) { Set-Item -LiteralPath "env:$name" -Value $secretEnv[$name] }
-        $state = az deployment group create --resource-group $Config.ResourceGroup `
+        $state = az deployment group create --subscription $Config.SubscriptionId `
+            --resource-group $Config.ResourceGroup `
             --template-file $template --parameters $params `
             --query 'properties.provisioningState' -o tsv
         if ($LASTEXITCODE -ne 0) {
@@ -451,16 +456,17 @@ function Invoke-StepPgCronGate {
     # for it (unlike shared_preload_libraries), so Bicep sets it but pg_cron still
     # binds to the default DB until a restart - every cron.schedule() silently
     # no-ops (#65/#66). Restart when pending, then assert it applied.
-    $pending = Get-PgParameter -ResourceGroup $Config.ResourceGroup -ServerName $Config.ServerName `
-        -Name 'cron.database_name' -Query 'isConfigPendingRestart'
+    $pending = Get-PgParameter -SubscriptionId $Config.SubscriptionId -ResourceGroup $Config.ResourceGroup `
+        -ServerName $Config.ServerName -Name 'cron.database_name' -Query 'isConfigPendingRestart'
     if ($pending.Trim().ToLowerInvariant() -eq 'true') {
         Write-BootstrapLog "cron.database_name restart pending; restarting $($Config.ServerName) (one restart applies all pending config)."
-        Invoke-PostgresRestart -ResourceGroup $Config.ResourceGroup -ServerName $Config.ServerName -Confirm:$false
-        $pending = Get-PgParameter -ResourceGroup $Config.ResourceGroup -ServerName $Config.ServerName `
-            -Name 'cron.database_name' -Query 'isConfigPendingRestart'
+        Invoke-PostgresRestart -SubscriptionId $Config.SubscriptionId -ResourceGroup $Config.ResourceGroup `
+            -ServerName $Config.ServerName -Confirm:$false
+        $pending = Get-PgParameter -SubscriptionId $Config.SubscriptionId -ResourceGroup $Config.ResourceGroup `
+            -ServerName $Config.ServerName -Name 'cron.database_name' -Query 'isConfigPendingRestart'
     }
-    $value = Get-PgParameter -ResourceGroup $Config.ResourceGroup -ServerName $Config.ServerName `
-        -Name 'cron.database_name' -Query 'value'
+    $value = Get-PgParameter -SubscriptionId $Config.SubscriptionId -ResourceGroup $Config.ResourceGroup `
+        -ServerName $Config.ServerName -Name 'cron.database_name' -Query 'value'
     if (-not (Test-PgCronDatabaseApplied -Value $value -Pending $pending -Expected $script:CronDatabase)) {
         Write-BootstrapLog "cron.database_name is '$value' (pendingRestart=$pending); expected '$($script:CronDatabase)' applied. pg_cron jobs will not schedule - do NOT migrate." 'HALT'
         return 1

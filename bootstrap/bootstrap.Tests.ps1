@@ -112,6 +112,38 @@ Describe 'Test-PgCronDatabaseApplied' {
     }
 }
 
+Describe 'Azure CLI server shims' {
+    # The two az shims the pg-cron gate drives. Both are subscription-scoped, and a
+    # standalone `-Step pg-cron-gate` skips precheck's subscription guard - so the
+    # subscription has to come from .env, not from whatever `az` happens to be on
+    # (#389). The rest of the effectful step bodies stay live-bring-up territory.
+    BeforeEach {
+        $script:AzArguments = @()
+        Mock az {
+            $script:AzArguments = @($args)
+            $global:LASTEXITCODE = 0
+            'false'
+        }
+    }
+
+    It 'reads a server parameter pinned to the config subscription' {
+        Get-PgParameter -SubscriptionId 'sub' -ResourceGroup 'rg' -ServerName 'server' `
+            -Name 'cron.database_name' -Query 'value' | Should -Be 'false'
+        $script:AzArguments -join ' ' | Should -Be (
+            'postgres flexible-server parameter show --subscription sub --resource-group rg ' +
+            '--server-name server --name cron.database_name --query value --output tsv'
+        )
+    }
+
+    It 'restarts the server pinned to the config subscription' {
+        Invoke-PostgresRestart -SubscriptionId 'sub' -ResourceGroup 'rg' -ServerName 'server' -Confirm:$false
+        $script:AzArguments -join ' ' | Should -Be (
+            'postgres flexible-server restart --subscription sub --resource-group rg ' +
+            '--name server --output none'
+        )
+    }
+}
+
 Describe 'Get-PgCronJobReport' {
     BeforeAll {
         $script:expected = @('trim-processed-batches', 'refresh-marts', 'trim-mart-refresh-log')
