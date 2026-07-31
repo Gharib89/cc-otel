@@ -26,11 +26,13 @@ function Test-FirewallRule {
     <# .SYNOPSIS $true when the named rule exists on the server. #>
     [OutputType([bool])]
     param(
+        [Parameter(Mandatory)][string]$SubscriptionId,
         [Parameter(Mandatory)][string]$ResourceGroup,
         [Parameter(Mandatory)][string]$ServerName,
         [Parameter(Mandatory)][string]$RuleName
     )
-    az postgres flexible-server firewall-rule show --resource-group $ResourceGroup `
+    az postgres flexible-server firewall-rule show --subscription $SubscriptionId `
+        --resource-group $ResourceGroup `
         --server-name $ServerName --name $RuleName --output none 2>$null
     return ($LASTEXITCODE -eq 0)
 }
@@ -39,12 +41,14 @@ function Remove-FirewallRule {
     <# .SYNOPSIS Delete the rule; caller has confirmed it exists. #>
     [CmdletBinding(SupportsShouldProcess)]
     param(
+        [Parameter(Mandatory)][string]$SubscriptionId,
         [Parameter(Mandatory)][string]$ResourceGroup,
         [Parameter(Mandatory)][string]$ServerName,
         [Parameter(Mandatory)][string]$RuleName
     )
     if (-not $PSCmdlet.ShouldProcess("$ServerName/$RuleName", 'delete firewall rule')) { return }
-    az postgres flexible-server firewall-rule delete --resource-group $ResourceGroup `
+    az postgres flexible-server firewall-rule delete --subscription $SubscriptionId `
+        --resource-group $ResourceGroup `
         --server-name $ServerName --name $RuleName --yes --output none
     if ($LASTEXITCODE -ne 0) { throw "Firewall rule delete failed (az exit $LASTEXITCODE)." }
 }
@@ -62,13 +66,15 @@ function Invoke-CloseMyIp {
 
     $cfg = Get-BootstrapConfig -Environment $Environment
 
-    if (-not (Test-FirewallRule -ResourceGroup $cfg.ResourceGroup -ServerName $cfg.ServerName -RuleName $cfg.RuleName)) {
+    if (-not (Test-FirewallRule -SubscriptionId $cfg.SubscriptionId -ResourceGroup $cfg.ResourceGroup `
+                -ServerName $cfg.ServerName -RuleName $cfg.RuleName)) {
         Write-BootstrapLog "Rule '$($cfg.RuleName)' on $($cfg.ServerName) already absent (no-op)."
         return 0
     }
 
     # Close owns the decision; force so the delete can't be independently declined.
-    Remove-FirewallRule -ResourceGroup $cfg.ResourceGroup -ServerName $cfg.ServerName -RuleName $cfg.RuleName -Confirm:$false
+    Remove-FirewallRule -SubscriptionId $cfg.SubscriptionId -ResourceGroup $cfg.ResourceGroup `
+        -ServerName $cfg.ServerName -RuleName $cfg.RuleName -Confirm:$false
     Write-BootstrapLog "Removed '$($cfg.RuleName)' from $($cfg.ServerName)."
     return 0
 }

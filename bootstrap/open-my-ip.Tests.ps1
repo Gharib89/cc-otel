@@ -22,19 +22,19 @@ Describe 'Azure CLI firewall-rule shims' {
     }
 
     It 'gets the rule IP with the Azure CLI 2.88 arguments' {
-        Get-FirewallRuleStartIp -ResourceGroup 'rg' -ServerName 'server' -RuleName 'rule' |
+        Get-FirewallRuleStartIp -SubscriptionId 'sub' -ResourceGroup 'rg' -ServerName 'server' -RuleName 'rule' |
             Should -Be '203.0.113.10'
         $script:AzArguments -join ' ' | Should -Be (
-            'postgres flexible-server firewall-rule show --resource-group rg ' +
+            'postgres flexible-server firewall-rule show --subscription sub --resource-group rg ' +
             '--server-name server --name rule --query startIpAddress --output tsv'
         )
     }
 
     It 'sets the rule with the Azure CLI 2.88 arguments' {
-        Set-FirewallRule -ResourceGroup 'rg' -ServerName 'server' -RuleName 'rule' `
+        Set-FirewallRule -SubscriptionId 'sub' -ResourceGroup 'rg' -ServerName 'server' -RuleName 'rule' `
             -IpAddress '203.0.113.10' -Confirm:$false
         $script:AzArguments -join ' ' | Should -Be (
-            'postgres flexible-server firewall-rule create --resource-group rg ' +
+            'postgres flexible-server firewall-rule create --subscription sub --resource-group rg ' +
             '--server-name server --name rule --start-ip-address 203.0.113.10 ' +
             '--end-ip-address 203.0.113.10 --output none'
         )
@@ -46,7 +46,7 @@ Describe 'Invoke-OpenMyIp (orchestration)' {
     # detect-then-write decision runs with no .env / az / network dependency.
     BeforeEach {
         Mock Get-BootstrapConfig {
-            [pscustomobject]@{ ResourceGroup = 'rg'; ServerName = 'server'; RuleName = 'operator-ag' }
+            [pscustomobject]@{ SubscriptionId = 'sub-123'; ResourceGroup = 'rg'; ServerName = 'server'; RuleName = 'operator-ag' }
         }
         Mock Write-BootstrapLog {}
     }
@@ -60,7 +60,8 @@ Describe 'Invoke-OpenMyIp (orchestration)' {
 
         Should -Invoke Get-MyPublicIp -Times 1 -Exactly
         Should -Invoke Set-FirewallRule -Times 1 -Exactly -ParameterFilter {
-            $IpAddress -eq '203.0.113.10' -and $RuleName -eq 'operator-ag'
+            $IpAddress -eq '203.0.113.10' -and $RuleName -eq 'operator-ag' -and
+            $SubscriptionId -eq 'sub-123'
         }
     }
 

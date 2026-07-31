@@ -45,7 +45,10 @@ have it ready first:
   [`dbmate`](https://github.com/amacneil/dbmate) on `PATH` (plus `docker` for the
   first-time image seed).
 - **Sessions:** `az login` (the right tenant — see the prod tenant gate below) and
-  `gh auth login` (repo secret write access).
+  `gh auth login` (repo secret write access). No `az account set` needed: every
+  subscription-scoped `az` call passes `--subscription` from `AZURE_SUBSCRIPTION_ID`
+  in `.env.<env>`, so a step targets the environment it was asked for and not
+  whatever subscription happens to be active (#389).
 - **`.env.<env>`:** a complete file (keys below) next to the repo root.
 
 ## The steps
