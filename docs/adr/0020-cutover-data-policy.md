@@ -1,4 +1,4 @@
-# Production inherits interim's live telemetry from 2026-07-17; nothing older crosses
+# The cutover data policy: production inherits interim's live telemetry from 2026-07-17
 
 **Status:** accepted — **amends ADR-0002**, which starts production on an empty schema-v2. Records
 the cutover data policy decided in #83; implemented by #245 (raw copy), #246 (reservoir copy) and
@@ -11,8 +11,9 @@ old-schema/new-schema translation, and therefore none of the bug class ADR-0002 
 avoid. What that ADR actually rules out stays ruled out: ADR-0006's mapped pilot history remains in
 interim and never reaches production.
 
-This is the third act on ADR-0002 in sequence — ADR-0006 carved interim out of it, ADR-0017 replayed
-interim's own reservoir across the same window, and this one carries that window forward to prod.
+ADR-0002 has been amended twice before, both times for interim: ADR-0006 carved interim out of it
+for the mapped pilot history, and ADR-0017 replayed interim's own reservoir across this same window.
+This is the first amendment that reaches production.
 
 ## Decisions
 
@@ -33,16 +34,23 @@ interim's own reservoir across the same window, and this one carries that window
 
 - **No dedup, because the row sets are disjoint.** Each tracked machine's installer bakes exactly one
   collector endpoint, so a machine emits to interim or to production, never both, and the copy cannot
-  produce a duplicate. Re-runnability is a separate concern and is **delete-window-then-copy**, not
+  produce a duplicate. The one precedent for the other outcome — ADR-0006's backfill "drops the
+  cutover sessions that dual-sent" — came from replaying the POC's *own history* into interim, where
+  a session already present live could arrive a second time from the dump. Nothing here replays
+  history: the window opens where interim's live telemetry begins. Should the flip produce a
+  dual-sent session anyway, #245's spot-check — interim-versus-production row counts for the window —
+  is where it surfaces. Re-runnability is a separate concern and is **delete-window-then-copy**, not
   `ON CONFLICT`: `raw.*` has no primary key by design — idempotency lives in `meta.processed_batches`
   (ADR-0017) — so there is no conflict target to name.
 
 - **Sessions straddling the boundary lose their pre-midnight rows, accepted.** A session live at
-  `2026-07-16 23:59` keeps only its post-boundary rows in production. The volume left behind is the
-  Jul 16 live remainder ADR-0017 measured — 3,228 metrics and 14,404 events — against a
-  fleet-lifetime production dataset, and it stays queryable in interim until decommission and in the
-  archive dump after that. Truncation is invisible in every mart aggregate except a session-grain
-  duration, which reads short for those few sessions.
+  `2026-07-16 23:59` keeps only its post-boundary rows in production; the rest stays queryable in
+  interim until decommission, and in the archive dump after that. The affected population is
+  deliberately left unquantified, because nothing measured can quantify it: Jul 16 holds 9,474 raw
+  metrics and 15,686 raw events (ADR-0017), and those are ADR-0006 pilot rows and interim-live rows
+  mixed with no discriminator — the same reason Jul 16 sits outside ADR-0017's replay window.
+  Whatever the count, the effect is bounded to one midnight and reaches no mart aggregate except a
+  session-grain duration, which reads short for the sessions concerned.
 
 - **Sessions straddling the fleet flip merge in the marts on `session_id`.** A different boundary
   with a different mechanism: at the flip (#244) a machine's rows land partly in interim and partly
@@ -53,18 +61,15 @@ interim's own reservoir across the same window, and this one carries that window
   post-cutover — daily report refresh green, freshness tile healthy, no new production `dq_finding` —
   then a human go/no-go with Ahmed, never automatic (#248 Part B). Before
   `az group delete rg-cc-otel-interim`, a full `pg_dump -Fc` of interim `cc_otel` lands in the
-  production storage account's `archive` container and is **verified by row count against the live
-  server**, exactly as Part A did for the POC.
+  production storage account's `archive` container — a **sibling container, never a prefix inside
+  `raw`**, because a dump is unredacted while every reservoir blob is redacted at the sink (ADR-0005)
+  and `tools.scrub` treats `raw` as its scrubbable surface (ADR-0016) — and is **verified by row
+  count against the live server**, exactly as Part A did for the POC.
 
 - **The POC half of that policy is already spent.** ADR-0016 pulled it forward for Azure consumption
-  cost: the POC `otel` dump was taken, verified and uploaded on 2026-07-28 (103,095,676 bytes,
-  `sha256 fe40f81e…ec02c971`, covering 2026-05-21 → 2026-07-16) before `rg-cc-otel-poc` was deleted.
-  This ADR therefore requires the interim dump only.
-
-- **`archive` is a sibling container, never a prefix inside `raw`.** A dump is unredacted — raw
-  `user_email`, every promoted column — whereas every blob in the raw reservoir is redacted at the
-  sink (ADR-0005) and `tools.scrub` treats that container as its scrubbable surface. A prefix would
-  make both claims false (ADR-0016).
+  cost: the POC `otel` dump was taken, verified and uploaded — 103,095,676 bytes,
+  `sha256 fe40f81e…ec02c971`, covering 2026-05-21 → 2026-07-16 — before `rg-cc-otel-poc` was deleted
+  on 2026-07-28 (#248 Part A). This ADR therefore requires the interim dump only.
 
 ## Considered options
 
