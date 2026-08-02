@@ -39,8 +39,12 @@ param postgresFirewallRules = concat([
 param postgresEntraAdminObjectId = '72599483-8910-479f-a2b3-47b22f225a44'
 param postgresEntraAdminLogin = 'Ahmed.Gharib@itworx.com'
 
-param collectorImage = 'ghcr.io/gharib89/cc-otel-collector:latest'
-param sinkImage = 'ghcr.io/gharib89/cc-otel-sink:latest'
+// bootstrap's deploy step reads the live Container App's images back and exports
+// these (#390) — an RG deploy is authoritative for the resources it declares, so a
+// literal :latest here replaced whatever SHA-tagged revision deploy.yml last rolled
+// out, silently. The fallback is the first bring-up, before any app exists to read.
+param collectorImage = readEnvironmentVariable('COLLECTOR_IMAGE', 'ghcr.io/gharib89/cc-otel-collector:latest')
+param sinkImage = readEnvironmentVariable('SINK_IMAGE', 'ghcr.io/gharib89/cc-otel-sink:latest')
 
 param fleetTokens = readEnvironmentVariable('FLEET_TOKENS', '')
 param databaseUrl = readEnvironmentVariable('DATABASE_URL', '')

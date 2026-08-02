@@ -204,6 +204,44 @@ function Get-SeedImagesDecision {
     return [pscustomobject]@{ Halt = $true; Message = $msg }
 }
 
+function Get-DeployImagePin {
+    <#
+    .SYNOPSIS
+        Whether the deploy step can re-pin the live Container App's images (#390).
+    .DESCRIPTION
+        An RG deploy is incremental per resource but authoritative for the resources
+        it declares, so deploying the template with the bicepparams' `:latest`
+        fallback replaces whatever SHA-tagged revision deploy.yml last rolled out
+        with a stale one - silent ingest failure until someone re-runs deploy.yml.
+        Reading the live images back and passing them as params keeps the revision
+        where it is. Both containers are declared together (iac/modules/containerapp.bicep),
+        so an empty map means there is no app yet and the `:latest` fallback is
+        correct. A half-read is treated the same, because the caller exports both
+        keys or neither: exporting one of them empty deploys an empty image
+        reference, and omitting it instead reverts that container to `:latest`.
+    #>
+    [OutputType([pscustomobject])]
+    param([Parameter(Mandatory)][hashtable]$ImageMap)
+    $collector = [string]$ImageMap['collector']
+    $sink = [string]$ImageMap['sink']
+    $pinned = -not ([string]::IsNullOrWhiteSpace($collector) -or [string]::IsNullOrWhiteSpace($sink))
+    $msg = if ($pinned) { "Pinning the live images: $collector, $sink." }
+    elseif ($ImageMap.Count -eq 0) {
+        'No Container App to read images from; deploying the :latest fallback from the bicepparams (first bring-up).'
+    }
+    else {
+        # Unreachable while both containers are declared together, but saying
+        # "no Container App" here would misdirect an operator who has one.
+        "Read $($ImageMap.Count) of 2 container images off the live app; not pinning a partial set."
+    }
+    return [pscustomobject]@{
+        Pinned         = $pinned
+        CollectorImage = $collector
+        SinkImage      = $sink
+        Message        = $msg
+    }
+}
+
 # =============================================================================
 # Effectful shims - thin wrappers over PATH probes, az, dbmate, psql, gh, docker.
 # =============================================================================
@@ -293,6 +331,57 @@ function Test-ContainerImage {
     param([Parameter(Mandatory)][string]$Reference)
     docker manifest inspect $Reference 2>&1 | Out-Null
     return ($LASTEXITCODE -eq 0)
+}
+
+function Get-ContainerAppImageMap {
+    <#
+    .SYNOPSIS
+        The live Container App's container-name -> image map; empty when absent.
+    .DESCRIPTION
+        An empty map means there is no app yet, and only that. deploy.yml sets the
+        images with `az containerapp update --container-name <c> --image <sha>`, so
+        the live template's container images are the SHA tags to re-pin.
+
+        Two calls on purpose. Existence and content have to stay distinguishable: a
+        read that merely *failed* - expired session, throttle, wrong resource group -
+        must not read as "no app yet", because the caller answers that by deploying
+        the params' :latest and reverting the live SHA-tagged revision, which is the
+        #390 incident itself. `az resource list` reports "no such app" as exit 0 with
+        no output, so a non-zero exit from either call is unambiguously a failure and
+        throws, like every other az shim here.
+
+        Deliberately `az resource` (core CLI) and not `az containerapp`: the
+        containerapp extension is not a bootstrap prerequisite, and its absence would
+        surface as the same failure this is careful not to misread.
+    #>
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory)][string]$SubscriptionId,
+        [Parameter(Mandatory)][string]$ResourceGroup,
+        [Parameter(Mandatory)][string]$AppName
+    )
+    $id = az resource list --subscription $SubscriptionId --resource-group $ResourceGroup `
+        --name $AppName --resource-type 'Microsoft.App/containerApps' `
+        --query '[0].id' --output tsv 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not look up the Container App '$AppName' (is the az session live and '$ResourceGroup' correct?)."
+    }
+    $appId = ([string]($id -join '')).Trim()
+    if ([string]::IsNullOrWhiteSpace($appId)) { return @{} }
+    # Tab-separated rows, not JSON: WinPS 5.1's ConvertFrom-Json hands a JSON array
+    # back as one object instead of enumerating it, so the loop would bind the whole
+    # array and member-enumerate into a single bogus 'collector sink' key. Same
+    # line-parsing shape as Get-PgCronJob.
+    $rows = az resource show --ids $appId `
+        --query 'properties.template.containers[].[name,image]' --output tsv 2>$null
+    if ($LASTEXITCODE -ne 0) { throw "Could not read the Container App '$AppName' images." }
+    $map = @{}
+    foreach ($line in @($rows)) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $f = $line -split "`t"
+        $map[$f[0]] = $f[1]
+    }
+    return $map
 }
 
 # =============================================================================
@@ -416,6 +505,19 @@ function Invoke-StepDeploy {
         GHCR_TOKEN        = $Config.GhcrToken
         PG_ADMIN_PASSWORD = $Config.PgAdminPassword
         PG_FIREWALL_RULES = $Config.PgFirewallRules
+    }
+    # Same mechanism, one step further (#390): the container images are read off the
+    # live app and passed back in, so this deploy cannot roll the SHA-tagged revision
+    # deploy.yml last shipped back to the stale :latest. Set only when both resolved -
+    # an empty-but-set variable defeats readEnvironmentVariable's default and would
+    # deploy an empty image reference instead of the intended :latest fallback.
+    $pin = Get-DeployImagePin -ImageMap (Get-ContainerAppImageMap `
+            -SubscriptionId $Config.SubscriptionId -ResourceGroup $Config.ResourceGroup `
+            -AppName $Config.AppName)
+    Write-BootstrapLog $pin.Message
+    if ($pin.Pinned) {
+        $secretEnv['COLLECTOR_IMAGE'] = $pin.CollectorImage
+        $secretEnv['SINK_IMAGE'] = $pin.SinkImage
     }
     $prior = [ordered]@{}
     foreach ($name in $secretEnv.Keys) { $prior[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
