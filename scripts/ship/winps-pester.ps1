@@ -4,10 +4,10 @@
     Run a Pester 5 suite in the *host* PowerShell, resolving Pester 5 for
     Windows PowerShell 5.1 where Install-Module is unavailable.
 .DESCRIPTION
-    scripts/ship/local-gate.sh invokes this with powershell.exe so the
+    scripts/ship/local-gate.sh invokes this with `powershell` (Windows
+    PowerShell 5.1, powershell.exe on PATH) rather than pwsh, so the
     bootstrap:pester gate matches bootstrap.yml's CI job, which runs
-    `shell: powershell` (Windows PowerShell 5.1) deliberately - the operator runs
-    bootstrap.ps1 under 5.1. pwsh 7 and 5.1 disagree on pipeline enumeration
+    `shell: powershell` deliberately - the operator runs bootstrap.ps1 under 5.1. pwsh 7 and 5.1 disagree on pipeline enumeration
     (ConvertFrom-Json hands 5.1 a JSON array back as one object), so a pwsh-only
     local run can be green on code CI fails (#401).
 
