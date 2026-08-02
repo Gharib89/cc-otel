@@ -368,14 +368,18 @@ function Get-ContainerAppImageMap {
     }
     $appId = ([string]($id -join '')).Trim()
     if ([string]::IsNullOrWhiteSpace($appId)) { return @{} }
-    $json = az resource show --ids $appId `
-        --query 'properties.template.containers[].{name:name,image:image}' --output json 2>$null
+    # Tab-separated rows, not JSON: WinPS 5.1's ConvertFrom-Json hands a JSON array
+    # back as one object instead of enumerating it, so the loop would bind the whole
+    # array and member-enumerate into a single bogus 'collector sink' key. Same
+    # line-parsing shape as Get-PgCronJob.
+    $rows = az resource show --ids $appId `
+        --query 'properties.template.containers[].[name,image]' --output tsv 2>$null
     if ($LASTEXITCODE -ne 0) { throw "Could not read the Container App '$AppName' images." }
-    # az stdout captures as a string[] (one element per line); WinPS 5.1's
-    # ConvertFrom-Json rejects an array, so rejoin before parsing.
     $map = @{}
-    foreach ($c in @(($json -join "`n") | ConvertFrom-Json)) {
-        if ($c.name) { $map[[string]$c.name] = [string]$c.image }
+    foreach ($line in @($rows)) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $f = $line -split "`t"
+        $map[$f[0]] = $f[1]
     }
     return $map
 }

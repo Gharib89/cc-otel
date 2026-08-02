@@ -150,9 +150,9 @@ Describe 'Azure CLI read shims' {
             $script:AzCalls += , @($args)
             $global:LASTEXITCODE = 0
             if ($args[1] -eq 'list') { return '/subscriptions/sub/rg/app' }
-            # As az emits it: multi-line stdout, which PowerShell captures as a string[].
-            '[', '  { "name": "collector", "image": "ghcr.io/x/collector:abc123" },',
-            '  { "name": "sink", "image": "ghcr.io/x/sink:abc123" }', ']'
+            # As az emits it: one tab-separated row per container, which PowerShell
+            # captures as a string[].
+            "collector`tghcr.io/x/collector:abc123", "sink`tghcr.io/x/sink:abc123"
         }
         $map = Get-ContainerAppImageMap -SubscriptionId 'sub' -ResourceGroup 'rg' -AppName 'app'
         $map['collector'] | Should -Be 'ghcr.io/x/collector:abc123'
@@ -165,7 +165,7 @@ Describe 'Azure CLI read shims' {
         )
         $script:AzCalls[1] -join ' ' | Should -Be (
             'resource show --ids /subscriptions/sub/rg/app ' +
-            '--query properties.template.containers[].{name:name,image:image} --output json'
+            '--query properties.template.containers[].[name,image] --output tsv'
         )
     }
 
