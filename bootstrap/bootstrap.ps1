@@ -216,8 +216,9 @@ function Get-DeployImagePin {
         Reading the live images back and passing them as params keeps the revision
         where it is. Both containers are declared together (iac/modules/containerapp.bicep),
         so an empty map means there is no app yet and the `:latest` fallback is
-        correct; a half-read is treated the same, because pinning one and defaulting
-        the other would deploy an empty image reference.
+        correct. A half-read is treated the same, because the caller exports both
+        keys or neither: exporting one of them empty deploys an empty image
+        reference, and omitting it instead reverts that container to `:latest`.
     #>
     [OutputType([pscustomobject])]
     param([Parameter(Mandatory)][hashtable]$ImageMap)
@@ -225,7 +226,7 @@ function Get-DeployImagePin {
     $sink = [string]$ImageMap['sink']
     $pinned = -not ([string]::IsNullOrWhiteSpace($collector) -or [string]::IsNullOrWhiteSpace($sink))
     $msg = if ($pinned) { "Pinning the live images: $collector, $sink." }
-    else { 'No Container App to read images from; deploying the bicepparams'' :latest fallback (first bring-up).' }
+    else { 'No Container App to read images from; deploying the :latest fallback from the bicepparams (first bring-up).' }
     return [pscustomobject]@{
         Pinned         = $pinned
         CollectorImage = $collector

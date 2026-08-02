@@ -261,7 +261,7 @@ Describe 'Get-DeployImagePin' {
         $p.Pinned | Should -BeFalse
         $p.Message | Should -Match ':latest'
     }
-    It 'does not pin a half-read app - a partial pin would deploy an empty image ref' {
+    It 'does not pin a half-read app - half a pin would break the other container' {
         (Get-DeployImagePin -ImageMap @{ collector = 'ghcr.io/x/collector:abc123' }).Pinned |
             Should -BeFalse
     }
