@@ -209,6 +209,14 @@ to read). A sink with blob settings writes a **new** blob per re-POST under *tod
 so a 18k-blob replay near-doubles the reservoir and poisons the compacted parquet
 (ADR-0015). Nothing in the tool prevents this.
 
+**A transient sink 5xx is retried, four times with backoff** (1/2/4/8 s). The sink answers 503
+when its pool hands out a connection Postgres has already closed (`SSL error: unexpected eof
+while reading`), and the next request opens a fresh one. Aborting there is the expensive
+failure: the delete has already run, so a run that stops halfway leaves a bigger hole than it
+came to close — three such aborts emptied event-day Jul 30 during #388. A 4xx still fails the
+run immediately. If the retries are exhausted, re-run the whole pass; it deletes and re-POSTs
+the window from scratch, so nothing depends on where the previous run stopped.
+
 **One pass for the whole window, not a pass per day.** A day pass deletes event-day D but
 re-POSTs partition `dt=D`, whose midnight-straddle records carry event-day **D-1** — rows the
 delete never touched, so the pass duplicates them, and the neighbouring day's pass later

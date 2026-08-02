@@ -28,6 +28,7 @@ import gzip
 import hashlib
 import sys
 from datetime import UTC, date, datetime, time, timedelta
+from time import sleep
 from typing import NamedTuple
 
 import httpx
@@ -43,6 +44,10 @@ from .signals import BY_ROUTE, ROUTES
 def blob_hash(blob_bytes: bytes) -> str:
     """The sink's batch hash for a stored blob: sha256 of its decompressed bytes."""
     return hashlib.sha256(gzip.decompress(blob_bytes)).hexdigest()
+
+
+POST_BACKOFF_S: tuple[float, ...] = (1, 2, 4, 8)
+"""Delays between re-POST attempts — one extra attempt per entry after the first."""
 
 
 def endpoint_for(name: str) -> str:
@@ -153,6 +158,33 @@ def plan(
     return ReplayPlan(signals, start, end, names, hashes, row_counts)
 
 
+def _post_blob(client: httpx.Client, name: str, data: bytes) -> None:
+    """Re-POST one blob, retrying a transient sink failure with backoff.
+
+    The sink answers 503 when its pool hands out a connection Postgres has already closed
+    (``SSL error: unexpected eof``); the next request opens a fresh one. Aborting on the
+    first such answer is the expensive failure — the window's rows are already deleted, so
+    a run that stops halfway leaves a hole bigger than the one it came to close (#388).
+    A 4xx is deterministic and propagates immediately. Retrying is safe: the sink claims
+    each batch hash inside the same transaction as its rows, so a retry either writes the
+    batch or no-ops on the hash it already claimed.
+    """
+    for attempt in range(len(POST_BACKOFF_S) + 1):
+        try:
+            resp = client.post(
+                endpoint_for(name),
+                content=data,
+                headers={"content-type": "application/json", "content-encoding": "gzip"},
+            )
+            resp.raise_for_status()
+            return
+        except (httpx.HTTPStatusError, httpx.TransportError) as err:
+            client_error = isinstance(err, httpx.HTTPStatusError) and err.response.status_code < 500
+            if client_error or attempt == len(POST_BACKOFF_S):
+                raise
+            sleep(POST_BACKOFF_S[attempt])
+
+
 def apply(
     conn: psycopg.Connection,
     reservoir: CurationReservoir,
@@ -170,12 +202,7 @@ def apply(
     )
     post_progress = Progress("re-POST blobs", total=len(replay_plan.names))
     for name in replay_plan.names:
-        resp = client.post(
-            endpoint_for(name),
-            content=reservoir.download(name),
-            headers={"content-type": "application/json", "content-encoding": "gzip"},
-        )
-        resp.raise_for_status()
+        _post_blob(client, name, reservoir.download(name))
         post_progress.tick()
     post_progress.done()
 

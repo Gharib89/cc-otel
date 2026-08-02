@@ -2,6 +2,7 @@ import gzip
 import hashlib
 from datetime import UTC, date, datetime
 
+import httpx
 import pytest
 
 from tools._window import partition_prefix
@@ -133,6 +134,52 @@ def test_apply_clears_ledger_before_reposting(fake_reservoir):
     apply(conn, res, _RecordingClient(order), the_plan)
 
     assert order == ["DELETE", "POST /v1/logs"]  # delete strictly before the re-POST
+
+
+class _FlakyClient:
+    """Answers 503 for the first ``failures`` posts, then 200 — the stale-pool signature."""
+
+    def __init__(self, failures: int, status: int = 503) -> None:
+        self._failures = failures
+        self._status = status
+        self.calls = 0
+
+    def post(self, path: str, *, content: bytes, headers: dict) -> httpx.Response:
+        self.calls += 1
+        code = self._status if self.calls <= self._failures else 200
+        return httpx.Response(code, request=httpx.Request("POST", f"http://sink{path}"))
+
+
+def _apply_against(client, fake_reservoir, monkeypatch) -> None:
+    from tools import replay
+
+    monkeypatch.setattr(replay, "sleep", lambda _s: None)
+    res = fake_reservoir({_name("a"): gzip.compress(b'{"resourceLogs":[]}')})
+    conn = _FakeConn(counts=[1])
+    apply(conn, res, client, plan(conn, res, _SIGNALS, [_DAY]))
+
+
+def test_apply_retries_a_transient_sink_5xx(fake_reservoir, monkeypatch):
+    """A 503 mid-window must not abort the run: the delete has already happened, so
+    giving up leaves the window deleted and only partly re-POSTed (#388)."""
+    client = _FlakyClient(failures=2)
+    _apply_against(client, fake_reservoir, monkeypatch)
+    assert client.calls == 3  # two failures, then the write lands
+
+
+def test_apply_gives_up_after_the_retry_budget(fake_reservoir, monkeypatch):
+    client = _FlakyClient(failures=99)
+    with pytest.raises(httpx.HTTPStatusError):
+        _apply_against(client, fake_reservoir, monkeypatch)
+    assert client.calls == 5  # one attempt per backoff step, plus the first
+
+
+def test_apply_does_not_retry_a_4xx(fake_reservoir, monkeypatch):
+    """A rejected payload is deterministic — retrying it only delays the failure."""
+    client = _FlakyClient(failures=99, status=400)
+    with pytest.raises(httpx.HTTPStatusError):
+        _apply_against(client, fake_reservoir, monkeypatch)
+    assert client.calls == 1
 
 
 def test_dry_run_never_calls_apply(monkeypatch, fake_reservoir):
