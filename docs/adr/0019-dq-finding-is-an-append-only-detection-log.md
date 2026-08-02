@@ -1,7 +1,9 @@
 # `dq_finding` is an append-only detection log; consumers read the current cycle
 
 **Status:** accepted. Records a decision first taken in #15 (retention) and never written where a
-reader would find it. Amends no ADR.
+reader would find it. Amends no ADR. Revised by #396, which landed the two columns this originally
+recorded as decided-but-deferred (`subject`, `kind`) — the decisions are unchanged, only their
+"not implemented" caveats are gone.
 
 `marts.refresh_all()` runs hourly and re-inserts a row for every still-true DQ condition. There is
 no `TRUNCATE`, no `DELETE`, no `ON CONFLICT`. The table therefore holds `cycles × conditions` rows,
@@ -36,20 +38,27 @@ reads the view — the whole `pg_health` DQ surface (the count card, the by-type
 now-question. Named `_current` after `dim_seat_current`, which already means the now-slice of a
 historized object in this schema.
 
-**A finding's identity is not recorded, and that is deferred, not solved.** `details` is a payload,
-not a key: for over half the detector types it carries a volatile measurement — `abs_diff_usd`,
-`last_activity_date`, `record_count`, an observation share — that moves every cycle. So
-`(finding_type, details)` is not a natural key, and "has this cleared / how long has it stood"
-cannot be asked today. The subject each detector groups by is already written in its own `GROUP BY`
-and is simply discarded at insert. Recovering it is mechanical but touches every detector, and
-nothing yet asks the question, so it waits.
+**A finding's identity is its `subject`.** `details` is a payload, not a key: for over half the
+detector types it carries a volatile measurement — `abs_diff_usd`, `last_activity_date`,
+`record_count`, an observation share — that moves every cycle, so `(finding_type, details)` is not a
+natural key. The subject each detector groups by was already written in its own `GROUP BY` and
+discarded at insert; `subject TEXT NOT NULL` now records it (#396), at that same grain — an email, a
+session-day, or the explicit `'(dataset)'` sentinel for a whole-dataset detector. `NOT NULL` is the
+point: a new detector cannot be written without declaring its grain. `marts.dq_finding_current`
+therefore carries `first_detected_at` (all-time) and `standing_since` (the start of the unbroken run
+of cycles ending at the current one), which is what makes "has this cleared / how long has it stood"
+askable. One bound: cycles are enumerated from the log's own rows, so a cycle in which *nothing at
+all* was detected leaves no trace and cannot read as a gap — accepted rather than built, because
+every live environment has a gauge standing on every cycle.
 
-**Not every finding is a defect, and the current count cannot reach zero.** `seat_boundary_basis`
-("not an error — it makes the inferred share of the timeline measurable"), `cumulative_value_kind`
-(an exclusion recorded so it is never silent), `owner_email_mismatch` ("an observation, never a
+**Not every finding is a defect, so the count is of defects.** `seat_boundary_basis` ("not an
+error — it makes the inferred share of the timeline measurable"), `cumulative_value_kind` (an
+exclusion recorded so it is never silent), `owner_email_mismatch` ("an observation, never a
 control") and `multi_email_session` are standing gauges: permanently true by design. The other eight
-types drain — someone can act until they reach zero. The classification is settled here but not
-implemented, for the same reason as the subject: it needs a column on the table.
+types drain — someone can act until they reach zero. `kind TEXT NOT NULL`, `CHECK (kind IN ('defect',
+'gauge'))`, records which (#396), and the `DQ Findings` card counts defects only, so a clean cycle
+reads zero. Gauges keep their rows and their place in `tbl_dq`, labelled by kind; they are excluded
+from a count, never from the surface.
 
 ## Considered options
 
@@ -74,8 +83,9 @@ when data quality moves. `Last DQ Finding` — `MAX ( detected_at )` — degener
 current-cycle source into the last refresh time, duplicating `Last Mart Refresh` on the same card
 band, so that tier becomes the count of distinct `finding_type` current instead.
 
-The card still counts gauges among defects, so it cannot show a clean bill of health. That is a
-known and documented wart until the classification lands.
+The card counts defects only (#396), so a clean bill of health is now reachable and reads `0` rather
+than `(Blank)` — `COUNTROWS` returns BLANK over an empty table, which was invisible only for as long
+as the gauges guaranteed the card a row every cycle.
 
 The log keeps growing, by design. It is queried through `psql` and the `analysis/` DuckDB lab, not
 the report.
