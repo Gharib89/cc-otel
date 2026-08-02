@@ -168,5 +168,9 @@ _Avoid_: deployment script, rollout tool
 **Parallel cutover**:
 The environment currently serving the report stays live as fallback until the adoption report completes its first successful Power BI refresh from the **production** Azure Postgres; only then is the old one decommissioned. That environment is **interim** — the POC half of the arrangement was surrendered early for cost (ADR-0016) once it had no writer and no reader, leaving interim, which carries the mapped pilot history (ADR-0006), as the thing a bad prod cutover falls back to. See ADR-0004 and ADR-0016.
 
+**Flip watermark**:
+Per **seat**, the timestamp of that seat's first **production** row — the moment its **tracked machine** started emitting to prod. It is the upper bound on what the interim→prod copy moves and deletes, which is what makes the copy safe to re-run: `raw.*` records no provenance, so a copy bounded by the window alone would delete production's own post-flip rows and be unable to restore them. Derived from production itself (`MIN(ts)` per `user_email`), never recorded. Per seat rather than per machine because no column identifies a device. See ADR-0020.
+_Avoid_: cutover timestamp, flip time (a single fleet-wide instant — the flip is staggered, one watermark per seat)
+
 **Azure prod stack**:
 The production environment: a second Azure resource group — IS-provisioned but empty, in an ITWorx subscription — holding a Postgres Flexible Server (public endpoint) plus an Azure Container Apps environment running the collector + sink in one Container App. IS grants RG Contributor only; Ahmed deploys all of it, Postgres included, via Bicep (ADR-0004).
