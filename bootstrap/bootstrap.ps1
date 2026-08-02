@@ -204,6 +204,37 @@ function Get-SeedImagesDecision {
     return [pscustomobject]@{ Halt = $true; Message = $msg }
 }
 
+function Get-DeployImagePin {
+    <#
+    .SYNOPSIS
+        Whether the deploy step can re-pin the live Container App's images (#390).
+    .DESCRIPTION
+        An RG deploy is incremental per resource but authoritative for the resources
+        it declares, so deploying the template with the bicepparams' `:latest`
+        fallback replaces whatever SHA-tagged revision deploy.yml last rolled out
+        with a stale one - silent ingest failure until someone re-runs deploy.yml.
+        Reading the live images back and passing them as params keeps the revision
+        where it is. Both containers are declared together (iac/modules/containerapp.bicep),
+        so a blank read means there is no app yet (virgin bring-up) and the `:latest`
+        fallback is correct; a half-read is treated the same, because pinning one and
+        defaulting the other would deploy an empty image reference.
+    #>
+    [OutputType([pscustomobject])]
+    param([Parameter(Mandatory)][hashtable]$ImageMap)
+    $CollectorImage = [string]$ImageMap['collector']
+    $SinkImage = [string]$ImageMap['sink']
+    $pinned = -not ([string]::IsNullOrWhiteSpace($CollectorImage) -or
+        [string]::IsNullOrWhiteSpace($SinkImage))
+    $msg = if ($pinned) { "Pinning the live images: $CollectorImage, $SinkImage." }
+    else { 'No live Container App images to read; deploying the bicepparams'' :latest fallback (virgin bring-up).' }
+    return [pscustomobject]@{
+        Pinned         = $pinned
+        CollectorImage = $CollectorImage
+        SinkImage      = $SinkImage
+        Message        = $msg
+    }
+}
+
 # =============================================================================
 # Effectful shims - thin wrappers over PATH probes, az, dbmate, psql, gh, docker.
 # =============================================================================
@@ -293,6 +324,41 @@ function Test-ContainerImage {
     param([Parameter(Mandatory)][string]$Reference)
     docker manifest inspect $Reference 2>&1 | Out-Null
     return ($LASTEXITCODE -eq 0)
+}
+
+function Get-ContainerAppImageMap {
+    <#
+    .SYNOPSIS
+        The live Container App's container-name -> image map; empty when absent.
+    .DESCRIPTION
+        Empty is the virgin-registry answer: az exits non-zero when the app does not
+        exist yet. deploy.yml sets these with `az containerapp update
+        --container-name <c> --image <sha>`, so the live template's container images
+        are the SHA tags to re-pin.
+
+        Deliberately `az resource show` (core CLI) and not `az containerapp show`:
+        the containerapp extension is not a bootstrap prerequisite, and a
+        missing-extension failure is indistinguishable here from "no app yet" - it
+        would fall back to :latest and silently reintroduce the very bug this reads
+        the images to prevent.
+    #>
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory)][string]$SubscriptionId,
+        [Parameter(Mandatory)][string]$ResourceGroup,
+        [Parameter(Mandatory)][string]$AppName
+    )
+    $json = az resource show --subscription $SubscriptionId --resource-group $ResourceGroup `
+        --name $AppName --resource-type 'Microsoft.App/containerApps' `
+        --query 'properties.template.containers[].{name:name,image:image}' --output json 2>$null
+    if ($LASTEXITCODE -ne 0) { return @{} }
+    # az stdout captures as a string[] (one element per line); WinPS 5.1's
+    # ConvertFrom-Json rejects an array, so rejoin before parsing.
+    $map = @{}
+    foreach ($c in @(($json -join "`n") | ConvertFrom-Json)) {
+        if ($c.name) { $map[[string]$c.name] = [string]$c.image }
+    }
+    return $map
 }
 
 # =============================================================================
@@ -416,6 +482,19 @@ function Invoke-StepDeploy {
         GHCR_TOKEN        = $Config.GhcrToken
         PG_ADMIN_PASSWORD = $Config.PgAdminPassword
         PG_FIREWALL_RULES = $Config.PgFirewallRules
+    }
+    # Same mechanism, one step further (#390): the container images are read off the
+    # live app and passed back in, so this deploy cannot roll the SHA-tagged revision
+    # deploy.yml last shipped back to the stale :latest. Set only when both resolved -
+    # an empty-but-set variable defeats readEnvironmentVariable's default and would
+    # deploy an empty image reference instead of the intended :latest fallback.
+    $pin = Get-DeployImagePin -ImageMap (Get-ContainerAppImageMap `
+            -SubscriptionId $Config.SubscriptionId -ResourceGroup $Config.ResourceGroup `
+            -AppName $Config.AppName)
+    Write-BootstrapLog $pin.Message
+    if ($pin.Pinned) {
+        $secretEnv['COLLECTOR_IMAGE'] = $pin.CollectorImage
+        $secretEnv['SINK_IMAGE'] = $pin.SinkImage
     }
     $prior = [ordered]@{}
     foreach ($name in $secretEnv.Keys) { $prior[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }

@@ -113,10 +113,11 @@ Describe 'Test-PgCronDatabaseApplied' {
 }
 
 Describe 'Azure CLI server shims' {
-    # The two az shims the pg-cron gate drives. Both are subscription-scoped, and a
-    # standalone `-Step pg-cron-gate` skips precheck's subscription guard - so the
-    # subscription has to come from .env, not from whatever `az` happens to be on
-    # (#389). The rest of the effectful step bodies stay live-bring-up territory.
+    # The az shims the pg-cron gate and the deploy step drive. All are
+    # subscription-scoped, and a standalone `-Step pg-cron-gate` skips precheck's
+    # subscription guard - so the subscription has to come from .env, not from
+    # whatever `az` happens to be on (#389). The rest of the effectful step bodies
+    # stay live-bring-up territory.
     BeforeEach {
         $script:AzArguments = @()
         Mock az {
@@ -141,6 +142,32 @@ Describe 'Azure CLI server shims' {
             'postgres flexible-server restart --subscription sub --resource-group rg ' +
             '--name server --output none'
         )
+    }
+
+    It 'reads the live container images with core az, pinned to the config subscription' {
+        Mock az {
+            $script:AzArguments = @($args)
+            $global:LASTEXITCODE = 0
+            # As az emits it: multi-line stdout, which PowerShell captures as a string[].
+            '[', '  { "name": "collector", "image": "ghcr.io/x/collector:abc123" },',
+            '  { "name": "sink", "image": "ghcr.io/x/sink:abc123" }', ']'
+        }
+        $map = Get-ContainerAppImageMap -SubscriptionId 'sub' -ResourceGroup 'rg' -AppName 'app'
+        $map['collector'] | Should -Be 'ghcr.io/x/collector:abc123'
+        $map['sink'] | Should -Be 'ghcr.io/x/sink:abc123'
+        # `az resource show`, not `az containerapp show`: a missing containerapp
+        # extension would look like "no app" and silently fall back to :latest.
+        $script:AzArguments -join ' ' | Should -Be (
+            'resource show --subscription sub --resource-group rg --name app ' +
+            '--resource-type Microsoft.App/containerApps ' +
+            '--query properties.template.containers[].{name:name,image:image} --output json'
+        )
+    }
+
+    It 'returns an empty map when the app does not exist yet (virgin bring-up)' {
+        Mock az { $global:LASTEXITCODE = 3 }
+        (Get-ContainerAppImageMap -SubscriptionId 'sub' -ResourceGroup 'rg' -AppName 'app').Count |
+            Should -Be 0
     }
 }
 
@@ -193,6 +220,26 @@ Describe 'Get-SeedImagesDecision' {
         $d = Get-SeedImagesDecision -CollectorPresent $true -SinkPresent $false
         $d.Halt | Should -BeTrue
         $d.Message | Should -Match 'sink'
+    }
+}
+
+Describe 'Get-DeployImagePin' {
+    It 'pins both images when the live app reports them' {
+        $p = Get-DeployImagePin -ImageMap @{
+            collector = 'ghcr.io/x/collector:abc123'; sink = 'ghcr.io/x/sink:abc123'
+        }
+        $p.Pinned | Should -BeTrue
+        $p.CollectorImage | Should -Be 'ghcr.io/x/collector:abc123'
+        $p.SinkImage | Should -Be 'ghcr.io/x/sink:abc123'
+    }
+    It 'does not pin when there is no app yet, naming the :latest fallback' {
+        $p = Get-DeployImagePin -ImageMap @{}
+        $p.Pinned | Should -BeFalse
+        $p.Message | Should -Match ':latest'
+    }
+    It 'does not pin a half-read app - a partial pin would deploy an empty image ref' {
+        (Get-DeployImagePin -ImageMap @{ collector = 'ghcr.io/x/collector:abc123' }).Pinned |
+            Should -BeFalse
     }
 }
 
