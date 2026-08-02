@@ -81,6 +81,57 @@
         ]
       }
     },
+    "objects": {
+      "columnWidth": [
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "185D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "dq_finding.finding_type"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "140D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "dq_finding.detected_at"
+          }
+        },
+        {
+          "properties": {
+            "value": {
+              "expr": {
+                "Literal": {
+                  "Value": "55D"
+                }
+              }
+            }
+          },
+          "selector": {
+            "metadata": "dq_finding.row_count"
+          }
+        }
+      ],
+      "columnHeaders": [
+        {
+          "properties": {}
+        }
+      ]
+    },
     "visualContainerObjects": {
       "general": [
         {
@@ -186,52 +237,6 @@
         }
       ]
     },
-    "drillFilterOtherVisuals": true,
-    "objects": {
-      "columnWidth": [
-        {
-          "properties": {
-            "value": {
-              "expr": {
-                "Literal": {
-                  "Value": "185D"
-                }
-              }
-            }
-          },
-          "selector": {
-            "metadata": "dq_finding.finding_type"
-          }
-        },
-        {
-          "properties": {
-            "value": {
-              "expr": {
-                "Literal": {
-                  "Value": "140D"
-                }
-              }
-            }
-          },
-          "selector": {
-            "metadata": "dq_finding.detected_at"
-          }
-        },
-        {
-          "properties": {
-            "value": {
-              "expr": {
-                "Literal": {
-                  "Value": "55D"
-                }
-              }
-            }
-          },
-          "selector": {
-            "metadata": "dq_finding.row_count"
-          }
-        }
-      ]
-    }
+    "drillFilterOtherVisuals": true
   }
 }

@@ -26,37 +26,12 @@ table dim_user
 
 		annotation SummarizationSetBy = Automatic
 
-	/// #345/#346: the date-typed twin of [first_seen], and the only correct operand for a dim_date[date_day]
-	/// boundary. marts.dim_user computes it as a Postgres `date`, which the connector imports as a naive
-	/// midnight exactly like date_day, where the timestamptz [first_seen] renders in the refreshing machine's
-	/// local zone (+3 on the Cairo fleet) and lands a late-evening identity on the following day. [first_seen]
-	/// stays for display (pg_adopt's roster table, pg_user_detail's cards) — a person reads a timestamp in
-	/// their own zone; a boundary must not.
-	column first_seen_date
-		dataType: dateTime
-		formatString: Short Date
-		lineageTag: d3460001-0000-4000-8000-000000000346
-		summarizeBy: none
-		sourceColumn: first_seen_date
-
-		annotation SummarizationSetBy = Automatic
-
 	column last_seen
 		dataType: dateTime
 		formatString: General Date
 		lineageTag: b2faf7ce-3a9e-4686-b972-b5a902e2b22f
 		summarizeBy: none
 		sourceColumn: last_seen
-
-		annotation SummarizationSetBy = Automatic
-
-	/// The [last_seen] counterpart, same reason as [first_seen_date]: recency cutoffs compare date-to-date.
-	column last_seen_date
-		dataType: dateTime
-		formatString: Short Date
-		lineageTag: d3460002-0000-4000-8000-000000000346
-		summarizeBy: none
-		sourceColumn: last_seen_date
 
 		annotation SummarizationSetBy = Automatic
 
@@ -131,6 +106,31 @@ table dim_user
 		dataType: boolean
 		lineageTag: d3210001-0000-4000-8000-000000000321
 		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	/// #345/#346: the date-typed twin of [first_seen], and the only correct operand for a dim_date[date_day]
+	/// boundary. marts.dim_user computes it as a Postgres `date`, which the connector imports as a naive
+	/// midnight exactly like date_day, where the timestamptz [first_seen] renders in the refreshing machine's
+	/// local zone (+3 on the Cairo fleet) and lands a late-evening identity on the following day. [first_seen]
+	/// stays for display (pg_adopt's roster table, pg_user_detail's cards) — a person reads a timestamp in
+	/// their own zone; a boundary must not.
+	column first_seen_date
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: d3460001-0000-4000-8000-000000000346
+		summarizeBy: none
+		sourceColumn: first_seen_date
+
+		annotation SummarizationSetBy = Automatic
+
+	/// The [last_seen] counterpart, same reason as [first_seen_date]: recency cutoffs compare date-to-date.
+	column last_seen_date
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: d3460002-0000-4000-8000-000000000346
+		summarizeBy: none
+		sourceColumn: last_seen_date
 
 		annotation SummarizationSetBy = Automatic
 
