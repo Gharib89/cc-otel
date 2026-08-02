@@ -67,3 +67,17 @@ ship_emit() { # ship_emit <key> <value> [<key> <value> ...]
 # from the scan alongside its own path.
 SECRET_RE='postgres(ql)?://[^ "'"'"']+:[^ "'"'"'@]+@|bearer +[a-z0-9._~+/=-]{25,}|AKIA[A-Z0-9]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|client_secret[^a-z_]|sig=[a-z0-9%]{30,}'
 IGNORE_RE='postgres://postgres:postgres@'
+
+# 5. Windows PowerShell Pester status ----------------------------------------
+# local-gate.sh runs the bootstrap Pester suite under Windows PowerShell 5.1 —
+# the shell bootstrap.yml's CI job uses — through winps-pester.ps1, which exits 3
+# when no Pester 5 is reachable from 5.1. Lives here rather than in local-gate.sh
+# so test_ship_lib.py can pin the mapping: exit 3 must never read as `pass`, or
+# "local gate green" silently means less than CI green (#401).
+ship_winps_pester_status() { # ship_winps_pester_status <exit-code> -> pass|unresolved|fail
+  case $1 in
+    0) printf 'pass' ;;
+    3) printf 'unresolved' ;;
+    *) printf 'fail' ;;
+  esac
+}

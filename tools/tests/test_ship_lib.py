@@ -103,6 +103,28 @@ def test_qstr_escapes_control_characters():
     assert _run("ship_qstr $'a\\tb\\nc\\rd'").strip() == r'"a\tb\nc\rd"'
 
 
+# --- Windows PowerShell Pester status (#401) -----------------------------------
+# local-gate.sh runs bootstrap:pester under Windows PowerShell 5.1 (the shell
+# bootstrap.yml's CI job uses) via winps-pester.ps1, which exits 3 when no Pester 5
+# is reachable from 5.1. The mapping below is the load-bearing part: exit 3 must
+# never read as `pass`, or "local gate green" silently means less than CI green.
+
+
+def test_winps_pester_status_maps_success_to_pass():
+    assert _run("ship_winps_pester_status 0") == "pass"
+
+
+def test_winps_pester_status_maps_the_unresolved_sentinel():
+    assert _run("ship_winps_pester_status 3") == "unresolved"
+
+
+@pytest.mark.parametrize("code", ["1", "2", "4", "127"])
+def test_winps_pester_status_maps_every_other_code_to_fail(code):
+    # A suite failure, a missing script, an unrunnable shell — all fail; only the
+    # explicit sentinel earns the deferred-to-ci downgrade.
+    assert _run(f"ship_winps_pester_status {code}") == "fail"
+
+
 # --- secrets regex (SECRET_RE / IGNORE_RE, moved into _lib.sh by #269) --------
 # Exercised through grep exactly as local-gate.sh's scanner uses them. The sample
 # credentials are assembled from fragments at runtime so no *source* line in this

@@ -16,6 +16,9 @@
 #                them (cloud fire with DOCKER=absent; PR CI proves them)
 #   --small      small lane: secrets grep + the one named pytest node, nothing else
 #
+# bootstrap:pester runs under Windows PowerShell 5.1 (winps-pester.ps1), matching
+# bootstrap.yml's `shell: powershell` job rather than the developer's pwsh 7 (#401).
+#
 # Gate statuses: pass | fail | deferred-to-ci | unavailable (required tool missing)
 # Exit: 0 all selected gates pass · 1 a gate failed · 2 a tool was unavailable
 set -uo pipefail
@@ -49,20 +52,52 @@ RESULTS="" FAILED=0 TOOLING=0
 
 record() { RESULTS="$RESULTS${RESULTS:+,}\"$1\":\"$2\""; }
 
-run_gate() { # run_gate <name> <cmd...>
-  local name=$1 log; shift
-  log="$LOGDIR/${name//[:\/]/_}.log"
+gate_log() { printf '%s/%s.log' "$LOGDIR" "${1//[:\/]/_}"; }
+
+emit_fail() { # emit_fail <name> <log>
+  { echo ""; echo "== $1 FAILED — last 40 lines =="; tail -40 "$2"; } >&2
+}
+
+gate_as() { # gate_as <status-on-success> <name> <cmd...>
+  local ok=$1 name=$2 log; shift 2
+  log=$(gate_log "$name")
   if "$@" >"$log" 2>&1; then
-    record "$name" pass
+    record "$name" "$ok"
   else
     record "$name" fail; FAILED=1
-    { echo ""; echo "== $name FAILED — last 40 lines =="; tail -40 "$log"; } >&2
+    emit_fail "$name" "$log"
   fi
+}
+
+run_gate() { # run_gate <name> <cmd...>
+  gate_as pass "$@"
 }
 
 pwsh_gate() { # pwsh_gate <name> <pwsh-command>  (unavailable if no pwsh)
   local name=$1 cmd=$2
   if have pwsh; then run_gate "$name" pwsh -NoProfile -Command "$cmd"
+  else record "$name" unavailable; TOOLING=1; fi
+}
+
+winps_pester_gate() { # winps_pester_gate <name> <suite-path> <pwsh-fallback-command>
+  # Pester under Windows PowerShell 5.1 — the shell bootstrap.yml's CI job uses.
+  # pwsh 7 enumerates pipeline input where 5.1 does not, so a pwsh-only local run
+  # can be green on code CI fails (#401). winps-pester.ps1 exits 3 when no Pester 5
+  # is reachable from 5.1; then pwsh still runs the suite (a failure there is a
+  # real failure) but a pass is reported deferred-to-ci — never pass, the same
+  # contract the Docker gates use.
+  local name=$1 path=$2 cmd=$3 log status
+  if have powershell; then
+    log=$(gate_log "$name")
+    powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/ship/winps-pester.ps1 \
+      -Path "$path" >"$log" 2>&1
+    status=$(ship_winps_pester_status $?)
+    case $status in
+      pass) record "$name" pass; return ;;
+      fail) record "$name" fail; FAILED=1; emit_fail "$name" "$log"; return ;;
+    esac
+  fi
+  if have pwsh; then gate_as deferred-to-ci "$name" pwsh -NoProfile -Command "$cmd"
   else record "$name" unavailable; TOOLING=1; fi
 }
 
@@ -184,7 +219,7 @@ fi
 # --- bootstrap (bootstrap.yml) ---------------------------------------------------
 if wf bootstrap; then
   pwsh_gate bootstrap:pssa '$f = Invoke-ScriptAnalyzer -Path ./bootstrap -Recurse; if ($f) { $f | Format-Table -AutoSize | Out-String | Write-Host; exit 1 }'
-  pwsh_gate bootstrap:pester 'Import-Module Pester; $c = New-PesterConfiguration; $c.Run.Path = "./bootstrap"; $c.Run.Exit = $true; Invoke-Pester -Configuration $c'
+  winps_pester_gate bootstrap:pester ./bootstrap 'Import-Module Pester; $c = New-PesterConfiguration; $c.Run.Path = "./bootstrap"; $c.Run.Exit = $true; Invoke-Pester -Configuration $c'
 fi
 
 # --- docker builds (docker.yml) ---------------------------------------------------
