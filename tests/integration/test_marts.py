@@ -1067,3 +1067,121 @@ def test_dq_finding_current_returns_only_the_latest_cycle(conn):
         "SELECT (SELECT max(detected_at) FROM marts.dq_finding_current)"
         " = (SELECT max(detected_at) FROM marts.dq_finding)",
     ) == (True,)
+
+
+def test_dq_finding_records_its_subject_and_whether_it_drains(conn):
+    """#396: `details` is a payload, not a key — over half the detector types embed a
+    volatile measurement in it, so `(finding_type, details)` yields a fresh "distinct
+    finding" every cycle and identifies nothing. `subject` carries the grain the detector
+    already groups by; whole-dataset detectors declare it as the `(dataset)` sentinel.
+    `kind` records whether the condition drains — a defect someone can act on until it
+    reaches zero — or is a gauge, true forever by design (ADR-0019).
+    """
+    ins_metric(
+        conn,
+        ts="2026-07-01T10:00:00Z",
+        metric_name="claude_code.commit.count",
+        metric_type="sum",
+        value=99,
+        value_kind="sum_cumulative",
+        user_email="a@x.com",
+    )
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:00:00Z",
+        event_name="api_request",
+        user_email=None,
+    )
+    refresh(conn)
+
+    # A recorded exclusion: true for as long as the exporter sends cumulative counters.
+    assert one(
+        conn,
+        "SELECT subject, kind FROM marts.dq_finding WHERE finding_type='cumulative_value_kind'",
+    ) == ("(dataset)", "gauge")
+    # Unattributed rows drain: they stop arriving once the emitter is fixed.
+    assert one(
+        conn,
+        "SELECT subject, kind FROM marts.dq_finding WHERE finding_type='unknown_email'",
+    ) == ("(dataset)", "defect")
+
+
+def test_dq_finding_subject_carries_the_session_day_grain(conn):
+    """A per-session detector's subject is its own GROUP BY, so multi_email_session —
+    grouped on (session_id, activity_date) — carries both. Without the date, two
+    offending days of one session would collide on a single subject and the view's
+    per-(finding_type, subject) dating would silently merge them.
+    """
+    for email, pid in (("dev@itworx.com", P1), ("dev.personal@gmail.com", P2)):
+        ins_event(
+            conn,
+            event_time="2026-07-01T10:00:00Z",
+            event_name="api_request",
+            session_id=S2,
+            user_email=email,
+            prompt_id=pid,
+        )
+    refresh(conn)
+    assert one(
+        conn,
+        "SELECT subject, kind FROM marts.dq_finding WHERE finding_type='multi_email_session'",
+    ) == (f"{S2}|2026-07-01", "gauge")
+
+
+def test_dq_finding_current_dates_the_finding_and_its_standing_streak(conn):
+    """#396: first_detected_at answers "how long has this been known", standing_since
+    answers "how long has it been standing *without clearing*" — the two diverge exactly
+    when a condition clears and returns, which is the case a single MIN(detected_at)
+    would misreport as an unbroken run.
+
+    The null-email row stands for the whole test on purpose: cycles are enumerated from
+    the log's own rows, so a cycle in which *nothing at all* was detected leaves no trace
+    and cannot be seen as a gap. One permanently-true condition makes every cycle
+    observable, which is the standing state of any live environment (the gauges are true
+    every cycle) and the bound the view documents.
+    """
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:00:00Z",
+        event_name="api_request",
+        user_email=None,
+    )
+    ins_metric(
+        conn,
+        ts="2026-07-01T10:00:00Z",
+        metric_name="claude_code.commit.count",
+        metric_type="sum",
+        value=99,
+        value_kind="sum_cumulative",
+        user_email="a@x.com",
+    )
+    refresh(conn)
+    refresh(conn)
+
+    # Detected in both cycles with no gap: the streak reaches back to the first detection.
+    assert one(
+        conn,
+        "SELECT first_detected_at = standing_since, standing_since < detected_at "
+        "FROM marts.dq_finding_current WHERE finding_type='cumulative_value_kind'",
+    ) == (True, True)
+
+    # Clear the condition, run a cycle without it, then bring it back.
+    conn.execute("DELETE FROM raw.metrics WHERE value_kind = 'sum_cumulative'")
+    refresh(conn)
+    ins_metric(
+        conn,
+        ts="2026-07-01T10:00:00Z",
+        metric_name="claude_code.commit.count",
+        metric_type="sum",
+        value=99,
+        value_kind="sum_cumulative",
+        user_email="a@x.com",
+    )
+    refresh(conn)
+
+    # The gap restarts the streak at the current cycle; first_detected_at does not move.
+    assert one(
+        conn,
+        "SELECT first_detected_at < standing_since, standing_since = detected_at "
+        "FROM marts.dq_finding_current WHERE finding_type='cumulative_value_kind'",
+    ) == (True, True)
