@@ -519,11 +519,33 @@ CREATE TABLE raw.events (
 --
 
 CREATE MATERIALIZED VIEW marts.bridge_session_agent AS
+ WITH agent_row AS (
+         SELECT events.session_id,
+            events.agent_name,
+            events.event_name,
+            NULL::boolean AS subagent_is_async,
+            NULL::bigint AS subagent_tool_uses,
+            NULL::bigint AS subagent_total_tokens
+           FROM raw.events
+          WHERE ((events.event_name = 'api_request'::text) AND (events.session_id IS NOT NULL) AND (events.agent_name IS NOT NULL))
+        UNION ALL
+         SELECT events.session_id,
+            events.agent_type,
+            events.event_name,
+            events.subagent_is_async,
+            events.subagent_tool_uses,
+            events.subagent_total_tokens
+           FROM raw.events
+          WHERE ((events.event_name = 'subagent_completed'::text) AND (events.session_id IS NOT NULL) AND (events.agent_type IS NOT NULL))
+        )
  SELECT session_id,
     agent_name,
-    count(*) AS invocations
-   FROM raw.events
-  WHERE ((event_name = 'api_request'::text) AND (session_id IS NOT NULL) AND (agent_name IS NOT NULL))
+    count(*) FILTER (WHERE (event_name = 'api_request'::text)) AS invocations,
+    count(*) FILTER (WHERE (event_name = 'subagent_completed'::text)) AS completions,
+    count(*) FILTER (WHERE subagent_is_async) AS async_completions,
+    COALESCE(sum(subagent_tool_uses), (0)::numeric) AS tool_uses,
+    COALESCE(sum(subagent_total_tokens), (0)::numeric) AS total_tokens
+   FROM agent_row
   GROUP BY session_id, agent_name
   WITH NO DATA;
 
@@ -535,10 +557,14 @@ CREATE MATERIALIZED VIEW marts.bridge_session_agent AS
 CREATE MATERIALIZED VIEW marts.bridge_session_hook AS
  SELECT session_id,
     hook_name,
-    count(*) AS executions
+    COALESCE(hook_event, 'unknown'::text) AS hook_event,
+    count(*) AS executions,
+    sum(total_duration_ms) AS total_duration_ms,
+    sum(num_hooks) AS num_hooks,
+    sum(num_success) AS num_success
    FROM raw.events
   WHERE ((event_name = 'hook_execution_complete'::text) AND (session_id IS NOT NULL) AND (hook_name IS NOT NULL))
-  GROUP BY session_id, hook_name
+  GROUP BY session_id, hook_name, COALESCE(hook_event, 'unknown'::text)
   WITH NO DATA;
 
 
@@ -547,22 +573,39 @@ CREATE MATERIALIZED VIEW marts.bridge_session_hook AS
 --
 
 CREATE MATERIALIZED VIEW marts.bridge_session_mcp AS
- WITH names AS (
-         SELECT events.session_id,
-            events.tool_name AS mcp_name
+ WITH server AS (
+         SELECT DISTINCT events.mcp_connection_server_name AS mcp_name,
+            regexp_replace(events.mcp_connection_server_name, '[ .:]'::text, '_'::text, 'g'::text) AS mcp_slug
            FROM raw.events
-          WHERE ((events.event_name = 'tool_result'::text) AND (events.session_id IS NOT NULL) AND (events.tool_name ~~ 'mcp__%'::text))
-        UNION ALL
+          WHERE ((events.event_name = 'mcp_server_connection'::text) AND (events.mcp_connection_server_name IS NOT NULL))
+        ), conn AS (
          SELECT events.session_id,
-            events.mcp_server_name
+            events.mcp_connection_server_name AS mcp_name,
+            count(*) AS connections,
+            count(*) FILTER (WHERE (events.mcp_connection_status = 'failed'::text)) AS connect_failures,
+            (array_agg(events.mcp_transport_type ORDER BY events.event_time DESC) FILTER (WHERE (events.mcp_transport_type IS NOT NULL)))[1] AS mcp_transport_type,
+            (array_agg(events.mcp_connection_server_scope ORDER BY events.event_time DESC) FILTER (WHERE (events.mcp_connection_server_scope IS NOT NULL)))[1] AS mcp_connection_server_scope
            FROM raw.events
+          WHERE ((events.event_name = 'mcp_server_connection'::text) AND (events.session_id IS NOT NULL) AND (events.mcp_connection_server_name IS NOT NULL))
+          GROUP BY events.session_id, events.mcp_connection_server_name
+        ), calls AS (
+         SELECT events.session_id,
+            server.mcp_name,
+            count(*) AS api_calls
+           FROM (raw.events
+             JOIN server ON ((server.mcp_slug = events.mcp_server_name)))
           WHERE ((events.event_name = 'api_request'::text) AND (events.session_id IS NOT NULL) AND (events.mcp_server_name IS NOT NULL))
+          GROUP BY events.session_id, server.mcp_name
         )
- SELECT session_id,
-    mcp_name,
-    count(*) AS tool_calls
-   FROM names
-  GROUP BY session_id, mcp_name
+ SELECT COALESCE(conn.session_id, calls.session_id) AS session_id,
+    COALESCE(conn.mcp_name, calls.mcp_name) AS mcp_name,
+    COALESCE(conn.connections, (0)::bigint) AS connections,
+    COALESCE(conn.connect_failures, (0)::bigint) AS connect_failures,
+    COALESCE(calls.api_calls, (0)::bigint) AS api_calls,
+    conn.mcp_transport_type,
+    conn.mcp_connection_server_scope
+   FROM (conn
+     FULL JOIN calls ON (((calls.session_id = conn.session_id) AND (calls.mcp_name = conn.mcp_name))))
   WITH NO DATA;
 
 
@@ -573,10 +616,13 @@ CREATE MATERIALIZED VIEW marts.bridge_session_mcp AS
 CREATE MATERIALIZED VIEW marts.bridge_session_plugin AS
  SELECT session_id,
     plugin_name,
+    COALESCE(plugin_scope, 'unknown'::text) AS plugin_scope,
+    COALESCE(plugin_version, 'unknown'::text) AS plugin_version,
+    COALESCE(marketplace_name, 'unknown'::text) AS marketplace_name,
     count(*) AS load_count
    FROM raw.events
   WHERE ((event_name = 'plugin_loaded'::text) AND (session_id IS NOT NULL) AND (plugin_name IS NOT NULL))
-  GROUP BY session_id, plugin_name
+  GROUP BY session_id, plugin_name, COALESCE(plugin_scope, 'unknown'::text), COALESCE(plugin_version, 'unknown'::text), COALESCE(marketplace_name, 'unknown'::text)
   WITH NO DATA;
 
 
@@ -587,7 +633,9 @@ CREATE MATERIALIZED VIEW marts.bridge_session_plugin AS
 CREATE MATERIALIZED VIEW marts.bridge_session_skill AS
  SELECT session_id,
     skill_name,
-    count(*) AS activations
+    count(*) AS activations,
+    (array_agg(skill_source ORDER BY event_time DESC) FILTER (WHERE ((event_name = 'skill_activated'::text) AND (skill_source IS NOT NULL))))[1] AS skill_source,
+    (array_agg(skill_invocation_trigger ORDER BY event_time DESC) FILTER (WHERE ((event_name = 'skill_activated'::text) AND (skill_invocation_trigger IS NOT NULL))))[1] AS skill_invocation_trigger
    FROM raw.events
   WHERE ((event_name = ANY (ARRAY['skill_activated'::text, 'api_request'::text])) AND (session_id IS NOT NULL) AND (skill_name IS NOT NULL))
   GROUP BY session_id, skill_name
@@ -1131,6 +1179,9 @@ CREATE MATERIALIZED VIEW marts.fact_session AS
          SELECT metrics.session_id,
             metrics.user_email,
             metrics.cc_version,
+            metrics.terminal_type,
+            metrics.os_type,
+            metrics.service_name,
             metrics.ts AS t
            FROM raw.metrics
           WHERE (metrics.session_id IS NOT NULL)
@@ -1138,6 +1189,9 @@ CREATE MATERIALIZED VIEW marts.fact_session AS
          SELECT events.session_id,
             events.user_email,
             events.cc_version,
+            events.terminal_type,
+            events.os_type,
+            events.service_name,
             events.event_time
            FROM raw.events
           WHERE (events.session_id IS NOT NULL)
@@ -1153,6 +1207,9 @@ CREATE MATERIALIZED VIEW marts.fact_session AS
     marts.email_bucket((array_agg(sig.user_email ORDER BY sig.t) FILTER (WHERE (sig.user_email IS NOT NULL)))[1]) AS user_email,
     min(sig.t) AS started_at,
     (array_agg(sig.cc_version ORDER BY sig.t DESC) FILTER (WHERE (sig.cc_version IS NOT NULL)))[1] AS cc_version,
+    (array_agg(sig.terminal_type ORDER BY sig.t DESC) FILTER (WHERE (sig.terminal_type IS NOT NULL)))[1] AS terminal_type,
+    (array_agg(sig.os_type ORDER BY sig.t DESC) FILTER (WHERE (sig.os_type IS NOT NULL)))[1] AS os_type,
+    (array_agg(sig.service_name ORDER BY sig.t DESC) FILTER (WHERE (sig.service_name IS NOT NULL)))[1] AS service_name,
     (EXTRACT(epoch FROM (max(sig.t) - min(sig.t))))::bigint AS duration_s
    FROM (sig
      LEFT JOIN start_type st ON ((sig.session_id = st.session_id)))
@@ -1211,13 +1268,15 @@ CREATE MATERIALIZED VIEW marts.fact_tool_outcome AS
  SELECT session_id,
     (event_time)::date AS activity_date,
     tool_name,
+    COALESCE(decision_source, 'unknown'::text) AS decision_source,
+    COALESCE(error_type, 'none'::text) AS error_type,
     count(*) AS tool_call_count,
     count(*) FILTER (WHERE success_bool) AS success_count,
     (percentile_cont((0.5)::double precision) WITHIN GROUP (ORDER BY ((duration_ms)::double precision)))::bigint AS duration_p50_ms,
     (percentile_cont((0.95)::double precision) WITHIN GROUP (ORDER BY ((duration_ms)::double precision)))::bigint AS duration_p95_ms
    FROM raw.events
   WHERE ((event_name = 'tool_result'::text) AND (session_id IS NOT NULL))
-  GROUP BY session_id, ((event_time)::date), tool_name
+  GROUP BY session_id, ((event_time)::date), tool_name, COALESCE(decision_source, 'unknown'::text), COALESCE(error_type, 'none'::text)
   WITH NO DATA;
 
 
@@ -1522,7 +1581,7 @@ CREATE UNIQUE INDEX bridge_session_agent_pk ON marts.bridge_session_agent USING 
 -- Name: bridge_session_hook_pk; Type: INDEX; Schema: marts; Owner: -
 --
 
-CREATE UNIQUE INDEX bridge_session_hook_pk ON marts.bridge_session_hook USING btree (session_id, hook_name);
+CREATE UNIQUE INDEX bridge_session_hook_pk ON marts.bridge_session_hook USING btree (session_id, hook_name, hook_event);
 
 
 --
@@ -1536,7 +1595,7 @@ CREATE UNIQUE INDEX bridge_session_mcp_pk ON marts.bridge_session_mcp USING btre
 -- Name: bridge_session_plugin_pk; Type: INDEX; Schema: marts; Owner: -
 --
 
-CREATE UNIQUE INDEX bridge_session_plugin_pk ON marts.bridge_session_plugin USING btree (session_id, plugin_name);
+CREATE UNIQUE INDEX bridge_session_plugin_pk ON marts.bridge_session_plugin USING btree (session_id, plugin_name, plugin_scope, plugin_version, marketplace_name);
 
 
 --
@@ -1634,7 +1693,7 @@ CREATE UNIQUE INDEX fact_session_pk ON marts.fact_session USING btree (session_i
 -- Name: fact_tool_outcome_pk; Type: INDEX; Schema: marts; Owner: -
 --
 
-CREATE UNIQUE INDEX fact_tool_outcome_pk ON marts.fact_tool_outcome USING btree (session_id, activity_date, tool_name);
+CREATE UNIQUE INDEX fact_tool_outcome_pk ON marts.fact_tool_outcome USING btree (session_id, activity_date, tool_name, decision_source, error_type);
 
 
 --
@@ -1777,4 +1836,11 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260730075429'),
     ('20260730075804'),
     ('20260730081110'),
-    ('20260802061454');
+    ('20260802061454'),
+    ('20260802135450'),
+    ('20260802135511'),
+    ('20260802135532'),
+    ('20260802135552'),
+    ('20260802135613'),
+    ('20260802135640'),
+    ('20260802135724');
