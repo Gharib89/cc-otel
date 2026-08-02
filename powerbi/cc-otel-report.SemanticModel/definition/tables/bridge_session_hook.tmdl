@@ -26,6 +26,42 @@ table bridge_session_hook
 
 		annotation SummarizationSetBy = Automatic
 
+	column hook_event
+		dataType: string
+		lineageTag: 9b1cac7d-99ae-4737-b574-2b1f39bec415
+		summarizeBy: none
+		sourceColumn: hook_event
+
+		annotation SummarizationSetBy = Automatic
+
+	column total_duration_ms
+		dataType: double
+		lineageTag: 448b02b8-7acb-409b-ace1-e61d7711810f
+		summarizeBy: sum
+		sourceColumn: total_duration_ms
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column num_hooks
+		dataType: int64
+		formatString: 0
+		lineageTag: c478d3bf-99ca-49fd-bd6d-505a8819a946
+		summarizeBy: sum
+		sourceColumn: num_hooks
+
+		annotation SummarizationSetBy = Automatic
+
+	column num_success
+		dataType: int64
+		formatString: 0
+		lineageTag: 1e670f69-c75b-4e7e-8841-64b2a135c971
+		summarizeBy: sum
+		sourceColumn: num_success
+
+		annotation SummarizationSetBy = Automatic
+
 	partition bridge_session_hook = m
 		mode: import
 		source =
