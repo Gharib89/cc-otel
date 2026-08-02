@@ -228,7 +228,8 @@ neither holds, you skipped a verification; stop and go back.
 Run `scripts/ship/local-gate.sh` green before opening the PR — it maps the diff
 to the same concern gates CI's path filters select and mirrors them locally,
 secrets grep included. Act on the JSON: `fail` → fix and re-run;
-`deferred-to-ci` (Docker-requiring gates under `--no-docker`) → PR CI proves
+`deferred-to-ci` (Docker-requiring gates under `--no-docker`; a Pester group with
+no reachable Windows-PowerShell Pester 5) → PR CI proves
 those, don't re-derive them; `unavailable` → a required tool is missing —
 surface it, don't silently skip. **Small lane:**
 `local-gate.sh --small <test-node>` per

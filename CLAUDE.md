@@ -65,11 +65,12 @@ psql "$DATABASE_URL"         # ad-hoc DB access (Azure otel real data / cc_otel)
 
 ## Driving PowerShell — output-capture traps
 
-The shell here is **PowerShell** (pwsh primary, WinPS 5.1 on the fleet). Four traps silently corrupt captured results or CI — each reads like a code bug when it's really PS semantics or the harness lying:
+The shell here is **PowerShell** (pwsh primary, WinPS 5.1 on the fleet). Five traps silently corrupt captured results or CI — each reads like a code bug when it's really PS semantics or the harness lying:
 
 - **Empty `[string[]]` return unrolls to `$null`.** `return [string[]]$x` yields `$null` when `$x` is empty; the caller then fails a `Mandatory` bind or throws on `$null.Count` under `Set-StrictMode`. Use `return , [string[]]$x` (unary comma preserves the array). Tests that pipe the array through `Should` mask it — assert the return **without** piping.
 - **Native stdout leaks into the return value.** A function calling `dbmate`/`psql`/any native exe returns `@(<tool output>, $rc)`, not `$rc` — a downstream `if ($rc -ne 0)` then evaluates a truthy array and false-halts a step that succeeded. Pipe native output to `| Out-Host` (shown, not returned).
 - **Multi-line stdout captures as a `string[]`, one element per line.** `$body = gh issue view N --json body --jq .body` becomes a line array; `.Replace()` member-enumerates and `Set-Content -NoNewline` concatenates with no separator, wiping newlines. Edit large GH issue/PR bodies in **bash** via `--body-file`, never a PS variable round-trip.
+- **`ConvertFrom-Json` hands WinPS 5.1 a JSON array back as one object.** `foreach ($c in @($json | ConvertFrom-Json))` binds the whole array instead of enumerating it, so `$c.name` member-enumerates into one bogus joined key; pwsh 7 enumerates, so the same test passes locally and fails CI (#399). Parse `az` list output as `--output tsv` rows. `scripts/ship/local-gate.sh` runs `bootstrap:pester` under 5.1 via `scripts/ship/winps-pester.ps1` — which imports pwsh's Pester 5 by absolute path when 5.1 has none of its own; with no 5.1-reachable Pester 5 at all the group reports `deferred-to-ci`, never `pass` (#401).
 - **`.ps1` files must be pure ASCII.** The `bootstrap` job throws on **any** PSScriptAnalyzer finding, Warnings included; `PSUseBOMForUnicodeEncodedFile` fires on a single non-ASCII byte (one em-dash `-` in a comment) while local `-Severity Error` stays green. Use ASCII; grep the diff with a literal-tab bracket so tab indentation isn't a false positive: `LC_ALL=C grep -n $'[^ -~\t]' file.ps1`.
 
 ## Dev database

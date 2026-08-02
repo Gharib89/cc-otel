@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Shared helpers for the ship phase scripts (#230). Sourced, never executed.
 #
-# Owns exactly three concerns that the phase scripts used to each restate:
+# Owns exactly five concerns that the phase scripts used to each restate:
 #   1. the gitignored env-file inventory (copied into the worktree at isolate,
 #      back out at merge) — SHIP_ENV_FILES, the single source so a fourth file
 #      can't be added to one side and silently lost at the other;
 #   2. the `<type>/<slug>-<issue>` branch convention — construct + suffix match;
 #   3. the JSON-object emit pattern every script prints on stdout;
 #   4. the secrets-scan regexes local-gate.sh greps with (#269) — security
-#      load-bearing, so they live here where test_ship_lib.py can exercise them.
+#      load-bearing, so they live here where test_ship_lib.py can exercise them;
+#   5. the Windows-PowerShell Pester exit-code mapping (#401) — same reason: the
+#      "exit 3 never reads as pass" rule needs a test.
 #
 # Kept intentionally shallow: local-gate.sh keeps its own record()/verdict logic,
 # and claim.sh/reflect.sh stay one-liners over these helpers.
@@ -67,3 +69,17 @@ ship_emit() { # ship_emit <key> <value> [<key> <value> ...]
 # from the scan alongside its own path.
 SECRET_RE='postgres(ql)?://[^ "'"'"']+:[^ "'"'"'@]+@|bearer +[a-z0-9._~+/=-]{25,}|AKIA[A-Z0-9]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|client_secret[^a-z_]|sig=[a-z0-9%]{30,}'
 IGNORE_RE='postgres://postgres:postgres@'
+
+# 5. Windows PowerShell Pester status ----------------------------------------
+# local-gate.sh runs the bootstrap Pester suite under Windows PowerShell 5.1 —
+# the shell bootstrap.yml's CI job uses — through winps-pester.ps1, which exits 3
+# when no Pester 5 is reachable from 5.1. Lives here rather than in local-gate.sh
+# so test_ship_lib.py can pin the mapping: exit 3 must never read as `pass`, or
+# "local gate green" silently means less than CI green (#401).
+ship_winps_pester_status() { # ship_winps_pester_status <exit-code> -> pass|unresolved|fail
+  case $1 in
+    0) printf 'pass' ;;
+    3) printf 'unresolved' ;;
+    *) printf 'fail' ;;
+  esac
+}
