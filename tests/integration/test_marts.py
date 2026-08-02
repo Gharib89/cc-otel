@@ -166,6 +166,42 @@ def test_fact_session_duration_start_type(conn):
     ) == ("fresh", 600, "a@x.com")
 
 
+def test_fact_session_carries_the_session_constant_resource_attributes(conn):
+    # terminal_type/os_type/service_name are constant within a session but absent
+    # from most records, so the mart recovers them the way it recovers cc_version:
+    # latest non-NULL wins, across both raw tables.
+    ins_metric(
+        conn,
+        ts="2026-07-01T10:00:00Z",
+        metric_name="claude_code.session.count",
+        metric_type="sum",
+        value=1,
+        value_kind="sum_delta",
+        session_id=S1,
+        terminal_type="vscode",
+        os_type="windows",
+    )
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:05:00Z",
+        event_name="api_request",
+        session_id=S1,
+        service_name="claude-code",
+    )
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:10:00Z",
+        event_name="tool_result",
+        session_id=S1,
+    )
+    refresh(conn)
+    assert one(
+        conn,
+        "SELECT terminal_type, os_type, service_name FROM marts.fact_session "
+        f"WHERE session_id='{S1}'",
+    ) == ("vscode", "windows", "claude-code")
+
+
 def test_fact_session_daily_counts_deltas_and_prompts(conn):
     ins_metric(
         conn,
@@ -418,6 +454,38 @@ def test_fact_tool_outcome_counts_and_percentiles(conn):
         "SELECT tool_call_count, success_count, duration_p50_ms, duration_p95_ms "
         "FROM marts.fact_tool_outcome WHERE tool_name = 'Bash'",
     ) == (3, 2, 200, 290)
+
+
+def test_fact_tool_outcome_grain_splits_on_decision_source_and_error_type(conn):
+    # The two new key columns carry sentinels, not NULLs: refresh_all() refreshes
+    # CONCURRENTLY, which needs a unique index, and a unique index treats NULLs as
+    # distinct.
+    for _ in range(2):
+        ins_event(
+            conn,
+            event_time="2026-07-01T10:00:00Z",
+            event_name="tool_result",
+            session_id=S1,
+            tool_name="Bash",
+            decision_source="config",
+            success_bool=True,
+        )
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:01:00Z",
+        event_name="tool_result",
+        session_id=S1,
+        tool_name="Bash",
+        error_type="ShellError",
+        success_bool=False,
+    )
+    refresh(conn)
+    refresh(conn)
+    assert all_(
+        conn,
+        "SELECT decision_source, error_type, tool_call_count FROM marts.fact_tool_outcome "
+        "WHERE tool_name = 'Bash' ORDER BY decision_source",
+    ) == [("config", "none", 2), ("unknown", "ShellError", 1)]
 
 
 def test_fact_api_error_rate_per_day(conn):
@@ -692,10 +760,10 @@ def test_bridges_session_multivalued_fields(conn):
     )
     ins_event(
         conn,
-        event_time="2026-07-01T10:02:00Z",
-        event_name="tool_result",
+        event_time="2026-07-01T09:59:00Z",
+        event_name="mcp_server_connection",
         session_id=S1,
-        tool_name="mcp__github__search",
+        mcp_connection_server_name="github",
     )
     ins_event(
         conn,
@@ -717,7 +785,6 @@ def test_bridges_session_multivalued_fields(conn):
     ) == [("dream", 1), ("research", 1)]
     assert all_(conn, "SELECT mcp_name FROM marts.bridge_session_mcp ORDER BY mcp_name") == [
         ("github",),
-        ("mcp__github__search",),
     ]
     assert all_(conn, "SELECT plugin_name, load_count FROM marts.bridge_session_plugin") == [
         ("acme", 1)
@@ -727,6 +794,187 @@ def test_bridges_session_multivalued_fields(conn):
     ]
     assert all_(conn, "SELECT hook_name, executions FROM marts.bridge_session_hook") == [
         ("PreToolUse:Bash", 1)
+    ]
+
+
+def test_bridge_session_mcp_keys_on_the_connection_display_name(conn):
+    # The connection event carries the only complete server name space; the cost
+    # side (api_request.mcp_server_name) carries a slugged form of the same name,
+    # and the two rarely land in the same session, so they FULL JOIN on the name.
+    for status in ("connected", "failed"):
+        ins_event(
+            conn,
+            event_time="2026-07-01T10:00:00Z",
+            event_name="mcp_server_connection",
+            session_id=S1,
+            mcp_connection_server_name="claude.ai Microsoft Learn",
+            mcp_connection_status=status,
+            mcp_transport_type="stdio",
+            mcp_connection_server_scope="user",
+        )
+    ins_event(
+        conn,
+        event_time="2026-07-01T11:00:00Z",
+        event_name="api_request",
+        session_id=S2,
+        mcp_server_name="claude_ai_Microsoft_Learn",
+    )
+    # A legacy-shaped tool_result: the branch that read these produced zero rows
+    # ever, and MCP tool results are anonymous as to server. It must stay out.
+    ins_event(
+        conn,
+        event_time="2026-07-01T11:01:00Z",
+        event_name="tool_result",
+        session_id=S2,
+        tool_name="mcp__github__search",
+    )
+    refresh(conn)
+    assert all_(
+        conn,
+        "SELECT session_id::text, mcp_name, connections, connect_failures, api_calls,"
+        " mcp_transport_type, mcp_connection_server_scope"
+        " FROM marts.bridge_session_mcp ORDER BY session_id",
+    ) == [
+        (S1, "claude.ai Microsoft Learn", 2, 1, 0, "stdio", "user"),
+        (S2, "claude.ai Microsoft Learn", 0, 0, 1, None, None),
+    ]
+
+
+def test_bridge_session_plugin_grain_widens_by_scope_version_marketplace(conn):
+    # A plugin upgraded mid-session is two rows by design; the sentinels keep the
+    # widened unique index NULL-free for the CONCURRENTLY refresh.
+    for version in ("1.0.0", "1.1.0"):
+        ins_event(
+            conn,
+            event_time="2026-07-01T10:00:00Z",
+            event_name="plugin_loaded",
+            session_id=S1,
+            plugin_name="acme",
+            plugin_version=version,
+            marketplace_name="acme-market",
+        )
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:00:00Z",
+        event_name="plugin_loaded",
+        session_id=S2,
+        plugin_name="acme",
+    )
+    refresh(conn)
+    refresh(conn)
+    assert all_(
+        conn,
+        "SELECT plugin_scope, plugin_version, marketplace_name, load_count"
+        " FROM marts.bridge_session_plugin ORDER BY plugin_version",
+    ) == [
+        ("unknown", "1.0.0", "acme-market", 1),
+        ("unknown", "1.1.0", "acme-market", 1),
+        ("unknown", "unknown", "unknown", 1),
+    ]
+
+
+def test_bridge_session_skill_attributes_do_not_split_the_grain(conn):
+    # skill_source / skill_invocation_trigger ride only on skill_activated; the
+    # api_request branch is 96% of the rows and carries neither, so they are
+    # aggregated attributes, never key columns.
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:00:00Z",
+        event_name="skill_activated",
+        session_id=S1,
+        skill_name="dream",
+        skill_source="user",
+        skill_invocation_trigger="nested-skill",
+    )
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:01:00Z",
+        event_name="api_request",
+        session_id=S1,
+        skill_name="dream",
+    )
+    refresh(conn)
+    assert one(
+        conn,
+        "SELECT activations, skill_source, skill_invocation_trigger"
+        " FROM marts.bridge_session_skill WHERE skill_name = 'dream'",
+    ) == (2, "user", "nested-skill")
+
+
+def test_bridge_session_agent_unions_agent_type_into_the_key(conn):
+    # api_request.agent_name and subagent_completed.agent_type are the same
+    # activity seen twice; they share one key and the run summary joins as measures.
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:00:00Z",
+        event_name="api_request",
+        session_id=S1,
+        agent_name="Explore",
+    )
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:01:00Z",
+        event_name="subagent_completed",
+        session_id=S1,
+        agent_type="Explore",
+        subagent_is_async=True,
+        subagent_tool_uses=5,
+        subagent_total_tokens=23900,
+    )
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:02:00Z",
+        event_name="subagent_completed",
+        session_id=S1,
+        agent_type="coder",
+        subagent_is_async=False,
+        subagent_tool_uses=67,
+        subagent_total_tokens=225700,
+    )
+    # Invocations with no matching completion: the run-summary measures must read
+    # 0, not NULL, so they stay consistent with completions/async_completions.
+    ins_event(
+        conn,
+        event_time="2026-07-01T10:03:00Z",
+        event_name="api_request",
+        session_id=S1,
+        agent_name="Plan",
+    )
+    refresh(conn)
+    assert all_(
+        conn,
+        "SELECT agent_name, invocations, completions, async_completions, tool_uses, total_tokens"
+        " FROM marts.bridge_session_agent ORDER BY tool_uses",
+    ) == [
+        ("Plan", 1, 0, 0, 0, 0),
+        ("Explore", 1, 1, 1, 5, 23900),
+        ("coder", 0, 1, 0, 67, 225700),
+    ]
+
+
+def test_bridge_session_hook_grain_by_event_with_overhead_measures(conn):
+    # hook_event is the useful axis (7 values, 100% populated); num_hooks is a
+    # per-firing batch size, so it sums and never becomes a dimension.
+    for event, dur in (("PreToolUse", 1000), ("PostToolUse", 500)):
+        ins_event(
+            conn,
+            event_time="2026-07-01T10:00:00Z",
+            event_name="hook_execution_complete",
+            session_id=S1,
+            hook_name="rtk",
+            hook_event=event,
+            total_duration_ms=dur,
+            num_hooks=2,
+            num_success=1,
+        )
+    refresh(conn)
+    assert all_(
+        conn,
+        "SELECT hook_event, executions, total_duration_ms, num_hooks, num_success"
+        " FROM marts.bridge_session_hook ORDER BY hook_event",
+    ) == [
+        ("PostToolUse", 1, 500, 2, 1),
+        ("PreToolUse", 1, 1000, 2, 1),
     ]
 
 
