@@ -45,9 +45,14 @@ BEGIN
       AND event_time < DATE '2026-07-14';
     GET DIAGNOSTICS n_events = ROW_COUNT;
 
-    INSERT INTO marts.dq_finding (finding_type, row_count, details)
+    -- subject/kind are NOT NULL (#396). A one-shot operator record is dataset-wide and never
+    -- drains -- nobody acts on it until it clears -- so it is a gauge under that test, and the
+    -- DQ card must not carry it as a permanent defect it can never work off.
+    INSERT INTO marts.dq_finding (finding_type, subject, kind, row_count, details)
     VALUES (
         'non_itworx_email_purge',
+        '(dataset)',
+        'gauge',
         n_metrics + n_events,
         jsonb_build_object(
             'note', 'one-shot purge of non-itworx-domain user_email rows from raw (#162)',

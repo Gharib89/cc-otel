@@ -42,13 +42,19 @@ SET
         WHEN 'seat_assignment_without_tier' THEN details ->> 'user_email'
         WHEN 'identity_alias_unresolved' THEN details ->> 'user_email'
         -- Whole-dataset detectors: cumulative_value_kind, unknown_email,
-        -- cost_promotion_divergence, seat_boundary_basis.
+        -- cost_promotion_divergence, seat_boundary_basis -- plus the two one-shot operator
+        -- records the backfill purges wrote (non_itworx_email_purge, empty_user_purge), which
+        -- are dataset-wide too.
         ELSE '(dataset)'
     END,
     kind = CASE
         WHEN finding_type IN (
             'seat_boundary_basis', 'cumulative_value_kind',
-            'owner_email_mismatch', 'multi_email_session'
+            'owner_email_mismatch', 'multi_email_session',
+            -- Not detector output: a completed purge is a historical record, so it never
+            -- drains either, and a defect the card can never work off is exactly the reading
+            -- this column exists to prevent.
+            'non_itworx_email_purge', 'empty_user_purge'
         ) THEN 'gauge'
         ELSE 'defect'
     END;

@@ -49,7 +49,9 @@ The initial backfill (before the domain filter above) carried non-itworx-domain 
 interim. `sql/purge_non_itworx.sql` deletes those rows from `raw.metrics` / `raw.events` in one
 transaction (NULL emails kept -- covered by the `unknown_email` DQ finding) and logs a
 `non_itworx_email_purge` `marts.dq_finding` row with the total row count and the distinct domains
-purged (domains, not full emails). It is scoped to the **backfill window** (`ts` / `event_time`
+purged (domains, not full emails). Both purge records land as `kind = 'gauge'` (#396): a completed
+purge is a historical record that never drains, so the DQ card must not carry it as a defect it can
+never work off. It is scoped to the **backfill window** (`ts` / `event_time`
 `< 2026-07-14`, the same backfill-vs-live cutoff as the Rollback section below), so live
 non-itworx rows are left untouched, and the itworx domain is matched case-/whitespace-insensitively
 (`lower(trim(user_email))`) so a mixed-case ITWORX address is never wrongly deleted. Run once
