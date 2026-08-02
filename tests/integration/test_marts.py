@@ -777,3 +777,45 @@ def test_cumulative_rows_recorded_as_dq_finding(conn):
     assert one(
         conn, "SELECT row_count FROM marts.dq_finding WHERE finding_type='cumulative_value_kind'"
     ) == (1,)
+
+
+def test_dq_finding_current_returns_only_the_latest_cycle(conn):
+    """#374: dq_finding is an append-only detection log — the view is the finding count.
+
+    A still-true condition is re-detected every cycle, so the table grows without the
+    conditions changing. marts.dq_finding_current keys on MAX(detected_at), which is an
+    exact cycle key because refresh_all() is one transaction and detected_at defaults to
+    transaction-time now() (ADR-0019).
+    """
+    ins_metric(
+        conn,
+        ts="2026-07-01T10:00:00Z",
+        metric_name="claude_code.commit.count",
+        metric_type="sum",
+        value=99,
+        value_kind="sum_cumulative",
+        user_email="a@x.com",
+    )
+    refresh(conn)
+    refresh(conn)
+
+    # Same one condition, detected twice: the table double-counts it, the view does not.
+    assert one(
+        conn,
+        "SELECT count(*) FROM marts.dq_finding WHERE finding_type='cumulative_value_kind'",
+    ) == (2,)
+    assert one(
+        conn,
+        "SELECT count(*) FROM marts.dq_finding_current WHERE finding_type='cumulative_value_kind'",
+    ) == (1,)
+
+    # A cycle is atomic in the view: it holds the newest cycle whole, and nothing older.
+    assert one(
+        conn,
+        "SELECT count(DISTINCT detected_at) FROM marts.dq_finding_current",
+    ) == (1,)
+    assert one(
+        conn,
+        "SELECT (SELECT max(detected_at) FROM marts.dq_finding_current)"
+        " = (SELECT max(detected_at) FROM marts.dq_finding)",
+    ) == (True,)

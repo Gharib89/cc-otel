@@ -968,6 +968,21 @@ CREATE TABLE marts.dq_finding (
 
 
 --
+-- Name: dq_finding_current; Type: VIEW; Schema: marts; Owner: -
+--
+
+CREATE VIEW marts.dq_finding_current AS
+ SELECT id,
+    finding_type,
+    detected_at,
+    row_count,
+    details
+   FROM marts.dq_finding f
+  WHERE (detected_at = ( SELECT max(latest.detected_at) AS max
+           FROM marts.dq_finding latest));
+
+
+--
 -- Name: dq_finding_id_seq; Type: SEQUENCE; Schema: marts; Owner: -
 --
 
@@ -1761,4 +1776,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260729115029'),
     ('20260730075429'),
     ('20260730075804'),
-    ('20260730081110');
+    ('20260730081110'),
+    ('20260802061454');

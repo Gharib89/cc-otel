@@ -19,8 +19,11 @@ Import mode. Two sources:
 - **Marts** — Azure Postgres `cc_otel` DB, `marts` schema only. The 14 matviews
   (`dim_*`, `fact_*`, `bridge_*`) load via `Value.NativeQuery` (`SELECT … FROM marts.<x>`)
   because Power BI's PostgreSQL connector **does not list materialized views** in the
-  Navigator — a plain navigation import can't see them. The two ops **tables**
-  (`mart_refresh_log`, `dq_finding`) use ordinary navigation.
+  Navigator — a plain navigation import can't see them. The two ops objects use ordinary
+  navigation: the `mart_refresh_log` **table**, and the `dq_finding_current` **view** (plain
+  views the Navigator does list), which enters the model under the name `dq_finding`. The
+  underlying `marts.dq_finding` is an append-only detection log — importing it counted
+  detections as findings (ADR-0019).
 - **Employee dim** — Azure SQL `vw_UserBasicInfo` (`itxdatainteg-prod` / `EmployeeSchema`),
   imported directly for org attributes + RLS.
 

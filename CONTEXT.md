@@ -50,6 +50,10 @@ Wall clock: `last_seen_at − started_at` of a non-empty session. Distinct from 
 A materialized view in the `marts` schema — the conformed star schema (dimensions, facts, bridges) the adoption report reads. Refreshed hourly by `pg_cron` inside Postgres via `marts.refresh_all()` before the Power BI refresh, each cycle logged to `mart_refresh_log`. Raw tables are archive + drill source.
 _Avoid_: aggregate table, summary view
 
+**DQ finding**:
+A data-quality condition `marts.refresh_all()` detects and records — a session logged under two addresses, an emitter with no seat, a promoted cost diverging from its counter. A finding is the *condition*; the row is a **detection** of it. `marts.dq_finding` is an append-only log, so every still-true condition is re-detected on every hourly cycle and its row count is cycles × conditions, never a count of findings (ADR-0019). Consumers read `marts.dq_finding_current` — the current cycle, keyed on `MAX(detected_at)`, which is exact because a cycle is one transaction. Not every finding is a defect: some are standing gauges that report a share or an exclusion and are true forever by design, so the current count cannot reach zero. The log itself is provenance, kept the full retention window and never trimmed.
+_Avoid_: data quality issue, DQ error, DQ alert, finding row
+
 **Raw reservoir**:
 An Azure Blob Storage container (`raw`) holding the **redacted-raw** OTLP payloads — the full body with only secret-bearing fields stripped (`full_command`, `bash_command`, `file_path`, `error`), everything else kept verbatim. Purpose: keep Postgres lean while preserving raw for **drift** discovery and future-parser replay. Not the source of truth (the report reads Postgres marts); queried ad-hoc with DuckDB. See ADR-0005.
 _Avoid_: raw dump, blob backup

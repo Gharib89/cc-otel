@@ -607,6 +607,11 @@ table _Measures
 		displayFolder: Data Health
 		lineageTag: 7f426481-4c81-4b6a-9e31-c45412e896fd
 
+	/// Conditions standing in the current refresh cycle (#374). The dq_finding table entering the
+	/// model is marts.dq_finding_current, not the underlying log: refresh_all() re-detects every
+	/// still-true condition hourly, so COUNTROWS over the log counted cycles x conditions and grew
+	/// ~150/day while data quality stood still. Counts gauges alongside defects, so it cannot read
+	/// zero — see ADR-0019.
 	measure 'DQ Findings' = COUNTROWS ( dq_finding )
 		formatString: #,##0
 		displayFolder: Data Health
@@ -1830,12 +1835,18 @@ table _Measures
 	/// Third tier for the DQ FINDINGS card (#330) — the only card in pg_health's six-card band
 	/// that left the slot empty, so the band's bottom edge read ragged under that column.
 	/// A delta is not available here: dq_finding carries detected_at but has no dim_date
-	/// relationship, so [DQ Findings] is an all-time count and a "vs Nd" delta over it would
-	/// render a permanent +0.0%. Mirrors [Last Mart Refresh]'s treatment on the band's first
-	/// card instead — a freshness stamp, not a delta. The prefix rides in the formatString,
-	/// same as that measure.
-	measure 'Last DQ Finding' = MAX ( dq_finding[detected_at] )
-		formatString: "Latest " dd MMM HH:mm
+	/// relationship, so a "vs Nd" delta over [DQ Findings] would render a permanent +0.0%.
+	/// #330 filled the slot with MAX ( detected_at ), a freshness stamp mirroring
+	/// [Last Mart Refresh] on the band's first card. That stamp died with #374: the table now
+	/// enters the model as marts.dq_finding_current, one cycle only, so MAX ( detected_at ) is
+	/// always exactly the last refresh time and the tier duplicated the card it was mirroring.
+	/// The spread of finding types is the reading that survives the current-cycle source and
+	/// still moves. DISTINCTCOUNT is safe from the BLANK member here — finding_type is NOT NULL
+	/// in the mart. COALESCE so an empty cycle renders the zero section rather than a blank
+	/// card, which is the ragged edge #330 exists to prevent. Text rides in the formatString,
+	/// same as [Last Mart Refresh].
+	measure 'DQ Finding Types' = COALESCE ( DISTINCTCOUNT ( dq_finding[finding_type] ), 0 )
+		formatString: #,##0 " types standing";;"No findings standing"
 		displayFolder: Data Health
 		lineageTag: b3300001-0000-4000-8000-000000000330
 

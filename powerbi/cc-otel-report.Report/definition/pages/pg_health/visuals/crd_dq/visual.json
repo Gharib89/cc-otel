@@ -79,7 +79,7 @@
             "altText": {
               "expr": {
                 "Literal": {
-                  "Value": "'Count of open data-quality findings for the selected period.'"
+                  "Value": "'Count of data-quality conditions standing in the current refresh cycle. Not narrowed by the date slicer: dq_finding has no date relationship.'"
                 }
               }
             }

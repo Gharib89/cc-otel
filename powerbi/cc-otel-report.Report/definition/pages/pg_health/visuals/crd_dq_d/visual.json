@@ -23,11 +23,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "Last DQ Finding"
+                  "Property": "DQ Finding Types"
                 }
               },
-              "queryRef": "_Measures.Last DQ Finding",
-              "nativeQueryRef": "Last DQ Finding"
+              "queryRef": "_Measures.DQ Finding Types",
+              "nativeQueryRef": "DQ Finding Types"
             }
           ]
         }
@@ -79,7 +79,7 @@
             "altText": {
               "expr": {
                 "Literal": {
-                  "Value": "'Timestamp of the most recent data-quality finding. A stamp rather than a delta: dq_finding has no date relationship, so the headline count is all-time and a window comparison would be meaningless.'"
+                  "Value": "'How many distinct kinds of data-quality condition are standing in the current refresh cycle. A spread rather than a delta: dq_finding has no date relationship, so a window comparison would be meaningless.'"
                 }
               }
             }
