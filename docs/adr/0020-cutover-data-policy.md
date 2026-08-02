@@ -38,8 +38,11 @@ This is the first amendment that reaches production.
   cutover sessions that dual-sent" — came from replaying the POC's *own history* into interim, where
   a session already present live could arrive a second time from the dump. Nothing here replays
   history: the window opens where interim's live telemetry begins. Should the flip produce a
-  dual-sent session anyway, #245's spot-check — interim-versus-production row counts for the window —
-  is where it surfaces. Re-runnability is a separate concern and is **delete-window-then-copy**, not
+  dual-sent session anyway, nothing in this policy removes it — detecting one belongs to #245's
+  verification step, and a plain interim-versus-production row-count match will not do it: production
+  already holds its own #244 validation rows inside the same window, and a re-run deletes the
+  production window before re-copying it. Re-runnability is a separate concern and is
+  **delete-window-then-copy**, not
   `ON CONFLICT`: `raw.*` has no primary key by design — idempotency lives in `meta.processed_batches`
   (ADR-0017) — so there is no conflict target to name.
 
@@ -101,13 +104,12 @@ This is the first amendment that reaches production.
 
 - **Production inherits the replay's shape, warts included.** The rows copied are interim's
   *post-replay* rows, so production gets the 29 promoted columns' history back to Jul 17 for free —
-  and equally inherits whatever residual ADR-0017's replay left on its live day (69 metrics /
-  39 events short at last measurement) unless that day is replayed frozen in interim before the copy
+  and equally inherits whatever residual that replay left on its live day, `2026-07-30` (69 metrics /
+  39 events short at last measurement), unless that day is replayed frozen in interim before the copy
   runs.
 
 - **The copy runs after the fleet is quiet on interim** (#245 gated on #244), or the window has a
-  moving right edge and the spot-check that compares interim-vs-production row counts can never
-  match.
+  moving right edge and no verification of the copy can settle.
 
 - **Production's reservoir becomes replay-capable back to Jul 17** once #246 lands, so a future
   column promotion can carry history in production the same way ADR-0017 did in interim.
