@@ -674,7 +674,11 @@ def test_seat_findings_carry_a_usable_subject(conn, pg_url, tmp_path):
     column through, so assert the value that actually lands — not the view definitions that make
     it non-null today.
     """
-    load(pg_url, roster(tmp_path, seat("holder@itworx.com", assigned="2026-06-01"), name="d1.csv"), "2026-07-01")
+    load(
+        pg_url,
+        roster(tmp_path, seat("holder@itworx.com", assigned="2026-06-01"), name="d1.csv"),
+        "2026-07-01",
+    )
     for email in ("holder@itworx.com", "stranger@itworx.com"):
         ins_event(
             conn,
