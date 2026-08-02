@@ -666,3 +666,34 @@ def test_no_seat_findings_fire_with_no_roster_loaded(conn):
     # No intervals exist, so nothing can be after a close and no boundary basis is measurable;
     # the emitter finding is the one honest signal — the roster simply is not loaded yet.
     assert seat_findings == {"seat_emitter_without_seat"}
+
+
+def test_seat_findings_carry_a_usable_subject(conn, pg_url, tmp_path):
+    """#396: `subject` is NOT NULL, so a detector grouping on a nullable column would abort the
+    whole hourly cycle rather than skip one row. The seat detectors are the ones passing a bare
+    column through, so assert the value that actually lands — not the view definitions that make
+    it non-null today.
+    """
+    load(pg_url, roster(tmp_path, seat("holder@itworx.com", assigned="2026-06-01"), name="d1.csv"), "2026-07-01")
+    for email in ("holder@itworx.com", "stranger@itworx.com"):
+        ins_event(
+            conn,
+            event_time="2026-07-02T10:00:00Z",
+            event_name="api_request",
+            user_email=email,
+        )
+    refresh(conn)
+
+    findings = all_(
+        conn,
+        "SELECT finding_type, subject, kind FROM marts.dq_finding "
+        "WHERE finding_type LIKE 'seat%' ORDER BY finding_type",
+    )
+    assert findings, "expected at least one seat finding to fire"
+    for finding_type, subject, kind in findings:
+        assert subject, f"{finding_type} emitted an empty subject"
+        assert kind in ("defect", "gauge"), finding_type
+
+    # The per-identity detector names the person, not the dataset — recording the grain the
+    # detector already grouped by is the whole point of the column.
+    assert ("seat_emitter_without_seat", "stranger@itworx.com", "defect") in findings

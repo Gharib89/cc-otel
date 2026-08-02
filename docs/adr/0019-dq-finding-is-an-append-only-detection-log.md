@@ -57,8 +57,10 @@ exclusion recorded so it is never silent), `owner_email_mismatch` ("an observati
 control") and `multi_email_session` are standing gauges: permanently true by design. The other eight
 types drain — someone can act until they reach zero. `kind TEXT NOT NULL`, `CHECK (kind IN ('defect',
 'gauge'))`, records which (#396), and the `DQ Findings` card counts defects only, so a clean cycle
-reads zero. Gauges keep their rows and their place in `tbl_dq`, labelled by kind; they are excluded
-from a count, never from the surface.
+reads zero. The by-type chart beside it is defect-scoped for the same reason — it reads the
+blank-preserving `[DQ Defects]`, so a gauge type is omitted rather than drawn as a zero-length bar
+claiming it stands at nothing. The grid is where gauges keep their rows, now labelled by `kind`:
+they leave the count, not the page.
 
 ## Considered options
 

@@ -5,10 +5,23 @@
 -- subject: `details` is a payload, not a key -- over half the detector types embed a volatile
 -- measurement in it (abs_diff_usd, last_activity_date, record_count, an observation share), so
 -- (finding_type, details) produces a fresh "distinct finding" every cycle and identifies
--- nothing. Every detector's subject is already written in its own GROUP BY and was thrown away
--- at insert; it is now recorded. NOT NULL is the point: a new detector cannot be written
--- without declaring its grain. Whole-dataset detectors declare that explicitly as the
--- '(dataset)' sentinel rather than a NULL that would read as "not yet classified".
+-- nothing. Every detector already writes its subject as its own row identity -- a GROUP BY for
+-- the aggregating ones, the window partition for seat_reopened_within_cadence, which has no
+-- GROUP BY at all -- and threw it away at insert; it is now recorded. NOT NULL is the point: a
+-- new detector cannot be written without declaring its grain. Whole-dataset detectors declare
+-- that explicitly as the '(dataset)' sentinel rather than a NULL that would read as "not yet
+-- classified".
+--
+-- Compound subjects join their parts with a '|'. No escaping, because no part can contain one:
+-- the parts are uuids, dates, and email addresses. Deliberately not a jsonb or a composite type
+-- -- the column exists to be grouped on and rendered in a grid, and a text key does both.
+--
+-- NOT NULL puts a new abort path into the hourly cycle, so every subject expression is NULL-safe
+-- at source: staging.stg_telemetry_day filters `user_email IS NOT NULL` on both branches (so
+-- stg_seat_uncovered_day inherits it), ref.seat_roster_snapshot.user_email is NOT NULL, the
+-- session detectors filter `session_id IS NOT NULL`, and seat_reopened_within_cadence guards
+-- `valid_to IS NOT NULL` in its own WHERE. A detector added over a nullable grain column must
+-- COALESCE it rather than let one NULL roll back the whole refresh.
 --
 -- kind: not every finding is a defect, so the DQ Findings card counted standing gauges among
 -- defects and could never read zero. The test is whether it drains -- a condition someone can
@@ -27,12 +40,17 @@ ADD COLUMN kind TEXT;
 UPDATE marts.dq_finding
 SET
     subject = CASE finding_type
-        -- Per-session grain. owner_email_mismatch is session-constant, so session_id alone
-        -- identifies it; multi_email_session groups on the session-day and needs both parts.
+        -- Per-session grain, plus the part that varies within a session. process_owner is
+        -- session-constant (#372) so it is not in owner_email_mismatch's subject, but user_email
+        -- is not -- multi_email_session exists precisely because a session can carry more than
+        -- one address, and two mismatching corporate addresses in one session are two findings.
         WHEN 'multi_email_session'
             THEN format('%s|%s', details ->> 'session_id', details ->> 'activity_date')
-        WHEN 'owner_email_mismatch' THEN details ->> 'session_id'
-        -- Per-identity grain, dated where the detector groups on a date as well.
+        WHEN 'owner_email_mismatch'
+            THEN format('%s|%s', details ->> 'session_id', details ->> 'user_email')
+        -- Per-identity grain, dated where a second column completes the row identity: one person
+        -- can hold multiple concurrent subscriptions across drops, and can reopen a seat more
+        -- than once, so an undated subject would merge separate incidents into one streak.
         WHEN 'seat_reopened_within_cadence'
             THEN format('%s|%s', details ->> 'user_email', details ->> 'closed_on')
         WHEN 'seat_multi_subscription'
@@ -63,6 +81,12 @@ ALTER TABLE marts.dq_finding
 ALTER COLUMN subject SET NOT NULL,
 ALTER COLUMN kind SET NOT NULL,
 ADD CONSTRAINT dq_finding_kind_check CHECK (kind IN ('defect', 'gauge'));
+
+-- dq_finding_current went from one indexed lookup on detected_at to four passes over the table
+-- (a DISTINCT, two window sorts, a GROUP BY), and Power BI reads it hourly against a log growing
+-- ~150 rows/day. The existing detected_at index still serves the current-cycle predicate; this one
+-- serves the per-finding dating, which is what the new columns added.
+CREATE INDEX dq_finding_subject_idx ON marts.dq_finding (finding_type, subject, detected_at);
 
 CREATE OR REPLACE FUNCTION marts.refresh_all() RETURNS void LANGUAGE plpgsql AS $fn$
 DECLARE
@@ -403,9 +427,13 @@ BEGIN
     -- alias machinery already owns that reading. No allowlist for shared or service accounts —
     -- Administrator, a hostname, or an unrelated personal name are plain mismatches, and that is
     -- the case this exists for.
+    --
+    -- The subject carries user_email as well as session_id (#396): process_owner is
+    -- session-constant, but the address is not, and this groups on it -- two mismatching
+    -- corporate addresses inside one session are two findings, not one.
     INSERT INTO marts.dq_finding (finding_type, subject, kind, row_count, details)
     SELECT 'owner_email_mismatch',
-           o.session_id::text,
+           format('%s|%s', o.session_id, o.user_email),
            'gauge', COUNT(*),
            jsonb_build_object(
                'session_id', o.session_id,
@@ -887,6 +915,8 @@ FROM marts.dq_finding AS f
 WHERE f.detected_at = (SELECT MAX(latest.detected_at) FROM marts.dq_finding AS latest);
 
 GRANT SELECT ON marts.dq_finding_current TO cc_otel_read;
+
+DROP INDEX IF EXISTS marts.dq_finding_subject_idx;
 
 ALTER TABLE marts.dq_finding
 DROP CONSTRAINT dq_finding_kind_check,

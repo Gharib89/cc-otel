@@ -422,9 +422,13 @@ BEGIN
     -- alias machinery already owns that reading. No allowlist for shared or service accounts —
     -- Administrator, a hostname, or an unrelated personal name are plain mismatches, and that is
     -- the case this exists for.
+    --
+    -- The subject carries user_email as well as session_id (#396): process_owner is
+    -- session-constant, but the address is not, and this groups on it -- two mismatching
+    -- corporate addresses inside one session are two findings, not one.
     INSERT INTO marts.dq_finding (finding_type, subject, kind, row_count, details)
     SELECT 'owner_email_mismatch',
-           o.session_id::text,
+           format('%s|%s', o.session_id, o.user_email),
            'gauge', COUNT(*),
            jsonb_build_object(
                'session_id', o.session_id,
@@ -1711,6 +1715,13 @@ CREATE UNIQUE INDEX dim_user_pk ON marts.dim_user USING btree (user_email);
 --
 
 CREATE INDEX dq_finding_detected_idx ON marts.dq_finding USING btree (detected_at DESC);
+
+
+--
+-- Name: dq_finding_subject_idx; Type: INDEX; Schema: marts; Owner: -
+--
+
+CREATE INDEX dq_finding_subject_idx ON marts.dq_finding USING btree (finding_type, subject, detected_at);
 
 
 --

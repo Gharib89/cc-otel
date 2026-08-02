@@ -6,6 +6,8 @@ criteria (including the >100% reset-split utilization window).
 
 from __future__ import annotations
 
+import psycopg
+import pytest
 from _helpers import ins_event, ins_metric
 
 S1 = "11111111-1111-1111-1111-111111111111"
@@ -1104,6 +1106,17 @@ def test_dq_finding_records_its_subject_and_whether_it_drains(conn):
         conn,
         "SELECT subject, kind FROM marts.dq_finding WHERE finding_type='unknown_email'",
     ) == ("(dataset)", "defect")
+
+
+def test_dq_finding_kind_is_a_closed_vocabulary(conn):
+    """The CHECK is what makes defect/gauge the schema's vocabulary rather than a convention a
+    new detector can quietly drift from — a third value has to be an ADR decision, not a typo.
+    """
+    with pytest.raises(psycopg.errors.CheckViolation):
+        conn.execute(
+            "INSERT INTO marts.dq_finding (finding_type, subject, kind)"
+            " VALUES ('invented_detector', 'a@x.com', 'warning')"
+        )
 
 
 def test_dq_finding_subject_carries_the_session_day_grain(conn):
