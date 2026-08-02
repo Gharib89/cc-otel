@@ -40,11 +40,37 @@ This is the first amendment that reaches production.
   history: the window opens where interim's live telemetry begins. Should the flip produce a
   dual-sent session anyway, nothing in this policy removes it — detecting one belongs to #245's
   verification step, and a plain interim-versus-production row-count match will not do it: production
-  already holds its own #244 validation rows inside the same window, and a re-run deletes the
-  production window before re-copying it. Re-runnability is a separate concern and is
-  **delete-window-then-copy**, not
-  `ON CONFLICT`: `raw.*` has no primary key by design — idempotency lives in `meta.processed_batches`
-  (ADR-0017) — so there is no conflict target to name.
+  already holds its own #244 validation rows inside the same window. Re-runnability is a separate
+  concern, settled by the flip watermark below.
+
+- **The copy is bounded per seat by a flip watermark, so a re-run deletes nothing
+  production-native.** Revised 2026-08-02 (#244 grilling); supersedes the
+  **delete-window-then-copy** rule this ADR first recorded, which was destructive by construction.
+  `raw.metrics` and `raw.events` carry an event `ts` and identity columns and nothing else — no
+  ingest timestamp, no batch linkage — and `meta.processed_batches` is `(batch_hash, processed_at)`
+  with no row linkage, so **nothing in production distinguishes a copied row from a
+  production-native one**. A global `ts >= '2026-07-17'` delete therefore removes production's own
+  post-flip telemetry and cannot restore it, because those rows are in production only. `raw.*` has
+  no primary key by design — idempotency lives in `meta.processed_batches` (ADR-0017) — so
+  `ON CONFLICT` was never available either.
+
+  The bound that works is derived from production itself. A seat's **flip watermark** is
+  `MIN(ts)` over that seat's production rows — the moment its machine started emitting to
+  production. The copy moves interim rows `WHERE ts >= '2026-07-17' AND ts < watermark(seat)` and
+  bounds its delete identically, so it deletes zero production-native rows by construction and is
+  safe to re-run. That matters because **the flip is staggered, not atomic**: IS pushes on a
+  90-minute cadence and a powered-off or off-VPN machine flips whenever it next ticks, so
+  stragglers are the expected case and the copy has to be re-runnable rather than one-shot.
+
+  **The watermark is per seat, not per machine, because no machine identifier exists.**
+  `process_owner`, `terminal_type`, `service_name` and `os_type` are the closest columns and none
+  identifies a device, so a seat running two machines that flip at different times would strand the
+  later machine's interim rows between the two flip moments. Measured 2026-08-02: interim
+  `raw.metrics` carries **17 distinct `user_email` over the trailing 7 days**, one machine each, so
+  seat and machine coincide and the limit is not live. That same 17 is the denominator for #244's
+  gate — every seat must have appeared in production before the copy is complete — and it replaces
+  watching interim for silence, which cannot distinguish a finished flip from a fleet that is merely
+  powered off.
 
 - **Sessions straddling the boundary lose their pre-midnight rows, accepted.** A session live at
   `2026-07-16 23:59` keeps only its post-boundary rows in production; the rest stays queryable in
