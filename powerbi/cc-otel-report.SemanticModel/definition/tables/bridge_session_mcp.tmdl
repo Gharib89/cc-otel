@@ -17,12 +17,12 @@ table bridge_session_mcp
 
 		annotation SummarizationSetBy = Automatic
 
-	column tool_calls
+	column api_calls
 		dataType: int64
 		formatString: 0
 		lineageTag: 3ffa5696-2305-4c18-a41d-8c74eda83db6
 		summarizeBy: sum
-		sourceColumn: tool_calls
+		sourceColumn: api_calls
 
 		annotation SummarizationSetBy = Automatic
 

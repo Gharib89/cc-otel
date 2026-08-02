@@ -746,7 +746,7 @@ table _Measures
 		displayFolder: Ecosystem
 		lineageTag: e1c2a3b4-0001-4a11-9c01-aa0000000001
 
-	measure 'MCP Calls' = SUM ( bridge_session_mcp[tool_calls] )
+	measure 'MCP Calls' = SUM ( bridge_session_mcp[api_calls] )
 		formatString: #,##0
 		displayFolder: Ecosystem
 		lineageTag: e1c2a3b4-0002-4a11-9c01-aa0000000002
