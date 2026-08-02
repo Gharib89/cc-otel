@@ -138,5 +138,88 @@ def _(matviews, mo, registry_status):
     return
 
 
+@app.cell
+def _(mo):
+    mo.md(
+        """
+        ## Promoted columns in Postgres
+
+        Everything above the marts section reads the reservoir, where a promoted
+        attribute is just an attribute. This is the promoted set as it *landed* — one
+        row per `(raw table, column)` — measured over the window the replay covers
+        (ADR-0017: Jul 17 → Jul 30, **interim only**; rows outside it are permanently
+        NULL for columns promoted after they were ingested). Zero fill is a finding
+        about the fleet, not a broken query.
+        """
+    )
+    return
+
+
+@app.cell
+def _(psycopg, settings):
+    # The replay's own bounds, so the lab and #379's verdict are computed from one
+    # place; end-exclusive, and each raw table carries its own event-time column.
+    replayed = ("2026-07-17", "2026-07-31")
+    _time_col = {"events": "event_time", "metrics": "ts"}
+
+    promoted_fill = []
+    with psycopg.connect(settings.database_url) as _pg:
+        # Intersect the *deployed* registry with the *deployed* columns: the notebook
+        # points at an environment, which may lag repo HEAD by a promotion cycle, and
+        # naming a column the table does not have yet would fail the whole cell.
+        _promoted = {
+            r[0]
+            for r in _pg.execute(
+                "SELECT DISTINCT column_name FROM meta.column_registry "
+                "WHERE status = 'promoted' AND column_name IS NOT NULL"
+            ).fetchall()
+        }
+        for _table, _tcol in _time_col.items():
+            _cols = sorted(
+                r[0]
+                for r in _pg.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = 'raw' AND table_name = %s",
+                    (_table,),
+                ).fetchall()
+                if r[0] in _promoted
+            )
+            _aggs = ", ".join(f'count("{c}"), count(DISTINCT "{c}")' for c in _cols)
+            _row = _pg.execute(
+                f"SELECT count(*), {_aggs} FROM raw.{_table} "
+                f'WHERE "{_tcol}" >= %s AND "{_tcol}" < %s',
+                replayed,
+            ).fetchone()
+            _total = _row[0]
+            for _col, _filled, _distinct in zip(_cols, _row[1::2], _row[2::2], strict=True):
+                promoted_fill.append(
+                    {
+                        "table": f"raw.{_table}",
+                        "column": _col,
+                        "rows": _filled,
+                        "fill_pct": round(100 * _filled / _total, 1) if _total else 0.0,
+                        "distinct": _distinct,
+                    }
+                )
+    promoted_fill.sort(key=lambda r: (r["fill_pct"], r["column"]))
+    return (promoted_fill, replayed)
+
+
+@app.cell
+def _(mo, promoted_fill, replayed):
+    _empty = [r for r in promoted_fill if r["rows"] == 0]
+    mo.vstack(
+        [
+            mo.md(
+                f"**{len(promoted_fill)} promoted (table, column) pairs** over "
+                f"{replayed[0]} → {replayed[1]} (end-exclusive) &nbsp;|&nbsp; "
+                f"**{len(_empty)} unpopulated**. Lowest fill first:"
+            ),
+            mo.ui.table(promoted_fill, selection=None),
+        ]
+    )
+    return
+
+
 if __name__ == "__main__":
     app.run()

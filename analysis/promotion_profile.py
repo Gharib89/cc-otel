@@ -82,9 +82,10 @@ def _():
 
 @app.cell
 def _(UTC, date, date_range, datetime, load_settings):
-    # Jul 18 is the reconciled floor: Jul 14-17 metrics blobs do not reconcile with
-    # raw rows (7,617 rows vs 3 blobs on Jul 14), so the window starts after them (#350).
-    since = date(2026, 7, 18)
+    # Jul 17 is the reconciled floor — it reconciles exactly (234 = 234 raw.metrics,
+    # 13,628 = 13,628 raw.events), corrected from Jul 18 by #379. Jul 14-16 stay out:
+    # their metrics blobs do not reconcile with raw rows (7,617 rows vs 3 blobs on Jul 14).
+    since = date(2026, 7, 17)
     until = datetime.now(UTC).date()
     settings = load_settings()
     days = date_range(since, until)

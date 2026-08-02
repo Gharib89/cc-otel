@@ -7,7 +7,7 @@ dashboard. Decision + charter: #87.
 
 | Notebook | What it explores |
 |---|---|
-| `overview.py` | Reservoir blob counts per signal + marts / column-registry status (EDA seed) |
+| `overview.py` | Reservoir blob counts per signal + marts / column-registry status + per-column fill of the promoted set over the replayed window ([ADR-0017](../docs/adr/0017-promoted-column-window-replayed-from-the-reservoir.md)) — the EDA seed |
 | `promotion_candidates.py` | Kept / unclassified attribute keys ranked by fill rate — promotion candidates for #16 |
 | `promotion_profile.py` | The same candidates at **record** grain over a wide window, cross-tabbed against sessions and seats — the evidence a promotion value case argues from (#351; frozen cut: [`docs/research/promotion-candidate-profile.md`](../docs/research/promotion-candidate-profile.md)) |
 | `redaction_audit.py` | `denied` keys still present in the redacted reservoir — redaction leaks (#8) |
