@@ -63,11 +63,13 @@ function Resolve-Pester5Manifest {
 
 $manifest = Resolve-Pester5Manifest
 if (-not $manifest) {
-    Write-Host "No Pester 5 reachable from PowerShell $($PSVersionTable.PSVersion)."
+    Write-Information "No Pester 5 reachable from PowerShell $($PSVersionTable.PSVersion)." `
+        -InformationAction Continue
     exit 3
 }
 
-Write-Host "PowerShell $($PSVersionTable.PSVersion) - Pester from $manifest"
+Write-Information "PowerShell $($PSVersionTable.PSVersion) - Pester from $manifest" `
+    -InformationAction Continue
 Import-Module -Name $manifest -ErrorAction Stop
 
 $config = New-PesterConfiguration

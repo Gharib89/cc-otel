@@ -79,14 +79,14 @@ pwsh_gate() { # pwsh_gate <name> <pwsh-command>  (unavailable if no pwsh)
   else record "$name" unavailable; TOOLING=1; fi
 }
 
-winps_pester_gate() { # winps_pester_gate <name> <suite-path> <pwsh-fallback-command>
+winps_pester_gate() { # winps_pester_gate <name> <suite-path>
   # Pester under Windows PowerShell 5.1 — the shell bootstrap.yml's CI job uses.
   # pwsh 7 enumerates pipeline input where 5.1 does not, so a pwsh-only local run
   # can be green on code CI fails (#401). winps-pester.ps1 exits 3 when no Pester 5
-  # is reachable from 5.1; then pwsh still runs the suite (a failure there is a
-  # real failure) but a pass is reported deferred-to-ci — never pass, the same
-  # contract the Docker gates use.
-  local name=$1 path=$2 cmd=$3 log status
+  # is reachable from 5.1; then pwsh runs the suite instead — a failure there is
+  # still a failure, but a pass only earns deferred-to-ci, since it says nothing
+  # about 5.1. (Unlike a Docker gate, which defers without running anything.)
+  local name=$1 path=$2 log status
   if have powershell; then
     log=$(gate_log "$name")
     powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/ship/winps-pester.ps1 \
@@ -95,9 +95,12 @@ winps_pester_gate() { # winps_pester_gate <name> <suite-path> <pwsh-fallback-com
     case $status in
       pass) record "$name" pass; return ;;
       fail) record "$name" fail; FAILED=1; emit_fail "$name" "$log"; return ;;
+      unresolved) ;; # no Pester 5 for 5.1 — fall through to the pwsh leg
     esac
   fi
-  if have pwsh; then gate_as deferred-to-ci "$name" pwsh -NoProfile -Command "$cmd"
+  if have pwsh; then
+    gate_as deferred-to-ci "$name" pwsh -NoProfile -Command \
+      "Import-Module Pester; \$c = New-PesterConfiguration; \$c.Run.Path = \"$path\"; \$c.Run.Exit = \$true; Invoke-Pester -Configuration \$c"
   else record "$name" unavailable; TOOLING=1; fi
 }
 
@@ -219,7 +222,7 @@ fi
 # --- bootstrap (bootstrap.yml) ---------------------------------------------------
 if wf bootstrap; then
   pwsh_gate bootstrap:pssa '$f = Invoke-ScriptAnalyzer -Path ./bootstrap -Recurse; if ($f) { $f | Format-Table -AutoSize | Out-String | Write-Host; exit 1 }'
-  winps_pester_gate bootstrap:pester ./bootstrap 'Import-Module Pester; $c = New-PesterConfiguration; $c.Run.Path = "./bootstrap"; $c.Run.Exit = $true; Invoke-Pester -Configuration $c'
+  winps_pester_gate bootstrap:pester ./bootstrap
 fi
 
 # --- docker builds (docker.yml) ---------------------------------------------------
