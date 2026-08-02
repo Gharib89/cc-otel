@@ -1,3 +1,7 @@
+/// The current refresh cycle's DQ findings. Sourced from marts.dq_finding_current, not
+/// marts.dq_finding — the underlying table is an append-only detection log that re-records every
+/// still-true condition hourly, so importing it counted detections as findings (ADR-0019, #374).
+/// The model keeps the table name so every measure, visual and slicer binding stays put.
 table dq_finding
 	lineageTag: 0bec46a6-6219-49db-a1fa-6f5f7afbdf5d
 
@@ -49,7 +53,7 @@ table dq_finding
 		source =
 				let
 				  Source = PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"),
-				  #"Navigation 1" = Source{[Schema = "marts", Item = "dq_finding"]}[Data]
+				  #"Navigation 1" = Source{[Schema = "marts", Item = "dq_finding_current"]}[Data]
 				in
 				  #"Navigation 1"
 
