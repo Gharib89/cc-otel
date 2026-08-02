@@ -262,8 +262,11 @@ Describe 'Get-DeployImagePin' {
         $p.Message | Should -Match ':latest'
     }
     It 'does not pin a half-read app - half a pin would break the other container' {
-        (Get-DeployImagePin -ImageMap @{ collector = 'ghcr.io/x/collector:abc123' }).Pinned |
-            Should -BeFalse
+        $p = Get-DeployImagePin -ImageMap @{ collector = 'ghcr.io/x/collector:abc123' }
+        $p.Pinned | Should -BeFalse
+        # Not the no-app message: an app that read partially still exists, and
+        # telling the operator otherwise sends them looking for the wrong thing.
+        $p.Message | Should -Match 'partial'
     }
 }
 

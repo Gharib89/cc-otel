@@ -226,7 +226,14 @@ function Get-DeployImagePin {
     $sink = [string]$ImageMap['sink']
     $pinned = -not ([string]::IsNullOrWhiteSpace($collector) -or [string]::IsNullOrWhiteSpace($sink))
     $msg = if ($pinned) { "Pinning the live images: $collector, $sink." }
-    else { 'No Container App to read images from; deploying the :latest fallback from the bicepparams (first bring-up).' }
+    elseif ($ImageMap.Count -eq 0) {
+        'No Container App to read images from; deploying the :latest fallback from the bicepparams (first bring-up).'
+    }
+    else {
+        # Unreachable while both containers are declared together, but saying
+        # "no Container App" here would misdirect an operator who has one.
+        "Read $($ImageMap.Count) of 2 container images off the live app; not pinning a partial set."
+    }
     return [pscustomobject]@{
         Pinned         = $pinned
         CollectorImage = $collector
