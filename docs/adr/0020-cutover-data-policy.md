@@ -46,7 +46,8 @@ This is the first amendment that reaches production.
 - **The copy is bounded per seat by a flip watermark, so a re-run deletes nothing
   production-native.** Revised 2026-08-02 (#244 grilling); supersedes the
   **delete-window-then-copy** rule this ADR first recorded, which was destructive by construction.
-  `raw.metrics` and `raw.events` carry an event `ts` and identity columns and nothing else — no
+  `raw.metrics` and `raw.events` carry an event time (`ts` and `event_time` respectively) and
+  identity columns and nothing else — no
   ingest timestamp, no batch linkage — and `meta.processed_batches` is `(batch_hash, processed_at)`
   with no row linkage, so **nothing in production distinguishes a copied row from a
   production-native one**. A global `ts >= '2026-07-17'` delete therefore removes production's own
@@ -55,8 +56,9 @@ This is the first amendment that reaches production.
   `ON CONFLICT` was never available either.
 
   The bound that works is derived from production itself. A seat's **flip watermark** is
-  `MIN(ts)` over that seat's production rows — the moment its machine started emitting to
-  production. The copy moves interim rows `WHERE ts >= '2026-07-17' AND ts < watermark(seat)` and
+  `MIN(<event time>)` over that seat's production rows — the moment its machine started emitting to
+  production — computed per table, since the two tables name that column differently. The copy moves
+  interim rows below the seat's watermark and
   bounds its delete identically, so it deletes zero production-native rows by construction and is
   safe to re-run. That matters because **the flip is staggered, not atomic**: IS pushes on a
   90-minute cadence and a powered-off or off-VPN machine flips whenever it next ticks, so
