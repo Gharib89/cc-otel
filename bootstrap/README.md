@@ -65,7 +65,7 @@ The default spine runs in this order. `mode` is how the step behaves:
 | `rbac` | Grant the deploy principal Contributor on the RG | auto |
 | `seed-images` | Detect the `:latest` images; halt+instruct on a virgin registry (needs Docker) | conditional |
 | `sync-secrets` | Fan `.env.<env>` out to the prefixed GitHub secrets | auto |
-| `deploy` | Deploy the Bicep template (`CapacityNotAvailable` retry/zone note below). Reads the live Container App's images back and re-pins them, so an RG deploy can no longer revert a running SHA-tagged revision to the params' `:latest` (#390); a virgin registry has no app to read from, and `:latest` is then the intended fallback | auto |
+| `deploy` | Deploy the Bicep template (`CapacityNotAvailable` retry/zone note below). Reads the live Container App's images back and re-pins them, so an RG deploy can no longer revert a running SHA-tagged revision to the params' `:latest` (#390). On a first bring-up there is no app to read from and `:latest` is the intended fallback; a read that *fails* halts the step rather than falling back | auto |
 | `open-ip` | Open the operator firewall rule; **stays open** (no auto-close) | auto |
 | `pg-cron-gate` | Assert `pg_cron` is preloaded and `cron.database_name=cc_otel` is applied (restart if pending) **before** migrating | gate |
 | `migrate` | `dbmate up` | auto |

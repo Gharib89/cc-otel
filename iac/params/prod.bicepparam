@@ -40,11 +40,9 @@ param postgresEntraAdminObjectId = '72599483-8910-479f-a2b3-47b22f225a44'
 param postgresEntraAdminLogin = 'Ahmed.Gharib@itworx.com'
 
 // bootstrap's deploy step reads the live Container App's images back and exports
-// these (#390). A resource-group deploy is authoritative for the resources it
-// declares, so a hardcoded :latest here would replace whatever SHA-tagged revision
-// deploy.yml last rolled out with a stale image - silent ingest failure. The
-// :latest fallback is the virgin-registry bring-up path: no app to read from, and
-// CI has never tagged a SHA for this environment.
+// these (#390) — an RG deploy is authoritative for the resources it declares, so a
+// literal :latest here replaced whatever SHA-tagged revision deploy.yml last rolled
+// out, silently. The fallback is the first bring-up, before any app exists to read.
 param collectorImage = readEnvironmentVariable('COLLECTOR_IMAGE', 'ghcr.io/gharib89/cc-otel-collector:latest')
 param sinkImage = readEnvironmentVariable('SINK_IMAGE', 'ghcr.io/gharib89/cc-otel-sink:latest')
 

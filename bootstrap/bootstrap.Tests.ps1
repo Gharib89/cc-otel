@@ -112,12 +112,12 @@ Describe 'Test-PgCronDatabaseApplied' {
     }
 }
 
-Describe 'Azure CLI server shims' {
+Describe 'Azure CLI read shims' {
     # The az shims the pg-cron gate and the deploy step drive. All are
-    # subscription-scoped, and a standalone `-Step pg-cron-gate` skips precheck's
-    # subscription guard - so the subscription has to come from .env, not from
-    # whatever `az` happens to be on (#389). The rest of the effectful step bodies
-    # stay live-bring-up territory.
+    # subscription-scoped, and a standalone `-Step pg-cron-gate` or `-Step deploy`
+    # skips precheck's subscription guard - so the subscription has to come from
+    # .env, not from whatever `az` happens to be on (#389). The rest of the
+    # effectful step bodies stay live-bring-up territory.
     BeforeEach {
         $script:AzArguments = @()
         Mock az {
@@ -145,9 +145,11 @@ Describe 'Azure CLI server shims' {
     }
 
     It 'reads the live container images with core az, pinned to the config subscription' {
+        $script:AzCalls = @()
         Mock az {
-            $script:AzArguments = @($args)
+            $script:AzCalls += , @($args)
             $global:LASTEXITCODE = 0
+            if ($args[1] -eq 'list') { return '/subscriptions/sub/rg/app' }
             # As az emits it: multi-line stdout, which PowerShell captures as a string[].
             '[', '  { "name": "collector", "image": "ghcr.io/x/collector:abc123" },',
             '  { "name": "sink", "image": "ghcr.io/x/sink:abc123" }', ']'
@@ -155,19 +157,41 @@ Describe 'Azure CLI server shims' {
         $map = Get-ContainerAppImageMap -SubscriptionId 'sub' -ResourceGroup 'rg' -AppName 'app'
         $map['collector'] | Should -Be 'ghcr.io/x/collector:abc123'
         $map['sink'] | Should -Be 'ghcr.io/x/sink:abc123'
-        # `az resource show`, not `az containerapp show`: a missing containerapp
-        # extension would look like "no app" and silently fall back to :latest.
-        $script:AzArguments -join ' ' | Should -Be (
-            'resource show --subscription sub --resource-group rg --name app ' +
-            '--resource-type Microsoft.App/containerApps ' +
+        # `az resource`, not `az containerapp`: a missing containerapp extension
+        # would look like "no app" and silently fall back to :latest.
+        $script:AzCalls[0] -join ' ' | Should -Be (
+            'resource list --subscription sub --resource-group rg --name app ' +
+            '--resource-type Microsoft.App/containerApps --query [0].id --output tsv'
+        )
+        $script:AzCalls[1] -join ' ' | Should -Be (
+            'resource show --ids /subscriptions/sub/rg/app ' +
             '--query properties.template.containers[].{name:name,image:image} --output json'
         )
     }
 
-    It 'returns an empty map when the app does not exist yet (virgin bring-up)' {
-        Mock az { $global:LASTEXITCODE = 3 }
+    It 'returns an empty map when the app does not exist yet' {
+        # `az resource list` answers "no such app" with exit 0 and no output.
+        Mock az { $global:LASTEXITCODE = 0; '' }
         (Get-ContainerAppImageMap -SubscriptionId 'sub' -ResourceGroup 'rg' -AppName 'app').Count |
             Should -Be 0
+    }
+
+    It 'throws rather than reporting "no app" when the read itself fails' {
+        # The #390 trap: a failed read that falls back to :latest would revert the
+        # live SHA-tagged revision - the very incident. Only exit 0 + no output
+        # means "no app yet".
+        Mock az { $global:LASTEXITCODE = 1 }
+        { Get-ContainerAppImageMap -SubscriptionId 'sub' -ResourceGroup 'rg' -AppName 'app' } |
+            Should -Throw -ExpectedMessage '*app*'
+    }
+
+    It 'throws when the app exists but its images cannot be read' {
+        Mock az {
+            if ($args[1] -eq 'list') { $global:LASTEXITCODE = 0; return '/subscriptions/sub/rg/app' }
+            $global:LASTEXITCODE = 1
+        }
+        { Get-ContainerAppImageMap -SubscriptionId 'sub' -ResourceGroup 'rg' -AppName 'app' } |
+            Should -Throw -ExpectedMessage '*images*'
     }
 }
 

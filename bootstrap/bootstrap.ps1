@@ -215,22 +215,21 @@ function Get-DeployImagePin {
         with a stale one - silent ingest failure until someone re-runs deploy.yml.
         Reading the live images back and passing them as params keeps the revision
         where it is. Both containers are declared together (iac/modules/containerapp.bicep),
-        so a blank read means there is no app yet (virgin bring-up) and the `:latest`
-        fallback is correct; a half-read is treated the same, because pinning one and
-        defaulting the other would deploy an empty image reference.
+        so an empty map means there is no app yet and the `:latest` fallback is
+        correct; a half-read is treated the same, because pinning one and defaulting
+        the other would deploy an empty image reference.
     #>
     [OutputType([pscustomobject])]
     param([Parameter(Mandatory)][hashtable]$ImageMap)
-    $CollectorImage = [string]$ImageMap['collector']
-    $SinkImage = [string]$ImageMap['sink']
-    $pinned = -not ([string]::IsNullOrWhiteSpace($CollectorImage) -or
-        [string]::IsNullOrWhiteSpace($SinkImage))
-    $msg = if ($pinned) { "Pinning the live images: $CollectorImage, $SinkImage." }
-    else { 'No live Container App images to read; deploying the bicepparams'' :latest fallback (virgin bring-up).' }
+    $collector = [string]$ImageMap['collector']
+    $sink = [string]$ImageMap['sink']
+    $pinned = -not ([string]::IsNullOrWhiteSpace($collector) -or [string]::IsNullOrWhiteSpace($sink))
+    $msg = if ($pinned) { "Pinning the live images: $collector, $sink." }
+    else { 'No Container App to read images from; deploying the bicepparams'' :latest fallback (first bring-up).' }
     return [pscustomobject]@{
         Pinned         = $pinned
-        CollectorImage = $CollectorImage
-        SinkImage      = $SinkImage
+        CollectorImage = $collector
+        SinkImage      = $sink
         Message        = $msg
     }
 }
@@ -331,16 +330,21 @@ function Get-ContainerAppImageMap {
     .SYNOPSIS
         The live Container App's container-name -> image map; empty when absent.
     .DESCRIPTION
-        Empty is the virgin-registry answer: az exits non-zero when the app does not
-        exist yet. deploy.yml sets these with `az containerapp update
-        --container-name <c> --image <sha>`, so the live template's container images
-        are the SHA tags to re-pin.
+        An empty map means there is no app yet, and only that. deploy.yml sets the
+        images with `az containerapp update --container-name <c> --image <sha>`, so
+        the live template's container images are the SHA tags to re-pin.
 
-        Deliberately `az resource show` (core CLI) and not `az containerapp show`:
-        the containerapp extension is not a bootstrap prerequisite, and a
-        missing-extension failure is indistinguishable here from "no app yet" - it
-        would fall back to :latest and silently reintroduce the very bug this reads
-        the images to prevent.
+        Two calls on purpose. Existence and content have to stay distinguishable: a
+        read that merely *failed* - expired session, throttle, wrong resource group -
+        must not read as "no app yet", because the caller answers that by deploying
+        the params' :latest and reverting the live SHA-tagged revision, which is the
+        #390 incident itself. `az resource list` reports "no such app" as exit 0 with
+        no output, so a non-zero exit from either call is unambiguously a failure and
+        throws, like every other az shim here.
+
+        Deliberately `az resource` (core CLI) and not `az containerapp`: the
+        containerapp extension is not a bootstrap prerequisite, and its absence would
+        surface as the same failure this is careful not to misread.
     #>
     [OutputType([hashtable])]
     param(
@@ -348,10 +352,17 @@ function Get-ContainerAppImageMap {
         [Parameter(Mandatory)][string]$ResourceGroup,
         [Parameter(Mandatory)][string]$AppName
     )
-    $json = az resource show --subscription $SubscriptionId --resource-group $ResourceGroup `
+    $id = az resource list --subscription $SubscriptionId --resource-group $ResourceGroup `
         --name $AppName --resource-type 'Microsoft.App/containerApps' `
+        --query '[0].id' --output tsv 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not look up the Container App '$AppName' (is the az session live and '$ResourceGroup' correct?)."
+    }
+    $appId = ([string]($id -join '')).Trim()
+    if ([string]::IsNullOrWhiteSpace($appId)) { return @{} }
+    $json = az resource show --ids $appId `
         --query 'properties.template.containers[].{name:name,image:image}' --output json 2>$null
-    if ($LASTEXITCODE -ne 0) { return @{} }
+    if ($LASTEXITCODE -ne 0) { throw "Could not read the Container App '$AppName' images." }
     # az stdout captures as a string[] (one element per line); WinPS 5.1's
     # ConvertFrom-Json rejects an array, so rejoin before parsing.
     $map = @{}
