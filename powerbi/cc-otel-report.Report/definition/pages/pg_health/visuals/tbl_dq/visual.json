@@ -59,6 +59,21 @@
               "queryRef": "dq_finding.row_count",
               "nativeQueryRef": "row_count",
               "displayName": "Rows"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dq_finding"
+                    }
+                  },
+                  "Property": "kind"
+                }
+              },
+              "queryRef": "dq_finding.kind",
+              "nativeQueryRef": "kind",
+              "displayName": "Kind"
             }
           ]
         }

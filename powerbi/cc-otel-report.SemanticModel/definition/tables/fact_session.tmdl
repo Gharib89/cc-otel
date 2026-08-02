@@ -71,6 +71,30 @@ table fact_session
 
 		annotation SummarizationSetBy = Automatic
 
+	column terminal_type
+		dataType: string
+		lineageTag: 67392b79-c4c1-4db0-9379-38c9dc614065
+		summarizeBy: none
+		sourceColumn: terminal_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column os_type
+		dataType: string
+		lineageTag: cb0c2500-43d6-4bdb-a4b4-af8f5308a4a5
+		summarizeBy: none
+		sourceColumn: os_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column service_name
+		dataType: string
+		lineageTag: 28211333-3432-4df6-86a8-0a6d9fb6efd8
+		summarizeBy: none
+		sourceColumn: service_name
+
+		annotation SummarizationSetBy = Automatic
+
 	partition fact_session = m
 		mode: import
 		source =

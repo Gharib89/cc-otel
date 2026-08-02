@@ -42,11 +42,11 @@
                       "Entity": "_Measures"
                     }
                   },
-                  "Property": "DQ Findings"
+                  "Property": "DQ Defects"
                 }
               },
-              "queryRef": "_Measures.DQ Findings",
-              "nativeQueryRef": "DQ Findings"
+              "queryRef": "_Measures.DQ Defects",
+              "nativeQueryRef": "DQ Defects"
             }
           ]
         }
@@ -61,7 +61,7 @@
                     "Entity": "_Measures"
                   }
                 },
-                "Property": "DQ Findings"
+                "Property": "DQ Defects"
               }
             },
             "direction": "Descending"

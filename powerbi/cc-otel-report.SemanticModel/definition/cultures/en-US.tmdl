@@ -454,6 +454,27 @@ cultureInfo en-US
 			          }
 			        }
 			      ]
+			    },
+			    "dq_finding.kind": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "dq_finding",
+			          "ConceptualProperty": "kind"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Kind": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
 			    }
 			  }
 			}

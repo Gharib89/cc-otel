@@ -607,12 +607,26 @@ table _Measures
 		displayFolder: Data Health
 		lineageTag: 7f426481-4c81-4b6a-9e31-c45412e896fd
 
+	/// Draining conditions standing in the current refresh cycle (#396). Blank-preserving on
+	/// purpose: cht_dq_type binds its Y here, and a measure that returned 0 in every filter
+	/// context would render a zero-length bar for each gauge type instead of omitting it. The
+	/// card's zero-reading tier is [DQ Findings], which wraps this.
+	measure 'DQ Defects' = CALCULATE ( COUNTROWS ( dq_finding ), dq_finding[kind] = "defect" )
+		formatString: #,##0
+		displayFolder: Data Health
+		lineageTag: 03960005-0000-4000-8000-000000000396
+
 	/// Conditions standing in the current refresh cycle (#374). The dq_finding table entering the
 	/// model is marts.dq_finding_current, not the underlying log: refresh_all() re-detects every
 	/// still-true condition hourly, so COUNTROWS over the log counted cycles x conditions and grew
-	/// ~150/day while data quality stood still. Counts gauges alongside defects, so it cannot read
-	/// zero — see ADR-0019.
-	measure 'DQ Findings' = COUNTROWS ( dq_finding )
+	/// ~150/day while data quality stood still.
+	/// #396: defects only. Four of the twelve detector types are standing gauges — permanently
+	/// true by design — so counting them made a clean cycle unreachable and the card could never
+	/// read zero (ADR-0019). Gauges keep their rows in tbl_dq, labelled by kind.
+	/// COALESCE because COUNTROWS returns BLANK over an empty table, so the card rendered
+	/// "(Blank)" rather than "0" — harmless while the gauges guaranteed a row every cycle, and
+	/// reachable the moment the count stopped including them.
+	measure 'DQ Findings' = COALESCE ( [DQ Defects], 0 )
 		formatString: #,##0
 		displayFolder: Data Health
 		lineageTag: 62b922f3-1e40-4a6a-8f0e-cabed5dbf026
@@ -732,7 +746,7 @@ table _Measures
 		displayFolder: Ecosystem
 		lineageTag: e1c2a3b4-0001-4a11-9c01-aa0000000001
 
-	measure 'MCP Calls' = SUM ( bridge_session_mcp[tool_calls] )
+	measure 'MCP Calls' = SUM ( bridge_session_mcp[api_calls] )
 		formatString: #,##0
 		displayFolder: Ecosystem
 		lineageTag: e1c2a3b4-0002-4a11-9c01-aa0000000002
@@ -1764,10 +1778,16 @@ table _Measures
 
 	/// #305 tooltip header: the finding's identity in one line, so the tooltip names what it is showing
 	/// without a second visual competing for a 320px canvas.
+	/// #396: carries the subject, which is what actually identifies the finding — the type alone names
+	/// the detector, not the email or session-day it fired on. The '(dataset)' sentinel is dropped
+	/// rather than printed: for a whole-dataset detector the type already says so.
 	measure 'DQ Finding Header' =
 			VAR FindingType = SELECTEDVALUE ( dq_finding[finding_type] )
+			VAR Subject = SELECTEDVALUE ( dq_finding[subject] )
 			VAR Detected = SELECTEDVALUE ( dq_finding[detected_at] )
 			VAR Affected = SUM ( dq_finding[row_count] )
+			VAR SubjectClause =
+			    IF ( OR ( ISBLANK ( Subject ), Subject = "(dataset)" ), "", "  ·  " & Subject )
 			VAR AffectedClause =
 			    IF (
 			        ISBLANK ( Affected ),
@@ -1777,7 +1797,8 @@ table _Measures
 			RETURN
 			    IF (
 			        NOT ISBLANK ( FindingType ),
-			        FindingType & "  ·  detected " & FORMAT ( Detected, "dd MMM HH:mm" ) & AffectedClause
+			        FindingType & SubjectClause & "  ·  detected "
+			            & FORMAT ( Detected, "dd MMM HH:mm" ) & AffectedClause
 			    )
 		displayFolder: Ingest Health
 		lineageTag: d3050002-0000-4000-8000-000000000305
@@ -1845,7 +1866,13 @@ table _Measures
 	/// in the mart. COALESCE so an empty cycle renders the zero section rather than a blank
 	/// card, which is the ragged edge #330 exists to prevent. Text rides in the formatString,
 	/// same as [Last Mart Refresh].
-	measure 'DQ Finding Types' = COALESCE ( DISTINCTCOUNT ( dq_finding[finding_type] ), 0 )
+	/// #396: scoped to defects, matching the headline it sits under — a tier counting gauge types
+	/// would read "4 types standing" over a card reading 0.
+	measure 'DQ Finding Types' =
+			COALESCE (
+			    CALCULATE ( DISTINCTCOUNT ( dq_finding[finding_type] ), dq_finding[kind] = "defect" ),
+			    0
+			)
 		formatString: #,##0 " types standing";;"No findings standing"
 		displayFolder: Data Health
 		lineageTag: b3300001-0000-4000-8000-000000000330

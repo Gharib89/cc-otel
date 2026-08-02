@@ -17,12 +17,46 @@ table bridge_session_mcp
 
 		annotation SummarizationSetBy = Automatic
 
-	column tool_calls
+	column api_calls
 		dataType: int64
 		formatString: 0
 		lineageTag: 3ffa5696-2305-4c18-a41d-8c74eda83db6
 		summarizeBy: sum
-		sourceColumn: tool_calls
+		sourceColumn: api_calls
+
+		annotation SummarizationSetBy = Automatic
+
+	column connections
+		dataType: int64
+		formatString: 0
+		lineageTag: 4fe91fb0-5959-43b2-b1f1-ebcfadf03de5
+		summarizeBy: sum
+		sourceColumn: connections
+
+		annotation SummarizationSetBy = Automatic
+
+	column connect_failures
+		dataType: int64
+		formatString: 0
+		lineageTag: 3b81093e-00ba-4b21-bdb3-1347024b1962
+		summarizeBy: sum
+		sourceColumn: connect_failures
+
+		annotation SummarizationSetBy = Automatic
+
+	column mcp_transport_type
+		dataType: string
+		lineageTag: b9c9b096-9d96-4908-b536-b48eca9949cf
+		summarizeBy: none
+		sourceColumn: mcp_transport_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column mcp_connection_server_scope
+		dataType: string
+		lineageTag: 4463dc2b-32e1-4d8d-aa8b-ac4330616eb5
+		summarizeBy: none
+		sourceColumn: mcp_connection_server_scope
 
 		annotation SummarizationSetBy = Automatic
 

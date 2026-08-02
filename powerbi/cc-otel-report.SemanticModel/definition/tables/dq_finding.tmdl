@@ -48,6 +48,49 @@ table dq_finding
 
 		annotation SummarizationSetBy = Automatic
 
+	/// What the finding is about, at the grain its detector groups by (#396) — an email, a
+	/// session-day, or the '(dataset)' sentinel for a whole-dataset detector. `details` cannot
+	/// serve: over half the types embed a volatile measurement in it, so it identifies nothing.
+	column subject
+		dataType: string
+		lineageTag: 03960001-0000-4000-8000-000000000396
+		summarizeBy: none
+		sourceColumn: subject
+
+		annotation SummarizationSetBy = Automatic
+
+	/// Whether the condition drains: 'defect' if someone can act on it until it reaches zero,
+	/// 'gauge' if it is permanently true by design (#396, ADR-0019). The DQ FINDINGS card counts
+	/// defects only, which is what lets it read zero.
+	column kind
+		dataType: string
+		lineageTag: 03960002-0000-4000-8000-000000000396
+		summarizeBy: none
+		sourceColumn: kind
+
+		annotation SummarizationSetBy = Automatic
+
+	/// When this (finding_type, subject) was first ever detected — all-time, across the whole log.
+	column first_detected_at
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 03960003-0000-4000-8000-000000000396
+		summarizeBy: none
+		sourceColumn: first_detected_at
+
+		annotation SummarizationSetBy = Automatic
+
+	/// Start of the unbroken run of cycles this finding has stood for. Differs from
+	/// first_detected_at exactly when the condition cleared and came back.
+	column standing_since
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 03960004-0000-4000-8000-000000000396
+		summarizeBy: none
+		sourceColumn: standing_since
+
+		annotation SummarizationSetBy = Automatic
+
 	partition dq_finding = m
 		mode: import
 		source =

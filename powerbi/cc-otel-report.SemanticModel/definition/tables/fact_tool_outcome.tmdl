@@ -66,6 +66,22 @@ table fact_tool_outcome
 
 		annotation SummarizationSetBy = Automatic
 
+	column decision_source
+		dataType: string
+		lineageTag: 4b22fc28-a9ce-458b-bde7-ad41e8c39116
+		summarizeBy: none
+		sourceColumn: decision_source
+
+		annotation SummarizationSetBy = Automatic
+
+	column error_type
+		dataType: string
+		lineageTag: 6f1c91af-da00-4952-8566-b18bfcd11706
+		summarizeBy: none
+		sourceColumn: error_type
+
+		annotation SummarizationSetBy = Automatic
+
 	partition fact_tool_outcome = m
 		mode: import
 		source =

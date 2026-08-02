@@ -26,6 +26,30 @@ table bridge_session_plugin
 
 		annotation SummarizationSetBy = Automatic
 
+	column plugin_scope
+		dataType: string
+		lineageTag: 693d0985-67cf-4a67-90eb-a9c8fb9f9329
+		summarizeBy: none
+		sourceColumn: plugin_scope
+
+		annotation SummarizationSetBy = Automatic
+
+	column plugin_version
+		dataType: string
+		lineageTag: 9ecbd021-cfab-4143-9251-49dc862fd87c
+		summarizeBy: none
+		sourceColumn: plugin_version
+
+		annotation SummarizationSetBy = Automatic
+
+	column marketplace_name
+		dataType: string
+		lineageTag: 84964ec9-73f7-49aa-bafb-56ce1778f798
+		summarizeBy: none
+		sourceColumn: marketplace_name
+
+		annotation SummarizationSetBy = Automatic
+
 	partition bridge_session_plugin = m
 		mode: import
 		source =

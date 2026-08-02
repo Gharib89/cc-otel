@@ -26,6 +26,44 @@ table bridge_session_agent
 
 		annotation SummarizationSetBy = Automatic
 
+	column completions
+		dataType: int64
+		formatString: 0
+		lineageTag: f5122220-4d26-48c5-84c5-b086702339ba
+		summarizeBy: sum
+		sourceColumn: completions
+
+		annotation SummarizationSetBy = Automatic
+
+	column async_completions
+		dataType: int64
+		formatString: 0
+		lineageTag: cfa9c36f-ccea-49cb-9164-93b3a52a1d15
+		summarizeBy: sum
+		sourceColumn: async_completions
+
+		annotation SummarizationSetBy = Automatic
+
+	column tool_uses
+		dataType: double
+		lineageTag: a41d7ecb-ed6e-4585-af82-432a0720ff30
+		summarizeBy: sum
+		sourceColumn: tool_uses
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_tokens
+		dataType: double
+		lineageTag: 59193bcb-9c2d-428b-867d-08fcffa078f0
+		summarizeBy: sum
+		sourceColumn: total_tokens
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
 	partition bridge_session_agent = m
 		mode: import
 		source =

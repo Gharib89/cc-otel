@@ -160,16 +160,20 @@ BEGIN
 
     -- DQ: sum_cumulative rows are excluded from staging (delta-only), never silently
     -- dropped — record how many were skipped this cycle.
-    INSERT INTO marts.dq_finding (finding_type, row_count, details)
-    SELECT 'cumulative_value_kind', COUNT(*),
+    INSERT INTO marts.dq_finding (finding_type, subject, kind, row_count, details)
+    SELECT 'cumulative_value_kind',
+           '(dataset)',
+           'gauge', COUNT(*),
            jsonb_build_object('note', 'sum_cumulative metric rows excluded from staging')
     FROM raw.metrics
     WHERE metric_type = 'sum' AND value_kind = 'sum_cumulative'
     HAVING COUNT(*) > 0;
 
     -- DQ: null-email rows collapse into dim_user's '(unknown)' member — surface the count.
-    INSERT INTO marts.dq_finding (finding_type, row_count, details)
-    SELECT 'unknown_email', COUNT(*),
+    INSERT INTO marts.dq_finding (finding_type, subject, kind, row_count, details)
+    SELECT 'unknown_email',
+           '(dataset)',
+           'defect', COUNT(*),
            jsonb_build_object('note', 'raw rows with null user_email')
     FROM (
         SELECT 1 FROM raw.metrics WHERE user_email IS NULL
@@ -181,8 +185,10 @@ BEGIN
     -- DQ: session-days logged under more than one account. fact_session_daily keeps a
     -- single (corp-preferred) email, so this is where multi-account usage is recorded —
     -- one finding per offending session-day, corp vs personal split out.
-    INSERT INTO marts.dq_finding (finding_type, row_count, details)
+    INSERT INTO marts.dq_finding (finding_type, subject, kind, row_count, details)
     SELECT 'multi_email_session',
+           format('%s|%s', session_id, activity_date),
+           'gauge',
            cardinality(all_emails),
            jsonb_build_object(
                'session_id', session_id,
@@ -225,8 +231,10 @@ BEGIN
     -- same API-equivalent value; a gap past tolerance means the api_request cost
     -- promotion diverged from the counter. Fire only when BOTH >1% relative AND >$0.01
     -- absolute.
-    INSERT INTO marts.dq_finding (finding_type, row_count, details)
+    INSERT INTO marts.dq_finding (finding_type, subject, kind, row_count, details)
     SELECT 'cost_promotion_divergence',
+           '(dataset)',
+           'defect',
            NULL,
            jsonb_build_object(
                'promoted_usd', round(promoted::numeric, 6),
@@ -255,8 +263,10 @@ BEGIN
     -- emit; telemetry after a close is near-proof the close was an export artefact rather than
     -- a real revocation. This catches the plausible-looking bad export that the loader's
     -- truncation guards let through.
-    INSERT INTO marts.dq_finding (finding_type, row_count, details)
-    SELECT 'seat_telemetry_after_close', COUNT(*),
+    INSERT INTO marts.dq_finding (finding_type, subject, kind, row_count, details)
+    SELECT 'seat_telemetry_after_close',
+           user_email,
+           'defect', COUNT(*),
            jsonb_build_object(
                'user_email', user_email,
                'closed_on', MAX(closed_on),
@@ -271,8 +281,10 @@ BEGIN
     -- close — the complement of the finding above, so every uncovered activity day is reported
     -- exactly once. Computed against raw telemetry (through the staging view), never against
     -- marts.dim_user.
-    INSERT INTO marts.dq_finding (finding_type, row_count, details)
-    SELECT 'seat_emitter_without_seat', COUNT(*),
+    INSERT INTO marts.dq_finding (finding_type, subject, kind, row_count, details)
+    SELECT 'seat_emitter_without_seat',
+           user_email,
+           'defect', COUNT(*),
            jsonb_build_object(
                'user_email', user_email,
                'first_activity_date', MIN(activity_date),
@@ -284,7 +296,7 @@ BEGIN
 
     -- DQ (#293): a seat closing and reopening with exactly one drop missed in between —
     -- almost certainly an export artefact, not a genuine revoke-and-regrant.
-    INSERT INTO marts.dq_finding (finding_type, row_count, details)
+    INSERT INTO marts.dq_finding (finding_type, subject, kind, row_count, details)
     WITH chained AS (
         SELECT
             user_email,
@@ -296,7 +308,9 @@ BEGIN
                 AS next_valid_from
         FROM staging.stg_seat_interval
     )
-    SELECT 'seat_reopened_within_cadence', 1,
+    SELECT 'seat_reopened_within_cadence',
+           format('%s|%s', c.user_email, c.valid_to),
+           'defect', 1,
            jsonb_build_object(
                'user_email', c.user_email,
                'closed_on', c.valid_to,
@@ -312,8 +326,10 @@ BEGIN
 
     -- DQ (#293): an assignment date present with no tier — a real pending-provisioning state
     -- (one such row in the first drop); #291 asks IS whether it is intentional.
-    INSERT INTO marts.dq_finding (finding_type, row_count, details)
-    SELECT 'seat_assignment_without_tier', COUNT(*),
+    INSERT INTO marts.dq_finding (finding_type, subject, kind, row_count, details)
+    SELECT 'seat_assignment_without_tier',
+           s.user_email,
+           'defect', COUNT(*),
            jsonb_build_object(
                'user_email', s.user_email,
                'assignment_date', MAX(s.assignment_date),
@@ -328,8 +344,10 @@ BEGIN
     -- DQ (#293): one person holding more than one concurrent subscription — the grain
     -- assertion. The landing grain permits it; the reporting dimension asserts one active tier
     -- per person, so a violation is reported rather than silently multiplying seat-days.
-    INSERT INTO marts.dq_finding (finding_type, row_count, details)
-    SELECT 'seat_multi_subscription', COUNT(*),
+    INSERT INTO marts.dq_finding (finding_type, subject, kind, row_count, details)
+    SELECT 'seat_multi_subscription',
+           format('%s|%s', s.user_email, d.as_of_date),
+           'defect', COUNT(*),
            jsonb_build_object(
                'user_email', s.user_email,
                'as_of_date', d.as_of_date,
@@ -343,8 +361,10 @@ BEGIN
     -- DQ (#293): the share of interval boundaries that are observation-dated rather than
     -- source-dated. Not an error — it makes the inferred share of the timeline measurable
     -- rather than invisible, so the request for a revocation column (#291) carries a number.
-    INSERT INTO marts.dq_finding (finding_type, row_count, details)
+    INSERT INTO marts.dq_finding (finding_type, subject, kind, row_count, details)
     SELECT 'seat_boundary_basis',
+           '(dataset)',
+           'gauge',
            COUNT(*) FILTER (WHERE valid_from_basis = 'observation-dated'),
            jsonb_build_object(
                'observation_dated', COUNT(*) FILTER (WHERE valid_from_basis = 'observation-dated'),
@@ -365,8 +385,10 @@ BEGIN
     -- can resolve one, and seat_emitter_without_seat already reports them. The roster clause
     -- makes "off-roster" literal rather than assumed — a personal address IS listed as a seat
     -- would be on-roster, and the finding says nothing about it.
-    INSERT INTO marts.dq_finding (finding_type, row_count, details)
-    SELECT 'identity_alias_unresolved', COUNT(*),
+    INSERT INTO marts.dq_finding (finding_type, subject, kind, row_count, details)
+    SELECT 'identity_alias_unresolved',
+           t.user_email,
+           'defect', COUNT(*),
            jsonb_build_object(
                'user_email', t.user_email,
                'first_activity_date', MIN(t.activity_date),
@@ -400,8 +422,14 @@ BEGIN
     -- alias machinery already owns that reading. No allowlist for shared or service accounts —
     -- Administrator, a hostname, or an unrelated personal name are plain mismatches, and that is
     -- the case this exists for.
-    INSERT INTO marts.dq_finding (finding_type, row_count, details)
-    SELECT 'owner_email_mismatch', COUNT(*),
+    --
+    -- The subject carries user_email as well as session_id (#396): process_owner is
+    -- session-constant, but the address is not, and this groups on it -- two mismatching
+    -- corporate addresses inside one session are two findings, not one.
+    INSERT INTO marts.dq_finding (finding_type, subject, kind, row_count, details)
+    SELECT 'owner_email_mismatch',
+           format('%s|%s', o.session_id, o.user_email),
+           'gauge', COUNT(*),
            jsonb_build_object(
                'session_id', o.session_id,
                'activity_date', MIN(o.activity_date),
@@ -1011,7 +1039,10 @@ CREATE TABLE marts.dq_finding (
     finding_type text NOT NULL,
     detected_at timestamp with time zone DEFAULT now() NOT NULL,
     row_count bigint,
-    details jsonb
+    details jsonb,
+    subject text NOT NULL,
+    kind text NOT NULL,
+    CONSTRAINT dq_finding_kind_check CHECK ((kind = ANY (ARRAY['defect'::text, 'gauge'::text])))
 );
 
 
@@ -1020,13 +1051,52 @@ CREATE TABLE marts.dq_finding (
 --
 
 CREATE VIEW marts.dq_finding_current AS
- SELECT id,
-    finding_type,
-    detected_at,
-    row_count,
-    details
-   FROM marts.dq_finding f
-  WHERE (detected_at = ( SELECT max(latest.detected_at) AS max
+ WITH cycle AS (
+         SELECT c.detected_at,
+            row_number() OVER (ORDER BY c.detected_at) AS cycle_seq
+           FROM ( SELECT DISTINCT dq_finding.detected_at
+                   FROM marts.dq_finding) c
+        ), detection AS (
+         SELECT DISTINCT f_1.finding_type,
+            f_1.subject,
+            c.cycle_seq
+           FROM (marts.dq_finding f_1
+             JOIN cycle c ON ((f_1.detected_at = c.detected_at)))
+        ), island AS (
+         SELECT d.finding_type,
+            d.subject,
+            d.cycle_seq,
+            (d.cycle_seq - row_number() OVER (PARTITION BY d.finding_type, d.subject ORDER BY d.cycle_seq)) AS island_key
+           FROM detection d
+        ), streak AS (
+         SELECT i.finding_type,
+            i.subject,
+            min(c.detected_at) AS standing_since
+           FROM (island i
+             JOIN cycle c ON ((i.cycle_seq = c.cycle_seq)))
+          GROUP BY i.finding_type, i.subject, i.island_key
+         HAVING (max(i.cycle_seq) = ( SELECT max(cycle.cycle_seq) AS max
+                   FROM cycle))
+        ), first_seen AS (
+         SELECT dq_finding.finding_type,
+            dq_finding.subject,
+            min(dq_finding.detected_at) AS first_detected_at
+           FROM marts.dq_finding
+          GROUP BY dq_finding.finding_type, dq_finding.subject
+        )
+ SELECT f.id,
+    f.finding_type,
+    f.subject,
+    f.kind,
+    f.detected_at,
+    f.row_count,
+    f.details,
+    fs.first_detected_at,
+    s.standing_since
+   FROM ((marts.dq_finding f
+     JOIN first_seen fs ON (((f.finding_type = fs.finding_type) AND (f.subject = fs.subject))))
+     JOIN streak s ON (((f.finding_type = s.finding_type) AND (f.subject = s.subject))))
+  WHERE (f.detected_at = ( SELECT max(latest.detected_at) AS max
            FROM marts.dq_finding latest));
 
 
@@ -1648,6 +1718,13 @@ CREATE INDEX dq_finding_detected_idx ON marts.dq_finding USING btree (detected_a
 
 
 --
+-- Name: dq_finding_subject_idx; Type: INDEX; Schema: marts; Owner: -
+--
+
+CREATE INDEX dq_finding_subject_idx ON marts.dq_finding USING btree (finding_type, subject, detected_at);
+
+
+--
 -- Name: fact_api_error_rate_pk; Type: INDEX; Schema: marts; Owner: -
 --
 
@@ -1843,4 +1920,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260802135552'),
     ('20260802135613'),
     ('20260802135640'),
-    ('20260802135724');
+    ('20260802135724'),
+    ('20260802150012');

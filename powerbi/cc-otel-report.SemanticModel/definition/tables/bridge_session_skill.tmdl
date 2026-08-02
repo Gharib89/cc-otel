@@ -26,6 +26,22 @@ table bridge_session_skill
 
 		annotation SummarizationSetBy = Automatic
 
+	column skill_source
+		dataType: string
+		lineageTag: 241465da-bd8c-4eff-828f-1799986f71cb
+		summarizeBy: none
+		sourceColumn: skill_source
+
+		annotation SummarizationSetBy = Automatic
+
+	column skill_invocation_trigger
+		dataType: string
+		lineageTag: df9b651b-30f2-497c-91e6-8f6704b91a14
+		summarizeBy: none
+		sourceColumn: skill_invocation_trigger
+
+		annotation SummarizationSetBy = Automatic
+
 	partition bridge_session_skill = m
 		mode: import
 		source =
