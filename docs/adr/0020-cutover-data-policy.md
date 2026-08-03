@@ -2,7 +2,9 @@
 
 **Status:** accepted — **amends ADR-0002**, which starts production on an empty schema-v2. Records
 the cutover data policy decided in #83; implemented by #245 (raw copy), #246 (reservoir copy) and
-#248 Part B (interim decommission).
+#248 Part B (interim decommission). **Amended by ADR-0021**, which repoints interim's sink at
+production and sweeps the seats that never flip — so "seats that never flip keep their rows in
+interim" below no longer holds.
 
 ADR-0002 rejects translating POC pilot history into a fresh schema, and the cutover is not that.
 Interim and production run the same schema-v2 behind the same sink image, so moving the recent
