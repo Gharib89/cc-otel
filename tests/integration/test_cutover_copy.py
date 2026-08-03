@@ -119,8 +119,11 @@ def test_dry_run_names_both_environments_and_writes_nothing(
     assert run(pg_url, target_url) == 0
 
     out = capsys.readouterr().out.splitlines()
-    assert out[0].startswith("Source (interim):    host=")
-    assert out[1].startswith("Target (production): host=")
+    # The port is part of both labels: the two containers share a host and a database name, so
+    # without it the operator's first check would read as one database twice over.
+    assert out[0].startswith("Source (interim):    host=127.0.0.1 port=")
+    assert out[1].startswith("Target (production): host=127.0.0.1 port=")
+    assert out[0] != out[1]
     assert "raw.metrics: 1 seat(s) flipped, 1 row(s) to copy" in out
     assert out[-1].startswith("Dry-run")
     assert emails(target, "raw.metrics", "ts") == [(SEAT, FLIP)]

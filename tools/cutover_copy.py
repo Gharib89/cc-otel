@@ -59,18 +59,14 @@ class Census(NamedTuple):
 
 
 def _connection_label(database_url: str) -> str:
+    """Host, port and database — printed for both ends, and the whole of what the same-database
+    refusal compares. The port is in it because a pair distinguished only by port is two databases:
+    printing labels that read identically would tell an operator the opposite.
+    """
     info = conninfo_to_dict(database_url)
-    return f"host={info.get('host', '(unset)')} database={info.get('dbname', '(unset)')}"
-
-
-def _identity(database_url: str) -> tuple[str, str, str]:
-    """Host, port and database — what makes two URLs the same server, port included so a pair
-    distinguished only by port (two local containers) is not mistaken for one database."""
-    info = conninfo_to_dict(database_url)
-    return (
-        str(info.get("host", "")),
-        str(info.get("port", "")),
-        str(info.get("dbname", "")),
+    return " ".join(
+        f"{label}={info.get(field, '(unset)')}"
+        for label, field in (("host", "host"), ("port", "port"), ("database", "dbname"))
     )
 
 
@@ -258,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Source (interim):    {_connection_label(source_url)}")
     print(f"Target (production): {_connection_label(target_url)}")
 
-    if _identity(source_url) == _identity(target_url):
+    if _connection_label(source_url) == _connection_label(target_url):
         print(
             f"Refused: source and target are the same database ({_connection_label(source_url)})"
             " — nothing copied",
