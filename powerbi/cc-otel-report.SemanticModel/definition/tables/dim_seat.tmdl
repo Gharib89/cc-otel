@@ -60,7 +60,7 @@ table dim_seat
 		mode: import
 		source =
 				let
-				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT * FROM marts.dim_seat")
+				  Source = Value.NativeQuery(PostgreSQL.Database(#"PgHost", #"PgDatabase"), "SELECT * FROM marts.dim_seat")
 				in
 				  Source
 

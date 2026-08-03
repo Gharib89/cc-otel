@@ -7,7 +7,7 @@ Pipeline: Claude Code OTel exporter → OTel Collector (bearer auth) → FastAPI
 ## Design sources
 
 - **`CONTEXT.md`** — the glossary. Use its vocabulary in issues, code, and tests; don't drift to the avoided synonyms.
-- **`docs/adr/`** — settled decisions: 0001 no traces, 0002 fresh schema / no backfill, 0003 minimal wrapper contract, 0004 production in Azure, 0005 blob raw reservoir, 0006 interim POC backfill, 0007 cost as API-equivalent value, 0008 canonical mart definitions, 0009 roster drops as immutable dated snapshots, 0010 seat marts under OrgScope RLS, 0011 linked identities scoped not merged, 0012 two-tier text floor + compressed spacing, 0013 semantic text tokens diverge from categorical slots, 0014 PPU workspace + hourly refresh + app-with-audiences distribution, 0015 compacted reservoir (one parquet per signal/day, derived + additive), 0016 POC fallback surrendered early (archive + delete `rg-cc-otel-poc` ahead of the cutover gate; amends 0004), 0017 promoted-column window replayed from the reservoir (interim, 2026-07-17 onward, reservoir-disabled sink; amends 0002), 0018 repo stays public / firewall ranges env-sourced / DB reachability residual accepted (amends 0004), 0019 `dq_finding` is an append-only detection log, read through `marts.dq_finding_current`, 0020 cutover data policy (prod inherits interim telemetry from 2026-07-17, archive-first gated interim decommission; amends 0002), 0021 ingest repoint + terminal sweep (interim's sink retargeted at prod, making interim write-quiet by construction; the seats it cannot reach swept once; amends 0020). Conflicts get surfaced, never silently overridden.
+- **`docs/adr/`** — settled decisions: 0001 no traces, 0002 fresh schema / no backfill, 0003 minimal wrapper contract, 0004 production in Azure, 0005 blob raw reservoir, 0006 interim POC backfill, 0007 cost as API-equivalent value, 0008 canonical mart definitions, 0009 roster drops as immutable dated snapshots, 0010 seat marts under OrgScope RLS, 0011 linked identities scoped not merged, 0012 two-tier text floor + compressed spacing, 0013 semantic text tokens diverge from categorical slots, 0014 PPU workspace + hourly refresh + app-with-audiences distribution, 0015 compacted reservoir (one parquet per signal/day, derived + additive), 0016 POC fallback surrendered early (archive + delete `rg-cc-otel-poc` ahead of the cutover gate; amends 0004), 0017 promoted-column window replayed from the reservoir (interim, 2026-07-17 onward, reservoir-disabled sink; amends 0002), 0018 repo stays public / firewall ranges env-sourced / DB reachability residual accepted (amends 0004), 0019 `dq_finding` is an append-only detection log, read through `marts.dq_finding_current`, 0020 cutover data policy (prod inherits interim telemetry from 2026-07-17, archive-first gated interim decommission; amends 0002), 0021 ingest repoint + terminal sweep (interim's sink retargeted at prod, making interim write-quiet by construction; the seats it cannot reach swept once; amends 0020), 0022 report ownership leaves the repo (host/database as M parameters, `powerbi/` frozen as an archive, two unscoped workspace Admins; amends 0004 + 0014). Conflicts get surfaced, never silently overridden.
 - **Map issue #1** — the full locked design and decision log. Every implementation issue (#17–#31) traces to a decision bullet there; read the relevant bullet before implementing.
 
 ## Way of working
@@ -102,7 +102,7 @@ Migration-authoring loop, the throwaway-container rationale, and the `.env` cave
 - **Standards are enforced by config, not prose** — ruff (`pyproject.toml`, line 100), mypy (`--strict`, `sink/src` only), sqlfluff (`db/`), PSScriptAnalyzer (`bootstrap/`, ASCII + zero findings), Bicep/PSRule (`iac/`); Python 3.13. The config *is* the spec; this file never restates a rule the linter already owns. Rule changes land in the config first.
 - **Everything is a migration** — views, grants, matviews, column-registry rows all land via dbmate; CI checks schema drift; never edit the schema out-of-band. Mart (matview) bodies are the exception to hand-authoring: edit the canonical `db/views/marts/<slug>.sql` and let `matview_sync --name` generate the migration — never hand-paste a mart DROP+CREATE into a new `dbmate new` migration (#263).
 - CI is path-filtered per concern — a new top-level concern needs a workflow filter.
-- `.pbip` is the Power BI source of truth; publishing is manual via Desktop.
+- `powerbi/` is a **frozen archive** — the report is owned and authored in the Power BI Service since 2026-08-03 (ADR-0022); never edit it. Owner runbook: `powerbi/HANDOVER.md`.
 
 ## Keep docs in sync with code
 
@@ -145,6 +145,7 @@ drives `cloud-ship` over the `ready-for-agent` frontier:
 
 ### Power BI authoring
 
-On-disk PBIP (PBIR/TMDL) is the source of truth; publishing is manual from
-Desktop. Tool routing table and the rejected-skill list: `powerbi/CLAUDE.md`
-(loads when working under `powerbi/`).
+Frozen — the report is authored in the Service by its owner, not here (ADR-0022).
+Do not edit `powerbi/**`; `powerbi/HANDOVER.md` holds the owner's runbook and the
+escalation split. The archived toolchain, kept for a deliberate un-freeze:
+`powerbi/CLAUDE.md` (loads when working under `powerbi/`).

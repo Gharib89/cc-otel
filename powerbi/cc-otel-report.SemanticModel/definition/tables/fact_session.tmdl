@@ -99,7 +99,7 @@ table fact_session
 		mode: import
 		source =
 				let
-				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT t.*, t.started_at::date AS activity_date FROM marts.fact_session t")
+				  Source = Value.NativeQuery(PostgreSQL.Database(#"PgHost", #"PgDatabase"), "SELECT t.*, t.started_at::date AS activity_date FROM marts.fact_session t")
 				in
 				  Source
 

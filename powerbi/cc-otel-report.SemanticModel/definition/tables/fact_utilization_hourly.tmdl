@@ -63,7 +63,7 @@ table fact_utilization_hourly
 		mode: import
 		source =
 				let
-				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT t.*, t.hour::date AS activity_date FROM marts.fact_utilization_hourly t")
+				  Source = Value.NativeQuery(PostgreSQL.Database(#"PgHost", #"PgDatabase"), "SELECT t.*, t.hour::date AS activity_date FROM marts.fact_utilization_hourly t")
 				in
 				  Source
 

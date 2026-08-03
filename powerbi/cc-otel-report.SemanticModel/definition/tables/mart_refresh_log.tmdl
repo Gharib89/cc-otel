@@ -49,7 +49,7 @@ table mart_refresh_log
 		mode: import
 		source =
 				let
-				  Source = PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"),
+				  Source = PostgreSQL.Database(#"PgHost", #"PgDatabase"),
 				  #"Navigation 1" = Source{[Schema = "marts", Item = "mart_refresh_log"]}[Data]
 				in
 				  #"Navigation 1"

@@ -68,7 +68,7 @@ table bridge_session_agent
 		mode: import
 		source =
 				let
-				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT * FROM marts.bridge_session_agent")
+				  Source = Value.NativeQuery(PostgreSQL.Database(#"PgHost", #"PgDatabase"), "SELECT * FROM marts.bridge_session_agent")
 				in
 				  Source
 

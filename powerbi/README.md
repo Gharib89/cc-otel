@@ -1,7 +1,12 @@
 # powerbi/
 
-Power BI adoption report — `.pbip` project (source of truth), branding assets, and the
-Desktop-published semantic model + report.
+Power BI adoption report — `.pbip` project, branding assets, and the Desktop-published semantic model
++ report.
+
+> **Frozen since 2026-08-03.** The report is owned and authored in the Power BI Service by Mohamed
+> Atallah; this tree is an archive of the last repo-authored state and is no longer the source of
+> truth (ADR-0022). Operating manual for the owner: [`HANDOVER.md`](HANDOVER.md). Everything below
+> describes the model and report as archived.
 
 ## Layout
 
@@ -143,10 +148,19 @@ Data-source credentials (per `bootstrap.ps1 powerbi` step):
   SSL required. It has SELECT on the whole `marts` schema.
 - **Azure SQL** — the employee-dataset login (`.env` `AZURE_DB_USER` / `AZURE_DB_PASSWORD`).
 
-Open `cc-otel-report.pbip`, Refresh, then spot-check RLS with **View as → OrgScope**.
-`.pbip` is the source of truth; publishing is manual from Desktop.
+Open `cc-otel-report.pbip`, Refresh, then spot-check RLS with **View as → OrgScope**. Reaching
+`ccotel-pg-prod` from Desktop needs the ITWorx VPN (no open-internet firewall rule — ADR-0018); the
+Service needs no such thing.
 
 ## Environments
 
-The model hardcodes the **interim** Postgres FQDN (`ccotel-pg-interim.…`). The prod swap is a
-find/replace of the server literal (or Desktop data-source edit) at cutover (#83).
+The Postgres server and database are **M parameters**, not literals: `definition/expressions.tmdl`
+declares `PgHost` and `PgDatabase` (`Type="Text"`) and all 21 partitions read
+`PostgreSQL.Database(#"PgHost", #"PgDatabase")`. Current values are production —
+`ccotel-pg-prod.postgres.database.azure.com` / `cc_otel` (#247, ADR-0022).
+
+Moving environments is therefore a value edit in the Service (Semantic model settings → Data access →
+**M parameters**), not a file change: parameterized sources still refresh, and parameter values are
+editable there. **Credentials are bound per server**, so re-enter the Postgres credentials after any
+`PgHost` change or the next refresh fails. The Azure SQL HR source stays a literal — one server,
+IS-owned, doesn't move.
