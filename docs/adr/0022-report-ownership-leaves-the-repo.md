@@ -21,8 +21,9 @@ keeps reading interim, and it is a change a Service-only owner cannot make at al
 
 ## Decisions
 
-- **The server and database are M parameters, not literals.** `definition/expressions.tmdl` declares
-  `PgHost` and `PgDatabase` (`IsParameterQuery=true, Type="Text"`), and all 21 partitions read
+- **The server and database are M parameters, not literals.**
+  `powerbi/cc-otel-report.SemanticModel/definition/expressions.tmdl` declares `PgHost` and
+  `PgDatabase` (`IsParameterQuery=true, Type="Text"`), and all 21 partitions read
   `PostgreSQL.Database(#"PgHost", #"PgDatabase")`. Both default to production
   (`ccotel-pg-prod.postgres.database.azure.com`, `cc_otel`), so the archived tree matches what is
   published.

@@ -1,7 +1,7 @@
 # powerbi/
 
-Power BI adoption report — `.pbip` project, branding assets, and the Desktop-published semantic model
-+ report.
+Power BI adoption report — `.pbip` project, branding assets, and the Desktop-published semantic
+model + report.
 
 > **Frozen since 2026-08-03.** The report is owned and authored in the Power BI Service by Mohamed
 > Atallah; this tree is an archive of the last repo-authored state and is no longer the source of
@@ -154,8 +154,9 @@ Service needs no such thing.
 
 ## Environments
 
-The Postgres server and database are **M parameters**, not literals: `definition/expressions.tmdl`
-declares `PgHost` and `PgDatabase` (`Type="Text"`) and all 21 partitions read
+The Postgres server and database are **M parameters**, not literals:
+`cc-otel-report.SemanticModel/definition/expressions.tmdl` declares `PgHost` and `PgDatabase`
+(`Type="Text"`) and all 21 partitions read
 `PostgreSQL.Database(#"PgHost", #"PgDatabase")`. Current values are production —
 `ccotel-pg-prod.postgres.database.azure.com` / `cc_otel` (#247, ADR-0022).
 
