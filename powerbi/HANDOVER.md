@@ -63,9 +63,12 @@ Semantic model **Settings** → **Refresh**:
 
 ### 4. Sign-off
 
-The handover is complete when **24 consecutive scheduled refreshes succeed** (one full day) — check
-**Refresh history** on the semantic model. Report that in the handover issue and the interim
-environment can be retired.
+**Signed off 2026-08-03.** Takeover, credential re-entry and the hourly schedule were confirmed
+working against production the same day, so the originally-planned 24-consecutive-green window was
+waived by Ahmed rather than waited out — he watches refresh history directly and steps in on a
+failure. The standing detector from here on is the **refresh-failure notification** (step 3), not a
+one-off observation window: a stalled refresh has to reach a human by mail, because nothing in the
+repo watches the Service.
 
 ## The two parameters — how the report changes environments
 
