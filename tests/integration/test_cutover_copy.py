@@ -82,10 +82,8 @@ def copy(pg_url: str, target_url: str, *extra: str) -> None:
 
 def emails(conn: psycopg.Connection, table: str, time_column: str) -> list[tuple[str, str]]:
     """Every row's (user_email, time) — the copy's observable effect, in order."""
-    rows = conn.execute(
-        f"SELECT user_email, to_char({time_column} AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SSZ')"
-        f" FROM {table} ORDER BY 2, 1"
-    ).fetchall()
+    stamp = f"to_char({time_column} AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SSZ')"
+    rows = conn.execute(f"SELECT user_email, {stamp} FROM {table} ORDER BY 2, 1").fetchall()
     return [(row[0], row[1]) for row in rows]
 
 
