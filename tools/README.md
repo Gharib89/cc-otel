@@ -1,7 +1,8 @@
 # Curation & ops tooling — operator runbook
 
-Seven command-line tools for curating and operating the redacted-blob reservoir (the
-`raw` container), the column registry, and the seat-roster reference data. They are
+Eight command-line tools for curating and operating the redacted-blob reservoir (the
+`raw` container), the column registry, the seat-roster reference data, and the interim -> prod
+cutover copy. They are
 **manual / on-demand** — never wired into CI or the sink. This is the human operator guide;
 the agent-facing curation workflow lives in
 [`docs/agents/column-curation.md`](../docs/agents/column-curation.md).
@@ -15,6 +16,7 @@ the agent-facing curation workflow lives in
 | `tools.replay` | rebuild a window of raw → staging → marts by re-POSTing blobs through the sink | **yes** (deletes raw rows, re-POSTs) |
 | `tools.compact` | collapse each frozen reservoir partition into one parquet in the `compacted` container | no (writes only the derived container) |
 | `tools.roster_load` | land an IS seat-roster drop as an immutable dated snapshot in `ref` | **yes** (writes HR data) |
+| `tools.cutover_copy` | copy interim's pre-flip `raw` telemetry into production, bounded per seat by the flip watermark | **yes** (writes production telemetry; never deletes) |
 
 ## Prerequisites
 
@@ -30,6 +32,7 @@ the agent-facing curation workflow lives in
    | var | needed by | value |
    |---|---|---|
    | `DATABASE_URL` | sweep, basis_drift, gen_data_dictionary, replay, roster_load | Postgres connection string |
+   | `INTERIM_DATABASE_URL` / `PROD_DATABASE_URL` | cutover_copy | the two environments' `cc_otel` connection strings — it needs both at once, so it reads its own pair rather than the ambient `DATABASE_URL` |
    | `CC_OTEL_BLOB_ACCOUNT_URL` | sweep, basis_drift, scrub, replay, compact | `https://<account>.blob.core.windows.net` |
    | `CC_OTEL_BLOB_CONTAINER` | sweep, basis_drift, scrub, replay, compact | container name (default `raw`) |
    | `CC_OTEL_BLOB_COMPACTED_CONTAINER` | compact, basis_drift | the derived container, `compacted` (ADR-0015); unset ⇒ `compact` refuses to run, and `basis_drift` reads raw throughout (~30x slower) |
@@ -52,6 +55,7 @@ Grant the role on the storage account (or the named container) to the identity y
 | `tools.scrub` | **Storage Blob Data Contributor** | overwrites blobs in place |
 | `tools.compact` | **Storage Blob Data Reader** on `raw` + **Storage Blob Data Contributor** on `compacted` | reads raw via DuckDB, writes only the derived container |
 | `tools.roster_load` | *(none — Postgres only)* | never touches blobs (ADR-0009 keeps no file copy) |
+| `tools.cutover_copy` | *(none — Postgres only)* | the reservoir half of the cutover is `azcopy` (#246) |
 
 > Progress: sweep / basis_drift / scrub / replay / compact print a throttled `label: n[/total]` line to **stderr**
 > every ~2s over long windows so a big run is visibly alive. stdout stays pipe-clean.
@@ -283,3 +287,58 @@ list because its floor considers the earliest assignment date (#293), which this
 move — a `fact_seat_day` row with no matching date row vanishes from every date-filtered
 measure. A refresh failure is reported and does not fail the load: the drop is already
 committed, and the hourly `marts.refresh_all()` reconciles.
+
+## `tools.cutover_copy` — copy interim's pre-flip telemetry into production (destructive)
+
+The raw half of the cutover data policy (#245, ADR-0020). Interim and production run the same
+schema behind the same sink image, so this is an **identity copy** — no mapping layer, which is
+why ADR-0002's ban on translated history does not apply. The reservoir half is `azcopy` (#246).
+
+A seat's **flip watermark** is `MIN(<event time>)` over that seat's *production* rows — the moment
+its machine started emitting to prod. The copy moves interim rows in `[2026-07-17, watermark)` and
+nothing else, **per table**, because the two tables name that column differently
+(`raw.metrics.ts`, `raw.events.event_time`) and a seat can be flipped for one and not the other.
+
+**Safety flow — dry-run first, always:**
+
+```sh
+export INTERIM_DATABASE_URL='postgres://.../cc_otel?sslmode=require'
+export PROD_DATABASE_URL='postgres://.../cc_otel?sslmode=require'
+uv run python -m tools.cutover_copy            # read-only: watermarks + what would move
+uv run python -m tools.cutover_copy --execute
+```
+
+The first two lines name the resolved **source and target** host and database. Check them: the two
+URLs differ by one word, and a swapped pair would copy production's telemetry back into interim.
+A source and target resolving to the same host, port and database is refused outright, as is a
+table whose column list differs between the environments — the copy names its columns explicitly,
+so an interim-only column would otherwise be dropped silently.
+
+**Re-run it as seats flip.** The flip is staggered (#244 closed at 4 of 18 seats), so a seat with
+no production row yet has no watermark and is skipped; a later run picks it up. There is **no
+delete step**: the one ADR-0020 first described is empty on every run by the definition of `MIN`
+— no production row sits below that seat's own minimum — and idempotency comes from the watermark
+itself, since a copied row *becomes* production's new minimum and collapses the next run's window
+to `[floor, floor)`. That matters because `raw.*` has no primary key, so `ON CONFLICT` was never
+available (ADR-0017).
+
+Interim is never written to. It stays the fallback until #248 Part B's gate opens.
+
+Each run reports what **stays** in interim per table: rows belonging to unflipped seats, rows at or
+above a watermark (post-flip interim traffic from a Claude Code process that had not restarted
+yet), and rows with no `user_email` to derive a seat from. #245 closes when the at-or-above count
+reaches zero; #248 Part B's row-count-verified `pg_dump` is the backstop for whatever never
+flips.
+
+**Accepted residual:** a batch arriving in interim *below* a seat's watermark after that seat was
+copied is stranded — watermark collapse empties the re-run window, and ADR-0020 fixes the watermark
+as derived, never recorded, so nothing can distinguish it. The exporter flushes every 10s, so the
+exposure is seconds wide.
+
+Verification runs automatically after the copy, against the watermarks captured **before** it (by
+then production's own minimum has collapsed, so re-deriving them would compare empty windows and
+pass vacuously): per-seat interim-vs-production counts over each seat's `[floor, watermark)`
+window must match, or the run exits 1. A whole-window count comparison would not do — production
+also holds its own #244 validation rows and post-flip rows inside the same window. Production's
+marts are then refreshed; a refresh failure is reported and does not fail the copy, since the rows
+are already committed and the hourly `marts.refresh_all()` reconciles.

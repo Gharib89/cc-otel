@@ -53,7 +53,9 @@ def target(target_url: str) -> Iterator[psycopg.Connection]:
         yield c
 
 
-def metric(conn: psycopg.Connection, ts: str, email: str | None = SEAT) -> None:
+def metric(
+    conn: psycopg.Connection, ts: str, email: str | None = SEAT, session_id: str | None = None
+) -> None:
     ins_metric(
         conn,
         ts=ts,
@@ -62,6 +64,7 @@ def metric(conn: psycopg.Connection, ts: str, email: str | None = SEAT) -> None:
         value=1,
         value_kind="sum_delta",
         user_email=email,
+        session_id=session_id,
     )
 
 
@@ -178,6 +181,30 @@ def test_reports_what_stays_in_interim_and_verifies_the_seats_it_copied(
     )
     assert "Verified raw.metrics: per-seat counts match for 1 seat(s)" in out
     assert emails(target, "raw.metrics", "ts") == [(SEAT, EARLY), (SEAT, FLIP)]
+
+
+def test_flags_a_session_that_emitted_to_both_environments_at_once(
+    conn: psycopg.Connection,
+    pg_url: str,
+    target: psycopg.Connection,
+    target_url: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # ADR-0020 assumes the row sets are disjoint (one baked endpoint per machine) and hands
+    # detecting the exception to this step. A session straddling the flip is *not* it — those have
+    # interim rows below the watermark and production rows above, and merge on session_id. A
+    # dual-send is the same session above the watermark on both sides.
+    straddling = "aaaaaaaa-0000-0000-0000-000000000001"
+    dual_sent = "bbbbbbbb-0000-0000-0000-000000000002"
+    metric(conn, EARLY, session_id=straddling)
+    metric(target, FLIP, session_id=straddling)
+    metric(conn, LATE, session_id=dual_sent)
+    metric(target, LATE, session_id=dual_sent)
+
+    copy(pg_url, target_url)
+
+    out = capsys.readouterr().out
+    assert f"raw.metrics: 1 session(s) emitted to both environments: {dual_sent}" in out
 
 
 def test_refuses_when_source_and_target_are_the_same_database(

@@ -164,6 +164,38 @@ def seat_counts(
     return counts
 
 
+def dual_sent_sessions(
+    source: psycopg.Connection, target: psycopg.Connection, table: str, time_column: str
+) -> list[str]:
+    """Sessions that emitted to interim and production at once — ADR-0020's one open exception.
+
+    The policy assumes disjoint row sets (each machine bakes exactly one collector endpoint) and
+    hands detecting the exception here. A session merely *straddling* the flip is not one: its
+    interim rows sit below the watermark and its production rows above, and the marts re-assemble
+    it on ``session_id``. A dual-send is the same session above the watermark on **both** sides.
+    Reported, never removed — nothing in the policy deletes production rows.
+    """
+    above = source.execute(
+        sql.SQL(
+            "SELECT DISTINCT src.session_id FROM {table} src JOIN {marks} w USING (user_email)"
+            " WHERE src.session_id IS NOT NULL AND src.{tc} >= w.watermark"
+        ).format(
+            table=sql.SQL(table),
+            marks=sql.Identifier(_WATERMARK_TABLE),
+            tc=sql.Identifier(time_column),
+        )
+    ).fetchall()
+    if not above:
+        return []
+    both = target.execute(
+        sql.SQL("SELECT DISTINCT session_id FROM {table} WHERE session_id = ANY(%s)").format(
+            table=sql.SQL(table)
+        ),
+        ([row[0] for row in above],),
+    ).fetchall()
+    return sorted(str(row[0]) for row in both)
+
+
 def copy_table(
     source: psycopg.Connection,
     target: psycopg.Connection,
@@ -262,6 +294,13 @@ def main(argv: list[str] | None = None) -> int:
             if args.execute:
                 copied = copy_table(source, target, table, time_column, columns, marks)
                 print(f"{table}: copied {copied} row(s) for {len(marks)} seat(s)")
+                # While the watermark scratch still holds this table's marks.
+                dual = dual_sent_sessions(source, target, table, time_column)
+                if dual:
+                    print(
+                        f"{table}: {len(dual)} session(s) emitted to both environments:"
+                        f" {', '.join(dual)}"
+                    )
 
         if not args.execute:
             print("Dry-run — nothing written; pass --execute to copy")
