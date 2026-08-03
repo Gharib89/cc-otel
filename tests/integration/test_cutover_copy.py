@@ -380,6 +380,115 @@ def test_refuses_when_interim_holds_a_column_production_lacks(
     assert emails(target, "raw.metrics", "ts") == [(SEAT, FLIP)]
 
 
+def test_the_gap_report_separates_a_delivered_backlog_from_a_stranded_one(
+    conn: psycopg.Connection,
+    pg_url: str,
+    target: psycopg.Connection,
+    target_url: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The discrimination ``held_above`` cannot make (#415).
+
+    Both seats below have a watermark collapsed onto their own interim floor, so both copy zero
+    rows and both report every row as ``held_above``. Only one of them is actually short in
+    production. The bucket counts read identically; the gap report does not.
+    """
+    # SEAT: a queued flush replayed the whole backlog through the repointed sink, so production
+    # holds both rows already. Copying nothing is correct.
+    metric(conn, EARLY)
+    metric(conn, LATE)
+    metric(target, EARLY)
+    metric(target, LATE)
+    # OTHER: the same collapse, but only the first row ever reached production. One row stranded.
+    metric(conn, EARLY, email=OTHER)
+    metric(conn, LATE, email=OTHER)
+    metric(target, EARLY, email=OTHER)
+
+    assert run(pg_url, target_url) == 0
+
+    out = capsys.readouterr().out
+    # Indistinguishable in the buckets: nothing copyable, four rows held above a watermark.
+    assert "raw.metrics: 2 seat(s) flipped, 0 row(s) to copy" in out
+    assert "4 row(s) at or above a watermark" in out
+    # Distinguished by the gap report.
+    assert "raw.metrics not in production: 1 row(s) above the floor across 1 seat(s)" in out
+    assert f"  {OTHER}: 1 of 2 row(s) missing" in out
+    assert SEAT not in out.split("not in production:")[1]
+
+
+def test_the_gap_report_names_a_seat_production_has_never_seen(
+    conn: psycopg.Connection,
+    pg_url: str,
+    target: psycopg.Connection,
+    target_url: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # An unflipped seat and a row with no seat identity: neither is copyable, and they have
+    # different owners — the first is #409's sweep target, the second is never swept at all.
+    metric(conn, EARLY, email=OTHER)
+    metric(conn, EARLY, email=None)
+    metric(conn, EARLY)
+    metric(target, FLIP)
+
+    assert run(pg_url, target_url) == 0
+
+    out = capsys.readouterr().out
+    assert "raw.metrics not in production: 3 row(s) above the floor across 3 seat(s)" in out
+    assert f"  {OTHER}: 1 of 1 row(s) missing — no production rows at all (#409 --sweep" in out
+    assert "  (no user_email): 1 of 1 row(s) missing — never swept" in out
+    # SEAT's row is short too — this run has not copied it yet — but production has seen the seat,
+    # so it is neither a sweep target nor unexplained.
+    assert f"  {SEAT}: 1 of 1 row(s) missing\n" in out
+
+
+def test_the_gap_report_reflects_the_state_after_the_copy_not_before_it(
+    conn: psycopg.Connection,
+    pg_url: str,
+    target: psycopg.Connection,
+    target_url: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # On --execute the report is the run's closing verdict, printed after the commit: reporting
+    # the pre-copy gap would name rows the same run had just delivered.
+    metric(conn, EARLY)
+    metric(target, FLIP)
+
+    copy(pg_url, target_url)
+
+    out = capsys.readouterr().out
+    assert "raw.metrics: production holds every seat's interim rows above the floor" in out
+    assert "raw.metrics not in production:" not in out
+
+
+def test_a_rolled_back_run_reports_no_gap_verdict(
+    conn: psycopg.Connection,
+    pg_url: str,
+    target: psycopg.Connection,
+    target_url: str,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The verdict is only true of a committed run. After a rollback it would describe rows that
+    # are no longer in production.
+    from tools import cutover_copy
+
+    real = cutover_copy.seat_counts
+
+    def inflate_the_source(db, table, time_column, marks):  # type: ignore[no-untyped-def]
+        counts = real(db, table, time_column, marks)
+        return {email: n + 1 for email, n in counts.items()} if db.autocommit else counts
+
+    monkeypatch.setattr(cutover_copy, "seat_counts", inflate_the_source)
+    metric(conn, EARLY)
+    metric(target, FLIP)
+
+    assert run(pg_url, target_url, "--execute") == 1
+
+    out = capsys.readouterr().out
+    assert "production holds every seat's interim rows" not in out
+    assert "not in production:" not in out
+
+
 def test_refreshes_production_marts_after_the_copy(
     conn: psycopg.Connection,
     pg_url: str,

@@ -332,9 +332,13 @@ Interim is never written to. It stays the fallback until #248 Part B's gate open
 
 Each run reports what **stays** in interim per table: rows belonging to unflipped seats, rows at or
 above a watermark (post-flip interim traffic from a Claude Code process that had not restarted
-yet), and rows with no `user_email` to derive a seat from. #245 closes when the at-or-above count
-reaches zero; #248 Part B's row-count-verified `pg_dump` is the backstop for whatever never
-flips.
+yet), and rows with no `user_email` to derive a seat from. #248 Part B's row-count-verified `pg_dump`
+is the backstop for whatever never flips.
+
+The at-or-above count is **not** a progress measure and does not fall to zero — nothing is deleted
+from interim, so a copied row lands in that bucket forever once its seat's watermark collapses onto
+it. Read the **cutover shortfall** below for that. (#245's original closure condition said the
+opposite; corrected in #415.)
 
 A seat whose watermark lands **at or below the floor** is named and dropped from the run: one
 production row predating 2026-07-17 makes `[floor, watermark)` empty, so nothing is copyable and
@@ -345,8 +349,37 @@ exception here. A session merely straddling the flip is not one of those, and is
 
 **Accepted residual:** a batch arriving in interim *below* a seat's watermark after that seat was
 copied is stranded — watermark collapse empties the re-run window, and ADR-0020 fixes the watermark
-as derived, never recorded, so nothing can distinguish it. The exporter flushes every 10s, so the
-exposure is seconds wide.
+as derived, never recorded, so nothing can distinguish it. The exposure is **not** one flush
+interval: the collector's sending queue is file-backed and survives restarts, so a replayed batch can
+carry an event time hours old — one seat's arrived ~17 hours late after the ingest repoint and
+collapsed its window to nothing (ADR-0021, amended by #415). What that costs is evidence rather than
+rows, which is what the shortfall report restores.
+
+**Every run reports the cutover shortfall per seat.** Per table, how many of interim's rows above the
+floor production demonstrably lacks — `sum(max(interim - production, 0))` grouped by
+`(user_email, UTC day)` — naming each seat and flagging the ones with no production row at all as
+`--sweep` targets (#409):
+
+```
+raw.metrics not in production: 30640 row(s) above the floor across 15 seat(s)
+  eman.abdelghany@itworx.com: 7165 of 7165 row(s) missing — no production rows at all (#409 --sweep target)
+  hadeel.sharaf@itworx.com: 654 of 47600 row(s) missing
+  (no user_email): 6 of 6 row(s) missing — never swept, no user_email to derive a seat from (ADR-0021)
+```
+
+Read this, not the held-in-interim buckets, to answer "what does the cutover still owe?". The
+at-or-above count conflates rows already copied, rows a returning seat's collector replayed straight
+into production, and rows genuinely missing; all three read the same. On 2026-08-04 that bucket read
+303,283 metrics against an actual shortfall of 30,640.
+
+The day grain is load-bearing: an active seat holds thousands *more* rows in production than in
+interim (`ahmed.gharib`, 14,141 more), and a flat count would let that surplus absorb pre-flip rows
+the copy missed. Grouping by day confines the overlap to the seat's flip day, making the figure a
+lower bound. Counts, not row identities — `raw.*` has no primary key, so it says how many rows are
+missing, never which. A detector, not a recovery cursor: a non-zero shortfall never fails a run,
+because the residuals ADR-0021 accepts are permanently non-zero. A dry run describes the state as it
+stands; `--execute` prints it after the commit, so it names what is still missing rather than rows
+the run just delivered, and a rolled-back run prints no verdict at all.
 
 Verification **gates the commit** rather than following it, against the watermarks captured before
 the copy (by then production's own minimum has collapsed, so re-deriving them would compare empty
