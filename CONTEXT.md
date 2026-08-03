@@ -172,5 +172,17 @@ The environment currently serving the report stays live as fallback until the ad
 Per **seat**, the timestamp of that seat's first **production** row — the moment its **tracked machine** started emitting to prod. It is the upper bound on what the interim→prod copy moves, and what makes the copy safe to re-run: a copied row becomes production's new minimum for that seat, so the next run's window is empty and duplicates need no delete to prevent them. `raw.*` records no provenance, so a bound on the window alone would have had to delete production's own post-flip rows and could not restore them. Derived from production itself (`MIN(ts)` per `user_email`), never recorded, and computed per table because `raw.metrics` and `raw.events` name their event time differently. Per seat rather than per machine because no column identifies a device. See ADR-0020.
 _Avoid_: cutover timestamp, flip time (a single fleet-wide instant — the flip is staggered, one watermark per seat)
 
+**Ingest repoint**:
+Retargeting **interim**'s sink at production's database and reservoir, so telemetry arriving at interim's collector endpoint lands in production. A **tracked machine** whose **installer** was never re-pushed therefore reaches production without being touched — interim's endpoint and bearer token are unchanged. It is what makes interim **write-quiet** by construction rather than by an operator's assertion, and it gives an unflipped **seat** a **flip watermark** so the ordinary interim→prod copy moves that seat's backlog with no special case. See ADR-0021.
+_Avoid_: dual-write (that is a fleet-side second exporter endpoint, rejected in ADR-0020), failover
+
+**Write-quiet**:
+Interim provably gaining no new rows — `now() - MAX(meta.processed_batches.processed_at) >= 24 hours`, a server-side ingest clock rather than the client-supplied event time a skewed laptop or a late flush can backdate. The precondition for the **terminal sweep**, and a property of the topology after the **ingest repoint**, not a claim about the fleet. See ADR-0021.
+_Avoid_: quiet, idle, drained (each reads as "nobody is working", which is the heuristic this term exists to replace)
+
+**Terminal sweep**:
+The one-time copy of an entire `[2026-07-17, ∞)` window for a **seat** that has no production row at all — a machine that never emits again. Run once interim is **write-quiet**, so its right edge is fixed; a seat is excluded the moment it has any production row, which is what keeps the sweep safe to re-run. Everything the **ingest repoint** can reach is handled by the ordinary **flip watermark** copy instead. See ADR-0021.
+_Avoid_: backfill (that is ADR-0006's schema-v1→v2 mapping, a different operation), catch-up
+
 **Azure prod stack**:
 The production environment: a second Azure resource group — IS-provisioned but empty, in an ITWorx subscription — holding a Postgres Flexible Server (public endpoint) plus an Azure Container Apps environment running the collector + sink in one Container App. IS grants RG Contributor only; Ahmed deploys all of it, Postgres included, via Bicep (ADR-0004).
