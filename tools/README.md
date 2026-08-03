@@ -330,6 +330,13 @@ yet), and rows with no `user_email` to derive a seat from. #245 closes when the 
 reaches zero; #248 Part B's row-count-verified `pg_dump` is the backstop for whatever never
 flips.
 
+A seat whose watermark lands **at or below the floor** is named and dropped from the run: one
+production row predating 2026-07-17 makes `[floor, watermark)` empty, so nothing is copyable and
+leaving it in would let verification report the seat as matched on 0 == 0 while its interim rows sat
+there. It needs a human look, not a re-run. A run also names any session that emitted to **both**
+environments at once — ADR-0020 assumes one baked endpoint per machine and assigns detecting the
+exception here. A session merely straddling the flip is not one of those, and is not reported.
+
 **Accepted residual:** a batch arriving in interim *below* a seat's watermark after that seat was
 copied is stranded — watermark collapse empties the re-run window, and ADR-0020 fixes the watermark
 as derived, never recorded, so nothing can distinguish it. The exporter flushes every 10s, so the

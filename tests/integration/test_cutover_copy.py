@@ -207,6 +207,74 @@ def test_flags_a_session_that_emitted_to_both_environments_at_once(
     assert f"raw.metrics: 1 session(s) emitted to both environments: {dual_sent}" in out
 
 
+def test_a_straddling_session_still_writing_to_interim_is_not_a_dual_send(
+    conn: psycopg.Connection,
+    pg_url: str,
+    target: psycopg.Connection,
+    target_url: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The commonest shape after a flip: the machine's *new* process emits to production while an
+    # old one, started before the env var changed, keeps writing to interim under its own session.
+    # Its interim rows sit either side of the watermark, and the rows below it get copied — which
+    # must not make the session look like it emitted to both environments at once.
+    straddling = "cccccccc-0000-0000-0000-000000000003"
+    metric(conn, EARLY, session_id=straddling)
+    metric(conn, LATE, session_id=straddling)
+    metric(target, FLIP)
+
+    copy(pg_url, target_url)
+
+    assert "emitted to both environments" not in capsys.readouterr().out
+
+
+def test_reports_and_skips_a_seat_whose_production_rows_predate_the_floor(
+    conn: psycopg.Connection,
+    pg_url: str,
+    target: psycopg.Connection,
+    target_url: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # A production row below the floor drags the seat's minimum below it, so `[floor, watermark)`
+    # is empty and nothing is copyable. Left in the watermark set it would copy nothing while
+    # verification compared 0 against 0 and reported the seat as matched.
+    metric(conn, EARLY)
+    metric(target, BELOW_FLOOR)
+    metric(target, FLIP)
+
+    copy(pg_url, target_url)
+
+    out = capsys.readouterr().out
+    assert f"raw.metrics: 1 seat(s) with a watermark at or below the floor: {SEAT}" in out
+    assert "raw.metrics: 0 seat(s) flipped" in out
+    assert "Verified raw.metrics: per-seat counts match for 0 seat(s)" in out
+    assert emails(target, "raw.metrics", "ts") == [(SEAT, BELOW_FLOOR), (SEAT, FLIP)]
+
+
+def test_a_column_mismatch_on_the_second_table_leaves_the_first_uncopied(
+    conn: psycopg.Connection,
+    pg_url: str,
+    target: psycopg.Connection,
+    target_url: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Both column checks must pass before anything is copied: psycopg commits an open transaction
+    # on any non-exception exit, so refusing mid-loop would land raw.metrics while stderr claimed
+    # nothing was copied.
+    metric(conn, EARLY)
+    event(conn, EARLY)
+    metric(target, FLIP)
+    event(target, FLIP)
+    conn.execute("ALTER TABLE raw.events ADD COLUMN pending_column TEXT")
+    try:
+        assert run(pg_url, target_url, "--execute") == 1
+    finally:
+        conn.execute("ALTER TABLE raw.events DROP COLUMN pending_column")
+
+    assert "Refused: raw.events columns differ" in capsys.readouterr().err
+    assert emails(target, "raw.metrics", "ts") == [(SEAT, FLIP)]
+
+
 def test_refuses_when_source_and_target_are_the_same_database(
     conn: psycopg.Connection, pg_url: str, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -36,14 +36,16 @@ from psycopg.conninfo import conninfo_to_dict
 
 # ADR-0020's window floor: interim's own live telemetry effectively begins here, and it is
 # ADR-0017's replay floor, so the promoted columns below it are permanently NULL.
-FLOOR = "2026-07-17 00:00:00+00"
+FLOOR = datetime.fromisoformat("2026-07-17 00:00:00+00:00")
 
 # Table -> its event-time column. The names diverge, so each table carries its own watermark set.
 TABLES = (("raw.metrics", "ts"), ("raw.events", "event_time"))
 
 # Source-side scratch holding the watermarks read off production, so one statement can apply every
 # seat's own window. TEMP: it lives in the source session and needs no cleanup or schema rights.
-_WATERMARK_TABLE = "_flip_watermark"
+# Always schema-qualified: unqualified, the initial `DROP TABLE IF EXISTS` would resolve through
+# `search_path` to a permanent `public` table on interim, which this tool never writes to.
+_MARKS = sql.SQL("pg_temp.{}").format(sql.Identifier("_flip_watermark"))
 
 
 class Census(NamedTuple):
@@ -56,7 +58,7 @@ class Census(NamedTuple):
     held_no_email: int
 
 
-def _target_label(database_url: str) -> str:
+def _connection_label(database_url: str) -> str:
     info = conninfo_to_dict(database_url)
     return f"host={info.get('host', '(unset)')} database={info.get('dbname', '(unset)')}"
 
@@ -99,16 +101,16 @@ def _columns(conn: psycopg.Connection, table: str) -> list[str]:
 def _seed_watermarks(
     source: psycopg.Connection, marks: dict[str, datetime]
 ) -> None:
-    source.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(sql.Identifier(_WATERMARK_TABLE)))
+    source.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(_MARKS))
     source.execute(
         sql.SQL(
             "CREATE TEMP TABLE {} (user_email TEXT PRIMARY KEY, watermark TIMESTAMPTZ NOT NULL)"
-        ).format(sql.Identifier(_WATERMARK_TABLE))
+        ).format(_MARKS)
     )
     with source.cursor() as cur:
         cur.executemany(
             sql.SQL("INSERT INTO {} (user_email, watermark) VALUES (%s, %s)").format(
-                sql.Identifier(_WATERMARK_TABLE)
+                _MARKS
             ),
             list(marks.items()),
         )
@@ -135,7 +137,7 @@ def census(source: psycopg.Connection, table: str, time_column: str) -> Census:
         ).format(
             tc=sql.Identifier(time_column),
             table=sql.SQL(table),
-            marks=sql.Identifier(_WATERMARK_TABLE),
+            marks=_MARKS,
         ),
         (FLOOR,),
     ).fetchone()
@@ -181,7 +183,7 @@ def dual_sent_sessions(
             " WHERE src.session_id IS NOT NULL AND src.{tc} >= w.watermark"
         ).format(
             table=sql.SQL(table),
-            marks=sql.Identifier(_WATERMARK_TABLE),
+            marks=_MARKS,
             tc=sql.Identifier(time_column),
         )
     ).fetchall()
@@ -220,7 +222,7 @@ def copy_table(
     ).format(
         projection=projection,
         table=sql.SQL(table),
-        marks=sql.Identifier(_WATERMARK_TABLE),
+        marks=_MARKS,
         time_column=sql.Identifier(time_column),
     )
     into = sql.SQL("COPY {table} ({column_list}) FROM STDIN").format(
@@ -256,12 +258,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     # Before anything else: the two URLs differ by one word, and a swapped pair would copy
     # production's telemetry back into interim.
-    print(f"Source (interim):    {_target_label(source_url)}")
-    print(f"Target (production): {_target_label(target_url)}")
+    print(f"Source (interim):    {_connection_label(source_url)}")
+    print(f"Target (production): {_connection_label(target_url)}")
 
     if _identity(source_url) == _identity(target_url):
         print(
-            f"Refused: source and target are the same database ({_target_label(source_url)})"
+            f"Refused: source and target are the same database ({_connection_label(source_url)})"
             " — nothing copied",
             file=sys.stderr,
         )
@@ -272,16 +274,33 @@ def main(argv: list[str] | None = None) -> int:
         psycopg.connect(source_url, autocommit=True) as source,
         psycopg.connect(target_url) as target,
     ):
-        for table, time_column in TABLES:
-            columns = _columns(target, table)
-            if _columns(source, table) != columns:
+        # Every table's column parity is checked before *any* table is copied: psycopg commits an
+        # open transaction on any non-exception exit, so refusing mid-loop would land the earlier
+        # table while this said nothing was copied.
+        table_columns = {}
+        for table, _ in TABLES:
+            table_columns[table] = _columns(target, table)
+            if _columns(source, table) != table_columns[table]:
                 print(
                     f"Refused: {table} columns differ between interim and production — an"
                     " explicit column list would drop the difference silently; nothing copied",
                     file=sys.stderr,
                 )
                 return 1
+
+        for table, time_column in TABLES:
             marks = watermarks(target, table, time_column)
+            # A production row below the floor drags that seat's minimum below it, leaving an empty
+            # window. Dropped from the set rather than copied as a no-op, so verification cannot
+            # report the seat as matched on 0 == 0 while its interim rows sit there untouched.
+            below_floor = sorted(email for email, mark in marks.items() if mark <= FLOOR)
+            if below_floor:
+                print(
+                    f"{table}: {len(below_floor)} seat(s) with a watermark at or below the floor:"
+                    f" {', '.join(below_floor)} — a production row predates {FLOOR:%Y-%m-%d},"
+                    " so nothing is copyable for them"
+                )
+                marks = {e: m for e, m in marks.items() if e not in set(below_floor)}
             captured[table] = marks
             _seed_watermarks(source, marks)
             counted = census(source, table, time_column)
@@ -292,15 +311,18 @@ def main(argv: list[str] | None = None) -> int:
                 f" above a watermark, {counted.held_no_email} row(s) with no user_email"
             )
             if args.execute:
-                copied = copy_table(source, target, table, time_column, columns, marks)
-                print(f"{table}: copied {copied} row(s) for {len(marks)} seat(s)")
-                # While the watermark scratch still holds this table's marks.
+                # Probed *before* the copy: afterwards this run's own copied rows would make every
+                # straddling session look as if it had emitted to both environments.
                 dual = dual_sent_sessions(source, target, table, time_column)
                 if dual:
                     print(
                         f"{table}: {len(dual)} session(s) emitted to both environments:"
                         f" {', '.join(dual)}"
                     )
+                copied = copy_table(
+                    source, target, table, time_column, table_columns[table], marks
+                )
+                print(f"{table}: copied {copied} row(s) for {len(marks)} seat(s)")
 
         if not args.execute:
             print("Dry-run — nothing written; pass --execute to copy")
