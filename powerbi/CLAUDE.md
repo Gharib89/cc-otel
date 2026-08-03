@@ -1,7 +1,22 @@
-# Power BI authoring
+# Power BI — frozen, do not author here
 
-The report under `powerbi/` is authored **on disk** (PBIR/TMDL); on-disk PBIP is
-the source of truth and publishing is manual from Desktop. Route Power BI work:
+**This tree is an archive, not the source of truth.** Since 2026-08-03 the report is owned and
+authored in the Power BI Service by Mohamed Atallah (`Mohamed.Atallah@itworx.com`) — ADR-0022. The
+`powerbi/` files record the last repo-authored state and will drift from what is published.
+
+So: **do not edit anything under `powerbi/`** — not a visual, not a measure, not a theme token —
+however obviously improvable it looks. A change here reaches no consumer and creates a false record of
+what the report contains. Report-layer work belongs to the owner; `HANDOVER.md` is his runbook and the
+escalation split. Data problems below `marts` are still this repo's (sink, migrations, mart
+definitions) and are fixed there, never here.
+
+`ci-powerbi.yml` still gates `powerbi/**` — it exists now as a tripwire, so an accidental edit fails
+loudly rather than landing quietly.
+
+## If authorship is ever deliberately resumed
+
+Un-freezing is a decision (ADR-0022 consequences), and the Service's copy — not this tree — is the
+base to re-export from. The toolchain that authored this model, kept for that case:
 
 | Task | Reach for |
 |---|---|

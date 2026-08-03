@@ -125,7 +125,7 @@ table fact_usage_window
 		mode: import
 		source =
 				let
-				  Source = Value.NativeQuery(PostgreSQL.Database("ccotel-pg-interim.postgres.database.azure.com", "cc_otel"), "SELECT t.*, t.window_end::date AS activity_date FROM marts.fact_usage_window t")
+				  Source = Value.NativeQuery(PostgreSQL.Database(#"PgHost", #"PgDatabase"), "SELECT t.*, t.window_end::date AS activity_date FROM marts.fact_usage_window t")
 				in
 				  Source
 

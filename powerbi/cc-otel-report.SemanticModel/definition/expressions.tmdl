@@ -1,0 +1,19 @@
+/// Postgres server FQDN every marts partition connects to. Edit this value to move the
+/// report between environments (Semantic model settings -> Data access -> M parameters);
+/// data-source credentials are bound per server and must be re-entered after a change.
+expression PgHost = "ccotel-pg-prod.postgres.database.azure.com" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+	lineageTag: 69db9dd2-026d-4d47-a430-e56bcfc39689
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Text
+
+/// Postgres database name. Same in every environment; parameterized so a host change
+/// never leaves the database literal behind.
+expression PgDatabase = "cc_otel" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+	lineageTag: 93320e6c-6a6c-47a9-9e35-e735315e0f8d
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Text
+
