@@ -80,6 +80,22 @@ All 21 Postgres queries read these, so changing `PgHost` moves the whole model t
 one edit — no Desktop, no file changes. **After any change you must re-enter the Postgres credentials
 (step 2), because they are bound to the server name.**
 
+### The trap: a green refresh can silently shrink the model
+
+Every Postgres query in this model is `SELECT *`. So if the target database is **missing columns**
+that the model expects — because its schema is behind the code — the query still succeeds, and Power
+BI reconciles by **deleting those columns from the model**. The refresh reports success. Visuals bound
+to the deleted columns go blank or error afterwards, with nothing pointing at the cause.
+
+This happened on the first attempt at this very repoint (2026-08-03): production was missing eight
+migrations, and the refresh quietly dropped `dq_finding[subject]`, `[kind]`,
+`[first_detected_at]`, `[standing_since]` plus columns from five `bridge_session_*` tables,
+`fact_session` and `fact_tool_outcome`.
+
+**So: before pointing `PgHost` at any database, confirm with Ahmed that its schema is up to date.**
+"The refresh succeeded" is not evidence that it is. After a host change, spot-check the Data Health
+page and one bridge visual rather than trusting the green tick.
+
 The only other server that exists is `ccotel-pg-interim.postgres.database.azure.com`, the old
 environment. It is a valid rollback target **only until the ingest repoint lands** (tracked in #410,
 expected within days of this handover): after that, interim stops receiving telemetry and would show

@@ -16,3 +16,4 @@ expression PgDatabase = "cc_otel" meta [IsParameterQuery=true, Type="Text", IsPa
 	annotation PBI_NavigationStepName = Navigation
 
 	annotation PBI_ResultType = Text
+
