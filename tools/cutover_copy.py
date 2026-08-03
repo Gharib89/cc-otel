@@ -41,6 +41,12 @@ FLOOR = datetime.fromisoformat("2026-07-17 00:00:00+00:00")
 # Table -> its event-time column. The names diverge, so each table carries its own watermark set.
 TABLES = (("raw.metrics", "ts"), ("raw.events", "event_time"))
 
+# Session-level advisory lock on the target, taken for the length of an ``--execute``. Two
+# concurrent runs would both read the pre-copy watermark and both copy the same rows, and those
+# duplicates could not be removed afterwards: ``raw.*`` has no primary key (ADR-0017) and this tool
+# has no delete. Arbitrary but fixed — the issue number and the window floor.
+LOCK_KEY = 245_20260717
+
 # Source-side scratch holding the watermarks read off production, so one statement can apply every
 # seat's own window. TEMP: it lives in the source session and needs no cleanup or schema rights.
 # Always schema-qualified: unqualified, the initial `DROP TABLE IF EXISTS` would resolve through
@@ -267,6 +273,20 @@ def main(argv: list[str] | None = None) -> int:
         psycopg.connect(source_url, autocommit=True) as source,
         psycopg.connect(target_url) as target,
     ):
+        # One writer at a time. Held for the whole run and released when this connection closes;
+        # session-level, so the rollback path below does not drop it early. A dry-run never takes
+        # it — it writes nothing, and must stay available while a copy is in flight.
+        if args.execute:
+            held = target.execute("SELECT pg_try_advisory_lock(%s)", (LOCK_KEY,)).fetchone()
+            if held is None or not held[0]:
+                print(
+                    "Refused: another cutover_copy --execute is running against this production"
+                    " database — run them one at a time; concurrent runs would both copy the same"
+                    " rows and raw.* has no primary key to dedup on",
+                    file=sys.stderr,
+                )
+                return 1
+
         # Every table's column parity is checked before *any* table is copied: psycopg commits an
         # open transaction on any non-exception exit, so refusing mid-loop would land the earlier
         # table while this said nothing was copied.

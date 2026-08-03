@@ -314,6 +314,12 @@ A source and target resolving to the same host, port and database is refused out
 table whose column list differs between the environments — the copy names its columns explicitly,
 so an interim-only column would otherwise be dropped silently.
 
+**One `--execute` at a time.** It takes a session-level advisory lock on production for the length
+of the run and refuses if another holds it. Two concurrent runs would both read the pre-copy
+watermark and both copy the same rows, and those duplicates could not be removed afterwards —
+`raw.*` has no primary key and this tool has no delete. A dry-run never takes the lock, so it stays
+available while a copy is in flight.
+
 **Re-run it as seats flip.** The flip is staggered (#244 closed at 4 of 18 seats), so a seat with
 no production row yet has no watermark and is skipped; a later run picks it up. There is **no
 delete step**: the one ADR-0020 first described is empty on every run by the definition of `MIN`

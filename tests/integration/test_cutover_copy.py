@@ -311,6 +311,43 @@ def test_a_verification_mismatch_rolls_production_back_and_skips_the_refresh(
     assert refreshed is not None and refreshed[0] == 0
 
 
+def test_refuses_to_run_while_another_execute_holds_the_lock(
+    conn: psycopg.Connection,
+    pg_url: str,
+    target: psycopg.Connection,
+    target_url: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Two concurrent runs would both read the pre-copy watermark and both copy the same rows, and
+    # `raw.*` has no primary key and this tool has no delete, so those duplicates could not be
+    # removed. A second connection holding the lock stands in for the other run.
+    from tools.cutover_copy import LOCK_KEY
+
+    metric(conn, EARLY)
+    metric(target, FLIP)
+    with psycopg.connect(target_url, autocommit=True) as other_run:
+        other_run.execute("SELECT pg_advisory_lock(%s)", (LOCK_KEY,))
+
+        assert run(pg_url, target_url, "--execute") == 1
+
+    assert "Refused: another cutover_copy --execute is running" in capsys.readouterr().err
+    assert emails(target, "raw.metrics", "ts") == [(SEAT, FLIP)]
+
+
+def test_a_dry_run_is_not_blocked_by_the_lock(
+    conn: psycopg.Connection, pg_url: str, target: psycopg.Connection, target_url: str
+) -> None:
+    # The lock guards writes only: a read-only dry-run must stay available while a copy is running.
+    from tools.cutover_copy import LOCK_KEY
+
+    metric(conn, EARLY)
+    metric(target, FLIP)
+    with psycopg.connect(target_url, autocommit=True) as other_run:
+        other_run.execute("SELECT pg_advisory_lock(%s)", (LOCK_KEY,))
+
+        assert run(pg_url, target_url) == 0
+
+
 def test_refuses_when_source_and_target_are_the_same_database(
     conn: psycopg.Connection, pg_url: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
