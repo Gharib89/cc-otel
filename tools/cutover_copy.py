@@ -81,9 +81,9 @@ def watermarks(conn: psycopg.Connection, table: str, time_column: str) -> dict[s
     derived for them and their interim counterparts stay where they are.
     """
     rows = conn.execute(
-        sql.SQL("SELECT user_email, min({}) FROM {} WHERE user_email IS NOT NULL GROUP BY 1").format(
-            sql.Identifier(time_column), sql.SQL(table)
-        )
+        sql.SQL(
+            "SELECT user_email, min({}) FROM {} WHERE user_email IS NOT NULL GROUP BY 1"
+        ).format(sql.Identifier(time_column), sql.SQL(table))
     ).fetchall()
     return {row[0]: row[1] for row in rows}
 
@@ -98,9 +98,7 @@ def _columns(conn: psycopg.Connection, table: str) -> list[str]:
     return [row[0] for row in rows]
 
 
-def _seed_watermarks(
-    source: psycopg.Connection, marks: dict[str, datetime]
-) -> None:
+def _seed_watermarks(source: psycopg.Connection, marks: dict[str, datetime]) -> None:
     source.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(_MARKS))
     source.execute(
         sql.SQL(
@@ -109,9 +107,7 @@ def _seed_watermarks(
     )
     with source.cursor() as cur:
         cur.executemany(
-            sql.SQL("INSERT INTO {} (user_email, watermark) VALUES (%s, %s)").format(
-                _MARKS
-            ),
+            sql.SQL("INSERT INTO {} (user_email, watermark) VALUES (%s, %s)").format(_MARKS),
             list(marks.items()),
         )
 
@@ -157,8 +153,9 @@ def seat_counts(
     counts = {}
     for email, mark in marks.items():
         row = conn.execute(
-            sql.SQL("SELECT count(*) FROM {table} WHERE user_email = %s AND {tc} >= %s AND {tc} < %s")
-            .format(table=sql.SQL(table), tc=sql.Identifier(time_column)),
+            sql.SQL(
+                "SELECT count(*) FROM {table} WHERE user_email = %s AND {tc} >= %s AND {tc} < %s"
+            ).format(table=sql.SQL(table), tc=sql.Identifier(time_column)),
             (email, FLOOR, mark),
         ).fetchone()
         assert row is not None  # noqa: S101 — aggregate-only SELECT always returns one row
@@ -319,9 +316,7 @@ def main(argv: list[str] | None = None) -> int:
                         f"{table}: {len(dual)} session(s) emitted to both environments:"
                         f" {', '.join(dual)}"
                     )
-                copied = copy_table(
-                    source, target, table, time_column, table_columns[table], marks
-                )
+                copied = copy_table(source, target, table, time_column, table_columns[table], marks)
                 print(f"{table}: copied {copied} row(s) for {len(marks)} seat(s)")
 
         if not args.execute:
