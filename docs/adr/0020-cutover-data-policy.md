@@ -26,8 +26,8 @@ This is the first amendment that reaches production.
   — the thing ADR-0002 keeps out of production — or live rows whose promoted columns are permanently
   NULL. One date satisfies all three; no separate judgement call was needed.
 
-- **Both stores move, on the same boundary.** Raw Postgres (#245 — `\copy` of `raw.metrics` and
-  `raw.events`) and the blob reservoir partitions (#246 — `azcopy`, same paths). Holding one window
+- **Both stores move, on the same boundary.** Raw Postgres (#245 — `tools.cutover_copy`, a
+  client-side `COPY` pipe over `raw.metrics` and `raw.events`) and the blob reservoir partitions (#246 — `azcopy`, same paths). Holding one window
   across both is what keeps replay and column curation (ADR-0017, #16) working from prod storage over
   the pre-cutover weeks; a Postgres-only copy would leave production with rows it could never
   re-derive.
@@ -58,9 +58,13 @@ This is the first amendment that reaches production.
   The bound that works is derived from production itself. A seat's **flip watermark** is
   `MIN(<event time>)` over that seat's production rows — the moment its machine started emitting to
   production — computed per table, since the two tables name that column differently. The copy moves
-  interim rows below the seat's watermark and
-  bounds its delete identically, so it deletes zero production-native rows by construction and is
-  safe to re-run. That matters because **the flip is staggered, not atomic**: IS pushes on a
+  interim rows below the seat's watermark and **deletes nothing at all**. Amended 2026-08-03 (#245):
+  this bullet first said the copy "bounds its delete identically", which is an unconditional no-op —
+  by the definition of `MIN`, no production row sits below that seat's own minimum — so the
+  implementation carries no delete step. Re-runnability comes from the watermark instead: a copied
+  row *becomes* production's new minimum for that seat, collapsing the next run's window to
+  `[floor, floor)`, so duplicates are unreachable with no delete needed to prevent them.
+  That matters because **the flip is staggered, not atomic**: IS pushes on a
   90-minute cadence and a powered-off or off-VPN machine flips whenever it next ticks, so
   stragglers are the expected case and the copy has to be re-runnable rather than one-shot.
 
@@ -136,8 +140,13 @@ This is the first amendment that reaches production.
   39 events short at last measurement), unless that day is replayed frozen in interim before the copy
   runs.
 
-- **The copy runs after the fleet is quiet on interim** (#245 gated on #244), or the window has a
-  moving right edge and no verification of the copy can settle.
+- **The copy runs per seat as each seat flips, not once after the fleet is quiet.** Amended
+  2026-08-03 (#245): this consequence originally required fleet quiet, because a moving right edge
+  would leave no verification able to settle. The per-seat watermark *is* a fixed right edge — a
+  flipped seat writes no further interim rows, so its window closes the moment it flips and
+  verifies independently of every other seat. #244 duly closed at 4 of 18 seats, with the rest
+  gated on developer process restarts, and #245 re-runs until interim holds no rows above any
+  seat's watermark.
 
 - **Production's reservoir becomes replay-capable back to Jul 17** once #246 lands, so a future
   column promotion can carry history in production the same way ADR-0017 did in interim.
