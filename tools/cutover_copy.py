@@ -318,10 +318,11 @@ def main(argv: list[str] | None = None) -> int:
         if not args.execute:
             print("Dry-run — nothing written; pass --execute to copy")
             return 0
-        # Both tables in one transaction: a failure leaves production exactly as it was, and the
-        # next run recomputes identical watermarks.
-        target.commit()
 
+        # Verification gates the commit rather than following it. The counts already see the copied
+        # rows inside this transaction, and a mismatch that had been committed would be permanent:
+        # the copied rows collapse each seat's watermark, so the missing ones fall outside every
+        # future run's window. Rolling back keeps them where a re-run can still reach them.
         mismatches: list[str] = []
         for table, time_column in TABLES:
             marks = captured[table]
@@ -337,8 +338,19 @@ def main(argv: list[str] | None = None) -> int:
             if not failed:
                 print(f"Verified {table}: per-seat counts match for {len(marks)} seat(s)")
 
-    for line in mismatches:
-        print(line, file=sys.stderr)
+        if mismatches:
+            target.rollback()
+            for line in mismatches:
+                print(line, file=sys.stderr)
+            print(
+                "Rolled back — production is unchanged and interim still holds every row;"
+                " re-run once the cause is understood",
+                file=sys.stderr,
+            )
+            return 1
+        # Both tables in one transaction: a failure leaves production exactly as it was, and the
+        # next run recomputes identical watermarks.
+        target.commit()
 
     # The rows are committed, so a refresh failure costs freshness rather than data — pg_cron's
     # hourly marts.refresh_all() reconciles either way.
@@ -352,7 +364,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         print("Refreshed production marts")
-    return 1 if mismatches else 0
+    return 0
 
 
 if __name__ == "__main__":

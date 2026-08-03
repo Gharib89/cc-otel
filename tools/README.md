@@ -342,10 +342,13 @@ copied is stranded — watermark collapse empties the re-run window, and ADR-002
 as derived, never recorded, so nothing can distinguish it. The exporter flushes every 10s, so the
 exposure is seconds wide.
 
-Verification runs automatically after the copy, against the watermarks captured **before** it (by
-then production's own minimum has collapsed, so re-deriving them would compare empty windows and
-pass vacuously): per-seat interim-vs-production counts over each seat's `[floor, watermark)`
-window must match, or the run exits 1. A whole-window count comparison would not do — production
-also holds its own #244 validation rows and post-flip rows inside the same window. Production's
-marts are then refreshed; a refresh failure is reported and does not fail the copy, since the rows
-are already committed and the hourly `marts.refresh_all()` reconciles.
+Verification **gates the commit** rather than following it, against the watermarks captured before
+the copy (by then production's own minimum has collapsed, so re-deriving them would compare empty
+windows and pass vacuously): per-seat interim-vs-production counts over each seat's
+`[floor, watermark)` window must match. A whole-window count comparison would not do — production
+also holds its own #244 validation rows and post-flip rows inside the same window. On a mismatch
+the whole run rolls back, nothing is refreshed, and it exits 1: a short copy that had been
+committed would be permanent, because the copied rows collapse each seat's watermark and the
+missing ones then fall outside every future run's window. Only a clean verification commits;
+production's marts are refreshed after that, and a refresh failure is reported without failing the
+copy, since the rows are in and the hourly `marts.refresh_all()` reconciles.

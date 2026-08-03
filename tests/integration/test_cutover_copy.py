@@ -276,6 +276,41 @@ def test_a_column_mismatch_on_the_second_table_leaves_the_first_uncopied(
     assert emails(target, "raw.metrics", "ts") == [(SEAT, FLIP)]
 
 
+def test_a_verification_mismatch_rolls_production_back_and_skips_the_refresh(
+    conn: psycopg.Connection,
+    pg_url: str,
+    target: psycopg.Connection,
+    target_url: str,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Verification has to gate the commit, not follow it. Committing a short copy would collapse
+    # the seat's watermark to the earliest copied row, so the missing rows fall outside every
+    # future run's window and are stranded for good — the exit code would be the only trace.
+    from tools import cutover_copy
+
+    real = cutover_copy.seat_counts
+
+    def inflate_the_source(db, table, time_column, marks):  # type: ignore[no-untyped-def]
+        # Only the source connection runs autocommit, which is what tells the two apart here.
+        counts = real(db, table, time_column, marks)
+        return {email: n + 1 for email, n in counts.items()} if db.autocommit else counts
+
+    monkeypatch.setattr(cutover_copy, "seat_counts", inflate_the_source)
+    metric(conn, EARLY)
+    metric(target, FLIP)
+
+    assert run(pg_url, target_url, "--execute") == 1
+
+    captured = capsys.readouterr()
+    assert f"Verification FAILED raw.metrics {SEAT}: interim 2, production 1" in captured.err
+    assert "Rolled back — production is unchanged" in captured.err
+    assert "Refreshed production marts" not in captured.out
+    assert emails(target, "raw.metrics", "ts") == [(SEAT, FLIP)]
+    refreshed = target.execute("SELECT count(*) FROM marts.mart_refresh_log").fetchone()
+    assert refreshed is not None and refreshed[0] == 0
+
+
 def test_refuses_when_source_and_target_are_the_same_database(
     conn: psycopg.Connection, pg_url: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
