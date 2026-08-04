@@ -2,6 +2,12 @@
 
 **Status:** accepted
 
+**Amended by ADR-0024 now that IS has shipped revocation columns** — the premise below ("no status
+column, no revocation date") and the *Revocation is absence* decision both narrow. The delivered
+columns are per-subscription revocation *events*, so the truncation guards and closure-by-absence
+stay exactly as written here; a revoke date only exact-dates a closure where the person is left
+holding no Claude subscription, and that exception can leave a genuine gap in one person's intervals.
+
 The `seat_roster` table feeding the adoption report is fabricated from telemetry (#163): tier is
 wrong for real users, "off-roster" is structurally impossible, and the licensed-seat denominator
 equals the observed-user count by construction. IS now supplies a real roster by email, roughly

@@ -7,9 +7,16 @@ per subscription. Seat history is **derived** from the accumulated drops (#293),
 into a dimension here, so a late-arriving drop needs no repair.
 
 Every column IS sends lands verbatim and any unmapped header is captured into ``extra``, so a
-new IS column (the status / revocation date requested in #291) is retained from the moment it
-first appears. No copy of the file is kept — the snapshot plus ``extra`` is the archive, a
-deliberate exception to the blob-reservoir convention (ADR-0009).
+new IS column is retained from the moment it first appears — which is how the revocation columns
+#291 asked for were already on hand when they arrived in the 2026-08-02 drop, and only then
+needed promoting to real columns (#419). No copy of the file is kept — the snapshot plus
+``extra`` is the archive, a deliberate exception to the blob-reservoir convention (ADR-0009).
+
+Those revocation columns record per-subscription revocation *events*, not a person-level status:
+the drop that introduced them carries 42 Github Copilot revocations against exactly one Claude
+seat, and four people left the population by vanishing from the file with no revocation record.
+So closure-by-absence and the truncation guards below stay exactly as they were; the revoke date
+only ever exact-dates a closure the derivation would otherwise have had to guess (#419).
 
 A successful write refreshes the seat marts (and ``dim_date``, whose floor this write can move)
 so Power BI is current without waiting for the hourly cycle; every other telemetry mart is left
@@ -68,6 +75,13 @@ _COLUMNS = {
 
 _SUBSCRIPTION_RE = re.compile(r"^subscription_(\d+)$")
 _ASSIGNMENT_RE = re.compile(r"^assignment_date_(\d+)$")
+# Per-subscription revocation events, first seen in the 2026-08-02 drop (#419). Numerically
+# suffixed and unpivoted exactly like the pair above: they record *which subscription* was
+# revoked and when, not a person-level status, so they belong at assignment grain.
+_REVOKED_RE = re.compile(r"^revoked_subscription_(\d+)$")
+_REVOKE_DATE_RE = re.compile(r"^revoke_date_(\d+)$")
+
+_SEQUENCED_RES = (_SUBSCRIPTION_RE, _ASSIGNMENT_RE, _REVOKED_RE, _REVOKE_DATE_RE)
 
 _DATE_FORMATS = ("%Y-%m-%d", "%m/%d/%Y")
 
@@ -95,6 +109,8 @@ class SeatRow:
     subscription_raw: str | None
     seat_tier: str | None
     assignment_date: date | None
+    revoked_subscription_raw: str | None
+    revoke_date: date | None
     anthropic_org_name: str | None
     person_name: str | None
     manager_name: str | None
@@ -118,6 +134,11 @@ def normalize_tier(raw: str | None) -> str | None:
     ``Claude Standard`` -> ``Standard``. An unrecognized tier keeps its own name rather than
     being coerced or dropped; blank is ``None`` (a real pending-provisioning state — one such
     row exists in the first drop, and #291 asks IS whether it is intentional).
+
+    Note what this costs: a non-Claude product (``Github Copilot``, which the roster also
+    carries) passes through unchanged, so a normalized tier cannot say which product it came
+    from. Anything that must distinguish them — the revocation rule in
+    ``staging.stg_seat_interval`` — reads the raw value instead (#419).
     """
     text = (raw or "").strip()
     if not text:
@@ -142,11 +163,12 @@ def _sequences(headers: Sequence[str]) -> list[int]:
 
     IS's numerically suffixed ``subscription_1`` / ``assignment_date_1`` signal their export
     tool can emit a second subscription per person; unpivoting them here keeps a second
-    subscription a data event rather than a migration.
+    subscription a data event rather than a migration. ``revoked_subscription_N`` /
+    ``revoke_date_N`` count too: a sequence can carry only a revocation.
     """
     seqs = set()
     for header in headers:
-        for pattern in (_SUBSCRIPTION_RE, _ASSIGNMENT_RE):
+        for pattern in _SEQUENCED_RES:
             match = pattern.match(header)
             if match:
                 seqs.add(int(match.group(1)))
@@ -172,7 +194,7 @@ def parse_rows(text: str) -> list[SeatRow]:
     unmapped = [
         header
         for header, key in lowered.items()
-        if key not in _COLUMNS and not _SUBSCRIPTION_RE.match(key) and not _ASSIGNMENT_RE.match(key)
+        if key not in _COLUMNS and not any(pattern.match(key) for pattern in _SEQUENCED_RES)
     ]
 
     rows: list[SeatRow] = []
@@ -193,7 +215,20 @@ def parse_rows(text: str) -> list[SeatRow]:
                 record.get(by_key.get(f"assignment_date_{seq}", "")) or "",
                 f"assignment_date_{seq}",
             )
-            if seq != 1 and not subscription and assigned is None:
+            revoked = (record.get(by_key.get(f"revoked_subscription_{seq}", "")) or "").strip()
+            revoked_on = _parse_date(
+                record.get(by_key.get(f"revoke_date_{seq}", "")) or "", f"revoke_date_{seq}"
+            )
+            # A sequence carrying only a revocation is a real observation — IS records the
+            # revoked subscription in the slot it used to occupy, so the slot is otherwise
+            # blank. Dropping it would lose the one event the columns exist to capture.
+            if (
+                seq != 1
+                and not subscription
+                and assigned is None
+                and not revoked
+                and revoked_on is None
+            ):
                 continue
             rows.append(
                 SeatRow(
@@ -202,6 +237,8 @@ def parse_rows(text: str) -> list[SeatRow]:
                     subscription_raw=subscription or None,
                     seat_tier=normalize_tier(subscription),
                     assignment_date=assigned,
+                    revoked_subscription_raw=revoked or None,
+                    revoke_date=revoked_on,
                     anthropic_org_name=mapped.get("anthropic_org_name") or None,
                     person_name=mapped.get("person_name") or None,
                     manager_name=mapped.get("manager_name") or None,
@@ -225,9 +262,12 @@ def parse_rows(text: str) -> list[SeatRow]:
 def compute_delta(prior: Sequence[SeatRow], incoming: Sequence[SeatRow]) -> Delta:
     """Diff the incoming drop against the newest existing one, keyed person + subscription.
 
-    Closures are absences: IS sends a current-state snapshot with no status column, so a seat
-    that stops appearing is a revocation. This count is the human checkpoint for that inference
-    — the guards only catch truncation, not a plausible-looking export missing a few people.
+    Closures are absences: IS sends a current-state snapshot with no person-level status column,
+    so a seat that stops appearing is a revocation. The revocation columns (#419) do not change
+    that — they record which subscription was revoked, and the drop that introduced them proves
+    the export omits most removals entirely. This count stays the human checkpoint for the
+    inference — the guards only catch truncation, not a plausible-looking export missing a few
+    people.
     """
     before = {(row.user_email, row.subscription_seq): row.seat_tier for row in prior}
     after = {(row.user_email, row.subscription_seq): row.seat_tier for row in incoming}
@@ -316,6 +356,7 @@ def _newest_drop(conn: psycopg.Connection) -> tuple[date | None, list[SeatRow]]:
     drop_id, as_of = row
     snapshot = conn.execute(
         "SELECT user_email, subscription_seq, subscription_raw, seat_tier, assignment_date,"
+        " revoked_subscription_raw, revoke_date,"
         " anthropic_org_name, person_name, manager_name, department, cost_center, extra"
         " FROM ref.seat_roster_snapshot WHERE drop_id = %s",
         (drop_id,),
@@ -347,9 +388,9 @@ def _insert_drop(
             cur.executemany(
                 "INSERT INTO ref.seat_roster_snapshot"
                 " (drop_id, user_email, subscription_seq, subscription_raw, seat_tier,"
-                "  assignment_date, anthropic_org_name, person_name, manager_name, department,"
-                "  cost_center, extra)"
-                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "  assignment_date, revoked_subscription_raw, revoke_date, anthropic_org_name,"
+                "  person_name, manager_name, department, cost_center, extra)"
+                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 [
                     (
                         drop_id,
@@ -358,6 +399,8 @@ def _insert_drop(
                         row.subscription_raw,
                         row.seat_tier,
                         row.assignment_date,
+                        row.revoked_subscription_raw,
+                        row.revoke_date,
                         row.anthropic_org_name,
                         row.person_name,
                         row.manager_name,

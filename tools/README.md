@@ -255,6 +255,12 @@ registry row plus one immutable `ref.seat_roster_snapshot` observation per perso
 subscription. Seat history is derived from all drops (ADR-0009), so drops arriving out of
 order need no repair — and no copy of the file is kept, so keep the source emails.
 
+Since the 2026-08-02 drop the file also carries `revoked_subscription_N` / `revoke_date_N`,
+unpivoted into `revoked_subscription_raw` + `revoke_date` per sequence. They are
+per-subscription **revocation events**, not a person-level status, so the truncation guards
+below and closure-by-absence are unchanged; the revoke date only exact-dates a Claude seat's
+close when the person is left holding no Claude subscription (ADR-0024).
+
 **Safety flow — dry-run first, always:**
 
 ```sh

@@ -35,6 +35,8 @@ def seat(
         subscription_raw=None if tier is None else f"Claude {tier}",
         seat_tier=tier,
         assignment_date=date(2026, 4, 8),
+        revoked_subscription_raw=None,
+        revoke_date=None,
         anthropic_org_name=org,
         person_name=None,
         manager_name=None,
@@ -77,6 +79,8 @@ class TestParseRows:
             subscription_raw="Claude Standard",
             seat_tier="Standard",
             assignment_date=date(2026, 4, 8),
+            revoked_subscription_raw=None,
+            revoke_date=None,
             anthropic_org_name="ITWorx",
             person_name="Dana",
             manager_name="Sam Lead",
@@ -134,12 +138,69 @@ class TestParseRows:
         assert (second.subscription_seq, second.seat_tier) == (2, "Premium")
         assert second.assignment_date == date(2026, 6, 16)
 
+    def test_unpivots_a_revocation_alongside_its_subscription_sequence(self) -> None:
+        text = csv_text(
+            "a@itworx.com,Github Copilot,4/8/2026,Claude Standard,7/28/2026",
+            header="email,subscription_1,assignment_date_1,revoked_subscription_1,revoke_date_1",
+        )
+        (row,) = parse_rows(text)
+        assert row.revoked_subscription_raw == "Claude Standard"
+        assert row.revoke_date == date(2026, 7, 28)
+
     def test_emits_no_row_for_an_entirely_empty_subscription_pair(self) -> None:
         text = csv_text(
             "a@itworx.com,Claude Standard,4/8/2026,,",
             header="email,subscription_1,assignment_date_1,subscription_2,assignment_date_2",
         )
         assert [row.subscription_seq for row in parse_rows(text)] == [1]
+
+    def test_keeps_a_second_sequence_carrying_only_a_revocation(self) -> None:
+        # IS records the revoked subscription in the slot it used to occupy, so that slot's
+        # subscription and assignment date are blank. Skipping the row would lose the event.
+        text = csv_text(
+            "a@itworx.com,Claude Standard,4/8/2026,,,Claude Premium,7/28/2026",
+            header=(
+                "email,subscription_1,assignment_date_1,subscription_2,assignment_date_2,"
+                "revoked_subscription_2,revoke_date_2"
+            ),
+        )
+        first, second = parse_rows(text)
+        assert (first.subscription_seq, first.revoked_subscription_raw) == (1, None)
+        assert (second.subscription_seq, second.subscription_raw) == (2, None)
+        assert (second.revoked_subscription_raw, second.revoke_date) == (
+            "Claude Premium",
+            date(2026, 7, 28),
+        )
+
+    def test_keeps_the_promoted_revocation_headers_out_of_extra(self) -> None:
+        # They were captured verbatim into `extra` until #419 promoted them; a drop landing
+        # both a real column and an `extra` copy would double-record the same event.
+        text = csv_text(
+            "a@itworx.com,Github Copilot,Claude Standard,7/28/2026",
+            header="email,subscription_1,revoked_subscription_1,revoke_date_1",
+        )
+        (row,) = parse_rows(text)
+        assert row.extra == {}
+
+    def test_reads_revocation_columns_whatever_their_casing(self) -> None:
+        text = csv_text(
+            "a@itworx.com,Github Copilot,Claude Standard,7/28/2026",
+            header="email,subscription_1, REVOKED_Subscription_1 ,Revoke_Date_1",
+        )
+        (row,) = parse_rows(text)
+        assert (row.revoked_subscription_raw, row.revoke_date) == (
+            "Claude Standard",
+            date(2026, 7, 28),
+        )
+
+    def test_refuses_an_unparseable_revoke_date(self) -> None:
+        with pytest.raises(RosterError, match="revoke_date_1"):
+            parse_rows(
+                csv_text(
+                    "a@itworx.com,Claude Standard,28.07.2026",
+                    header="email,revoked_subscription_1,revoke_date_1",
+                )
+            )
 
     def test_emits_one_row_when_the_file_carries_no_subscription_columns(self) -> None:
         text = csv_text("a@itworx.com,ITWorx", header="email,Team")

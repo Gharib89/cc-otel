@@ -120,6 +120,33 @@ def test_an_unmapped_header_lands_in_extra(
     assert row[0] == {"status": "Revoked", "revocation_date": "2026-07-20"}
 
 
+def test_the_promoted_revocation_columns_land_instead_of_extra(
+    conn: psycopg.Connection, pg_url: str, tmp_path: Path
+) -> None:
+    # #419: the four headers IS added in the 2026-08-02 drop, unpivoted per sequence. A second
+    # sequence carrying only a revocation is the shape the export actually produces.
+    path = roster(
+        tmp_path,
+        "a@itworx.com,ITWorx,Github Copilot,4/8/2026,Claude Standard,7/28/2026,,,Claude Premium,"
+        "7/20/2026",
+        header=(
+            f"{SHORT_HEADER},revoked_subscription_1,revoke_date_1,subscription_2,"
+            "assignment_date_2,revoked_subscription_2,revoke_date_2"
+        ),
+    )
+
+    load(pg_url, path, "2026-08-02")
+
+    rows = conn.execute(
+        "SELECT subscription_seq, subscription_raw, revoked_subscription_raw, revoke_date::text,"
+        " extra FROM ref.seat_roster_snapshot ORDER BY subscription_seq"
+    ).fetchall()
+    assert rows == [
+        (1, "Github Copilot", "Claude Standard", "2026-07-28", {}),
+        (2, None, "Claude Premium", "2026-07-20", {}),
+    ]
+
+
 def test_reingesting_byte_identical_content_is_refused(
     conn: psycopg.Connection, pg_url: str, tmp_path: Path
 ) -> None:
