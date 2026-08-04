@@ -89,7 +89,7 @@ _KINDS: dict[str, tuple[str, str, str]] = {
 # no catalog row yet).
 _CREATE_RE = re.compile(
     r"^CREATE (MATERIALIZED VIEW|OR REPLACE VIEW|OR REPLACE FUNCTION)"
-    r" (marts|staging)\.([a-z][a-z0-9_]*)",
+    r" (marts|staging)\.([a-z_][a-z0-9_]*)",
     re.MULTILINE,
 )
 _KIND_BY_CREATE = {

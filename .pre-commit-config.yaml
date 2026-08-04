@@ -13,10 +13,10 @@ repos:
     hooks:
       - id: sqlfluff-lint
         # Authored SQL only. schema.sql is a generated dbmate dump, and
-        # db/views/marts/ are generated pg_matviews.definition dumps (#263) —
-        # never lint either.
+        # db/views/ + db/functions/ are generated catalog-deparse dumps
+        # (#263, #426) — never lint any of them.
         files: ^db/.*\.sql$
-        exclude: ^db/(schema\.sql|views/marts/.*\.sql)$
+        exclude: ^db/(schema\.sql|views/.*\.sql|functions/.*\.sql)$
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
