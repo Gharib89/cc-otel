@@ -26,8 +26,16 @@
 -- therefore derived *from* `valid_to_basis` rather than alongside it: only one of the two is
 -- independently computed, so they cannot drift.
 --
--- The dates produced are identical to the previous derivation, branch for branch; only the new
--- output column is added. `dim_seat` gains the column in the following migration, where it sits
+-- Dates are unchanged except in one corner the restructure fixes. The previous revoke branch was
+-- a two-term LEAST(revoke_date, next_valid_from) that never consulted next_as_of_after_last_seen,
+-- so a person who vanished from a drop and later returned without Claude, carrying a revoke date
+-- postdating its own export, closed at the *successor's* opening rather than at the drop they went
+-- missing from -- a week late, and against ADR-0024's "a seat vanishing from a drop still closes
+-- at that drop's as-of date". Selecting the date by the basis makes that unrepresentable: no
+-- branch can pick a date its own verdict does not name. Verified against the previous derivation
+-- on identical input; see the absence-outranks-revocation test.
+--
+-- `dim_seat` gains the column in the following migration, where it sits
 -- next to `valid_from_basis`; a matview is rebuilt outright, so it is free to order its columns
 -- for readers. Here it must be appended *last*: CREATE OR REPLACE VIEW can only add trailing
 -- columns, and dropping the view instead would cascade through `stg_seat_uncovered_day` and the
@@ -282,9 +290,10 @@ WHERE valid_to IS NULL OR valid_to > valid_from;
 
 -- Removing a column is the one edit CREATE OR REPLACE VIEW cannot make, so the down has to drop
 -- and rebuild -- and dropping this view cascades to everything derived from it. The three seat
--- marts and `stg_seat_uncovered_day` are therefore recreated verbatim from git HEAD below,
--- indexes and grants included. They come back WITH NO DATA, exactly as a fresh migration leaves
--- them; `marts.refresh_all()` repopulates them.
+-- marts and `stg_seat_uncovered_day` are therefore recreated below, indexes and grants included.
+-- Their bodies are git HEAD's, restyled to pass sqlfluff (this migration carries no `noqa`, unlike
+-- a matview_sync-generated one) and marked WITH NO DATA, exactly as a fresh migration leaves them;
+-- `marts.refresh_all()` repopulates them.
 DROP VIEW staging.stg_seat_interval CASCADE;
 
 CREATE VIEW staging.stg_seat_interval AS

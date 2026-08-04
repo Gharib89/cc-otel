@@ -46,6 +46,14 @@ CASE arm, and it starts reporting the moment IS's export behaviour widens.
   opening side — one predicate, because the boundary date and the basis recorded for it must never
   disagree. A revoke date landing after the successor opened yields that opening, and is therefore
   reported as `succession-dated`, not `revoke-dated`.
+- **The restructure fixes a latent mis-dating, and that is accepted rather than preserved.** The
+  previous revoke branch was a two-term `LEAST(revoke_date, next_valid_from)` that never consulted
+  the absence date. So a person who vanished from a drop, then returned without Claude carrying a
+  revoke date postdating its own export, had their seat closed at the successor's opening instead
+  of at the drop they went missing from — later than the truth, and against ADR-0024's "a seat
+  vanishing from a drop still closes at that drop's as-of date". Deriving the date from the basis
+  makes it unrepresentable. Reproducing the old answer to keep dates byte-identical was rejected:
+  it would mean encoding a known-wrong date to protect a claim of no change.
 - **`dim_seat_current` does not get the column.** It holds only open intervals, where the basis is
   NULL on every row by construction.
 - **The `seat_boundary_basis` dq gauge is left measuring openings only.** Whether a second gauge
@@ -73,6 +81,11 @@ CASE arm, and it starts reporting the moment IS's export behaviour widens.
 - **The column reports no `revoke-dated` rows until IS sends a drop after 2026-08-02.** Everything
   closed to date is `succession-dated` or `observation-dated`. That is the honest state, and it is
   itself the measure ADR-0009 asked for.
+- **One `valid_to` value can move, and no current row is affected.** The mis-dating corrected above
+  needs a revoke date postdating its own export *and* an absence gap *and* a return without Claude.
+  Both environments hold zero promoted revocations (the columns take no backfill and the loader
+  refuses a re-load), so the corner is unreachable on today's data and no published figure shifts.
+  It is pinned by test rather than left to be rediscovered.
 - **`stg_seat_interval` appends the column last.** `CREATE OR REPLACE VIEW` can only add trailing
   columns, so the staging view's column order no longer groups the two basis markers together;
   `dim_seat`, rebuilt outright, does group them. The rollback has to `DROP ... CASCADE` and

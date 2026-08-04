@@ -412,6 +412,74 @@ def test_a_revoke_date_after_the_next_interval_opens_is_succession_dated(conn, p
     ]
 
 
+def test_an_absence_closes_the_seat_even_when_a_later_revocation_is_recorded(
+    conn, pg_url, tmp_path
+):
+    """Absence outranks a revoke date that cannot have produced the close (ADR-0024, ADR-0025).
+
+    The person vanishes from the 08-02 drop, then returns on 08-09 holding Copilot, carrying a
+    Claude revocation dated *after* the export reporting it -- the unvalidated shape ADR-0024
+    accepted as a residual. The seat closed when they vanished, on 08-02; the revoke date is too
+    late to have dated it, and the successor opens later still.
+
+    The previous derivation answered 08-09 here: its revoke branch was a two-term
+    LEAST(revoke_date, next_valid_from) that never consulted the absence date at all, so an
+    inert revoke date pulled the close *forward* past the drop the seat was missing from --
+    contradicting ADR-0024's "a seat vanishing from a drop still closes at that drop's as-of
+    date". Deriving the date from the basis fixes that by construction: no branch can select a
+    date the basis does not name.
+    """
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-07-25",
+    )
+    load(
+        pg_url,
+        roster(tmp_path, seat("other@itworx.com", assigned="4/9/2026"), name="d2.csv"),
+        "2026-08-02",
+    )
+    load(
+        pg_url,
+        roster(
+            tmp_path,
+            seat("other@itworx.com", assigned="4/9/2026"),
+            revoking_seat(
+                "a@itworx.com",
+                "Github Copilot",
+                revoked="Claude Standard",
+                revoked_on="8/20/2026",
+            ),
+            name="d3.csv",
+            header=REVOKE_HEADER,
+        ),
+        "2026-08-09",
+    )
+    refresh(conn)
+
+    assert intervals(conn) == [
+        (
+            "a@itworx.com",
+            "Standard",
+            "ITWorx",
+            "2026-04-08",
+            "2026-08-02",
+            "source-dated",
+            "observation-dated",
+        ),
+        (
+            "a@itworx.com",
+            "Github Copilot",
+            "ITWorx",
+            "2026-08-09",
+            None,
+            "observation-dated",
+            None,
+        ),
+        ("other@itworx.com", "Standard", "ITWorx", "2026-04-09", None, "source-dated", None),
+    ]
+
+
 def test_a_vanished_person_still_closes_at_the_as_of_of_the_drop_they_left(conn, pg_url, tmp_path):
     # Four people left the 2026-08-02 population this way: simply absent, with no revocation
     # record of any kind. The promoted columns must not weaken that inference — an absent person
