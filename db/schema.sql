@@ -908,33 +908,58 @@ CREATE VIEW staging.stg_seat_interval AS
             (array_agg(numbered.next_as_of ORDER BY numbered.as_of_date DESC))[1] AS next_as_of_after_last_seen
            FROM numbered
           GROUP BY numbered.user_email, numbered.interval_seq
-        ), bounded AS (
-         SELECT x.user_email,
-            x.seat_tier,
-            x.anthropic_org_name,
-            x.valid_from,
-            x.valid_from_basis,
-            x.first_seen_on,
-            x.last_seen_on,
+        ), successor AS (
+         SELECT r.user_email,
+            r.interval_seq,
+            r.first_seen_on,
+            r.last_seen_on,
+            r.seat_tier,
+            r.anthropic_org_name,
+            r.valid_from,
+            r.valid_from_basis,
+            r.is_claude_seat,
+            r.claude_closed_on,
+            r.next_as_of_after_last_seen,
+            lead(r.valid_from) OVER (PARTITION BY r.user_email ORDER BY r.interval_seq) AS next_valid_from,
+            lead(r.claude_closed_on) OVER (PARTITION BY r.user_email ORDER BY r.interval_seq) AS next_claude_closed_on
+           FROM interval_run r
+        ), closing AS (
+         SELECT s.user_email,
+            s.interval_seq,
+            s.first_seen_on,
+            s.last_seen_on,
+            s.seat_tier,
+            s.anthropic_org_name,
+            s.valid_from,
+            s.valid_from_basis,
+            s.is_claude_seat,
+            s.claude_closed_on,
+            s.next_as_of_after_last_seen,
+            s.next_valid_from,
+            s.next_claude_closed_on,
                 CASE
-                    WHEN (x.is_claude_seat AND (x.next_claude_closed_on IS NOT NULL)) THEN GREATEST(x.valid_from, LEAST(x.next_claude_closed_on, x.next_valid_from))
-                    WHEN (LEAST(x.next_as_of_after_last_seen, x.next_valid_from) IS NULL) THEN NULL::date
-                    ELSE GREATEST(x.valid_from, LEAST(x.next_as_of_after_last_seen, x.next_valid_from))
+                    WHEN (s.is_claude_seat AND (s.next_claude_closed_on IS NOT NULL) AND ((s.next_valid_from IS NULL) OR (s.next_claude_closed_on <= s.next_valid_from))) THEN 'revoke-dated'::text
+                    WHEN ((s.next_valid_from IS NOT NULL) AND ((s.next_as_of_after_last_seen IS NULL) OR (s.next_valid_from <= s.next_as_of_after_last_seen))) THEN 'succession-dated'::text
+                    WHEN (s.next_as_of_after_last_seen IS NOT NULL) THEN 'observation-dated'::text
+                    ELSE NULL::text
+                END AS valid_to_basis
+           FROM successor s
+        ), bounded AS (
+         SELECT closing.user_email,
+            closing.seat_tier,
+            closing.anthropic_org_name,
+            closing.valid_from,
+            closing.valid_from_basis,
+            closing.valid_to_basis,
+            closing.first_seen_on,
+            closing.last_seen_on,
+                CASE closing.valid_to_basis
+                    WHEN 'revoke-dated'::text THEN GREATEST(closing.valid_from, closing.next_claude_closed_on)
+                    WHEN 'succession-dated'::text THEN GREATEST(closing.valid_from, closing.next_valid_from)
+                    WHEN 'observation-dated'::text THEN GREATEST(closing.valid_from, closing.next_as_of_after_last_seen)
+                    ELSE NULL::date
                 END AS valid_to
-           FROM ( SELECT r.user_email,
-                    r.interval_seq,
-                    r.first_seen_on,
-                    r.last_seen_on,
-                    r.seat_tier,
-                    r.anthropic_org_name,
-                    r.valid_from,
-                    r.valid_from_basis,
-                    r.is_claude_seat,
-                    r.claude_closed_on,
-                    r.next_as_of_after_last_seen,
-                    lead(r.valid_from) OVER (PARTITION BY r.user_email ORDER BY r.interval_seq) AS next_valid_from,
-                    lead(r.claude_closed_on) OVER (PARTITION BY r.user_email ORDER BY r.interval_seq) AS next_claude_closed_on
-                   FROM interval_run r) x
+           FROM closing
         )
  SELECT user_email,
     seat_tier,
@@ -943,7 +968,8 @@ CREATE VIEW staging.stg_seat_interval AS
     valid_to,
     valid_from_basis,
     first_seen_on,
-    last_seen_on
+    last_seen_on,
+    valid_to_basis
    FROM bounded
   WHERE ((valid_to IS NULL) OR (valid_to > valid_from));
 
@@ -958,7 +984,8 @@ CREATE MATERIALIZED VIEW marts.dim_seat AS
     anthropic_org_name,
     valid_from,
     valid_to,
-    valid_from_basis
+    valid_from_basis,
+    valid_to_basis
    FROM staging.stg_seat_interval
   WITH NO DATA;
 
@@ -1948,4 +1975,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260802135724'),
     ('20260802150012'),
     ('20260804100116'),
-    ('20260804100120');
+    ('20260804100120'),
+    ('20260804120629'),
+    ('20260804121300');
