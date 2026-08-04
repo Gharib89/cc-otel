@@ -526,7 +526,7 @@ def test_refreshes_production_marts_after_the_copy(
 # per-seat window copy in the same run rather than being a separate mode.
 
 
-def test_sweep_copies_a_seats_whole_window_when_production_has_never_seen_it(
+def test_sweep_copies_the_whole_window_of_a_seat_production_has_never_seen(
     conn: psycopg.Connection,
     pg_url: str,
     target: psycopg.Connection,
@@ -574,6 +574,24 @@ def test_sweep_refuses_when_interim_has_written_within_the_last_24_hours(
     metric(conn, EARLY)
 
     assert run(pg_url, target_url, "--execute", "--sweep") == 1
+
+    assert "Refused" in capsys.readouterr().err
+    assert emails(target, "raw.metrics", "ts") == []
+
+
+def test_a_sweep_dry_run_is_refused_by_the_same_gate(
+    conn: psycopg.Connection,
+    pg_url: str,
+    target: psycopg.Connection,
+    target_url: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The gate reads the same on a dry-run: a preview of a sweep the gate would refuse invites
+    # acting on it, so --sweep refuses before any per-table work, --execute or not.
+    seed_last_batch(conn, hours=1)
+    metric(conn, EARLY)
+
+    assert run(pg_url, target_url, "--sweep") == 1
 
     assert "Refused" in capsys.readouterr().err
     assert emails(target, "raw.metrics", "ts") == []
