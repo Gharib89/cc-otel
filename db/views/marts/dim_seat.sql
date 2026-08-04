@@ -8,7 +8,8 @@ CREATE MATERIALIZED VIEW marts.dim_seat AS
     anthropic_org_name,
     valid_from,
     valid_to,
-    valid_from_basis
+    valid_from_basis,
+    valid_to_basis
    FROM staging.stg_seat_interval;
 
 CREATE UNIQUE INDEX dim_seat_pk ON marts.dim_seat USING btree (user_email, valid_from);

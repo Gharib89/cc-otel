@@ -80,7 +80,7 @@ def intervals(conn: psycopg.Connection):
     return all_(
         conn,
         "SELECT user_email, seat_tier, anthropic_org_name, valid_from::text, valid_to::text,"
-        " valid_from_basis FROM marts.dim_seat ORDER BY user_email, valid_from",
+        " valid_from_basis, valid_to_basis FROM marts.dim_seat ORDER BY user_email, valid_from",
     )
 
 
@@ -104,7 +104,7 @@ def test_a_seat_opens_from_its_assignment_date(conn, pg_url, tmp_path):
     refresh(conn)
 
     assert intervals(conn) == [
-        ("a@itworx.com", "Standard", "ITWorx", "2026-04-08", None, "source-dated")
+        ("a@itworx.com", "Standard", "ITWorx", "2026-04-08", None, "source-dated", None)
     ]
 
 
@@ -113,7 +113,7 @@ def test_a_seat_with_no_assignment_date_opens_observation_dated(conn, pg_url, tm
     refresh(conn)
 
     assert intervals(conn) == [
-        ("a@itworx.com", "Standard", "ITWorx", "2026-05-20", None, "observation-dated")
+        ("a@itworx.com", "Standard", "ITWorx", "2026-05-20", None, "observation-dated", None)
     ]
 
 
@@ -131,8 +131,16 @@ def test_a_tier_change_with_a_moved_assignment_date_is_source_dated(conn, pg_url
     refresh(conn)
 
     assert intervals(conn) == [
-        ("a@itworx.com", "Standard", "ITWorx", "2026-04-08", "2026-06-01", "source-dated"),
-        ("a@itworx.com", "Premium", "ITWorx", "2026-06-01", None, "source-dated"),
+        (
+            "a@itworx.com",
+            "Standard",
+            "ITWorx",
+            "2026-04-08",
+            "2026-06-01",
+            "source-dated",
+            "succession-dated",
+        ),
+        ("a@itworx.com", "Premium", "ITWorx", "2026-06-01", None, "source-dated", None),
     ]
 
 
@@ -150,8 +158,18 @@ def test_a_tier_change_without_a_moved_assignment_date_is_observation_dated(conn
     refresh(conn)
 
     assert intervals(conn) == [
-        ("a@itworx.com", "Standard", "ITWorx", "2026-04-08", "2026-06-20", "source-dated"),
-        ("a@itworx.com", "Premium", "ITWorx", "2026-06-20", None, "observation-dated"),
+        # The close and the next opening land on the same date; it is still a succession, not an
+        # absence — the seat continued, it did not vanish from the drop.
+        (
+            "a@itworx.com",
+            "Standard",
+            "ITWorx",
+            "2026-04-08",
+            "2026-06-20",
+            "source-dated",
+            "succession-dated",
+        ),
+        ("a@itworx.com", "Premium", "ITWorx", "2026-06-20", None, "observation-dated", None),
     ]
 
 
@@ -174,8 +192,16 @@ def test_a_seat_absent_from_a_later_drop_closes_at_that_drops_as_of(conn, pg_url
     refresh(conn)
 
     assert intervals(conn) == [
-        ("a@itworx.com", "Standard", "ITWorx", "2026-04-08", None, "source-dated"),
-        ("b@itworx.com", "Standard", "ITWorx", "2026-04-09", "2026-06-20", "source-dated"),
+        ("a@itworx.com", "Standard", "ITWorx", "2026-04-08", None, "source-dated", None),
+        (
+            "b@itworx.com",
+            "Standard",
+            "ITWorx",
+            "2026-04-09",
+            "2026-06-20",
+            "source-dated",
+            "observation-dated",
+        ),
     ]
 
 
@@ -193,8 +219,16 @@ def test_an_organization_move_opens_a_new_interval(conn, pg_url, tmp_path):
     refresh(conn)
 
     assert intervals(conn) == [
-        ("a@itworx.com", "Standard", "ITWorx", "2026-04-08", "2026-06-20", "source-dated"),
-        ("a@itworx.com", "Standard", "ITWorx2", "2026-06-20", None, "observation-dated"),
+        (
+            "a@itworx.com",
+            "Standard",
+            "ITWorx",
+            "2026-04-08",
+            "2026-06-20",
+            "source-dated",
+            "succession-dated",
+        ),
+        ("a@itworx.com", "Standard", "ITWorx2", "2026-06-20", None, "observation-dated", None),
     ]
 
 
@@ -231,8 +265,17 @@ def test_a_revoked_claude_seat_closes_on_the_revoke_date(conn, pg_url, tmp_path)
     refresh(conn)
 
     assert intervals(conn) == [
-        # Closed on the revoke date, not the 2026-08-02 as-of the drop was taken.
-        ("yara@itworx.com", "Standard", "ITWorx", "2026-04-08", "2026-07-28", "source-dated"),
+        # Closed on the revoke date, not the 2026-08-02 as-of the drop was taken — and the only
+        # shape that records `revoke-dated`, the exact-dated half of the closing basis.
+        (
+            "yara@itworx.com",
+            "Standard",
+            "ITWorx",
+            "2026-04-08",
+            "2026-07-28",
+            "source-dated",
+            "revoke-dated",
+        ),
         # The Copilot interval is untouched: it still opens where it was observed.
         (
             "yara@itworx.com",
@@ -241,6 +284,7 @@ def test_a_revoked_claude_seat_closes_on_the_revoke_date(conn, pg_url, tmp_path)
             "2026-08-02",
             None,
             "observation-dated",
+            None,
         ),
     ]
 
@@ -271,7 +315,7 @@ def test_a_revoked_copilot_subscription_is_not_a_seat_event(conn, pg_url, tmp_pa
     refresh(conn)
 
     assert intervals(conn) == [
-        ("a@itworx.com", "Standard", "ITWorx", "2026-04-08", None, "source-dated")
+        ("a@itworx.com", "Standard", "ITWorx", "2026-04-08", None, "source-dated", None)
     ]
 
 
@@ -303,8 +347,136 @@ def test_a_revoked_claude_tier_alongside_a_held_one_is_a_tier_change(conn, pg_ur
     refresh(conn)
 
     assert intervals(conn) == [
-        ("a@itworx.com", "Standard", "ITWorx", "2026-04-08", "2026-08-01", "source-dated"),
-        ("a@itworx.com", "Premium", "ITWorx", "2026-08-01", None, "source-dated"),
+        # The revoke date (7/28) is inert here, so the close is not `revoke-dated`: it lands
+        # where the new tier opens, which is what a succession means.
+        (
+            "a@itworx.com",
+            "Standard",
+            "ITWorx",
+            "2026-04-08",
+            "2026-08-01",
+            "source-dated",
+            "succession-dated",
+        ),
+        ("a@itworx.com", "Premium", "ITWorx", "2026-08-01", None, "source-dated", None),
+    ]
+
+
+def test_a_revoke_date_after_the_next_interval_opens_is_succession_dated(conn, pg_url, tmp_path):
+    # ADR-0024's clamp, read from the basis side. The person holds no Claude subscription any
+    # more, so the revoke date is live -- but it lands *after* the Copilot interval already
+    # opened, so `valid_to` falls back to that opening. The basis has to say so: reporting
+    # `revoke-dated` against a date the revoke date did not produce is exactly the
+    # date/basis disagreement the two are derived together to prevent.
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-07-25",
+    )
+    load(
+        pg_url,
+        roster(
+            tmp_path,
+            revoking_seat(
+                "a@itworx.com",
+                "Github Copilot",
+                revoked="Claude Standard",
+                revoked_on="8/20/2026",
+            ),
+            name="d2.csv",
+            header=REVOKE_HEADER,
+        ),
+        "2026-08-02",
+    )
+    refresh(conn)
+
+    assert intervals(conn) == [
+        (
+            "a@itworx.com",
+            "Standard",
+            "ITWorx",
+            "2026-04-08",
+            "2026-08-02",
+            "source-dated",
+            "succession-dated",
+        ),
+        (
+            "a@itworx.com",
+            "Github Copilot",
+            "ITWorx",
+            "2026-08-02",
+            None,
+            "observation-dated",
+            None,
+        ),
+    ]
+
+
+def test_an_absence_closes_the_seat_even_when_a_later_revocation_is_recorded(
+    conn, pg_url, tmp_path
+):
+    """Absence outranks a revoke date that cannot have produced the close (ADR-0024, ADR-0025).
+
+    The person vanishes from the 08-02 drop, then returns on 08-09 holding Copilot, carrying a
+    Claude revocation dated *after* the export reporting it -- the unvalidated shape ADR-0024
+    accepted as a residual. The seat closed when they vanished, on 08-02; the revoke date is too
+    late to have dated it, and the successor opens later still.
+
+    The previous derivation answered 08-09 here: its revoke branch was a two-term
+    LEAST(revoke_date, next_valid_from) that never consulted the absence date at all, so an
+    inert revoke date pulled the close *forward* past the drop the seat was missing from --
+    contradicting ADR-0024's "a seat vanishing from a drop still closes at that drop's as-of
+    date". Deriving the date from the basis fixes that by construction: no branch can select a
+    date the basis does not name.
+    """
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-07-25",
+    )
+    load(
+        pg_url,
+        roster(tmp_path, seat("other@itworx.com", assigned="4/9/2026"), name="d2.csv"),
+        "2026-08-02",
+    )
+    load(
+        pg_url,
+        roster(
+            tmp_path,
+            seat("other@itworx.com", assigned="4/9/2026"),
+            revoking_seat(
+                "a@itworx.com",
+                "Github Copilot",
+                revoked="Claude Standard",
+                revoked_on="8/20/2026",
+            ),
+            name="d3.csv",
+            header=REVOKE_HEADER,
+        ),
+        "2026-08-09",
+    )
+    refresh(conn)
+
+    assert intervals(conn) == [
+        (
+            "a@itworx.com",
+            "Standard",
+            "ITWorx",
+            "2026-04-08",
+            "2026-08-02",
+            "source-dated",
+            "observation-dated",
+        ),
+        (
+            "a@itworx.com",
+            "Github Copilot",
+            "ITWorx",
+            "2026-08-09",
+            None,
+            "observation-dated",
+            None,
+        ),
+        ("other@itworx.com", "Standard", "ITWorx", "2026-04-09", None, "source-dated", None),
     ]
 
 
@@ -335,8 +507,16 @@ def test_a_vanished_person_still_closes_at_the_as_of_of_the_drop_they_left(conn,
     refresh(conn)
 
     assert intervals(conn) == [
-        ("stays@itworx.com", "Standard", "ITWorx", "2026-04-08", None, "source-dated"),
-        ("vanishes@itworx.com", "Standard", "ITWorx", "2026-04-09", "2026-08-02", "source-dated"),
+        ("stays@itworx.com", "Standard", "ITWorx", "2026-04-08", None, "source-dated", None),
+        (
+            "vanishes@itworx.com",
+            "Standard",
+            "ITWorx",
+            "2026-04-09",
+            "2026-08-02",
+            "source-dated",
+            "observation-dated",
+        ),
     ]
 
 
@@ -373,8 +553,16 @@ def test_loading_drops_out_of_as_of_order_produces_identical_history(conn, pg_ur
 
     assert intervals(conn) == in_order
     assert in_order == [
-        ("e@itworx.com", "Standard", "ITWorx", "2026-04-08", "2026-06-01", "source-dated"),
-        ("e@itworx.com", "Premium", "ITWorx", "2026-06-01", None, "source-dated"),
+        (
+            "e@itworx.com",
+            "Standard",
+            "ITWorx",
+            "2026-04-08",
+            "2026-06-01",
+            "source-dated",
+            "succession-dated",
+        ),
+        ("e@itworx.com", "Premium", "ITWorx", "2026-06-01", None, "source-dated", None),
     ]
 
 
@@ -412,8 +600,8 @@ def test_deleting_a_bad_drop_and_refreshing_restores_correct_history(conn, pg_ur
     refresh(conn)
 
     assert intervals(conn) == [
-        ("a@itworx.com", "Standard", "ITWorx", "2026-04-08", None, "source-dated"),
-        ("b@itworx.com", "Standard", "ITWorx", "2026-04-09", None, "source-dated"),
+        ("a@itworx.com", "Standard", "ITWorx", "2026-04-08", None, "source-dated", None),
+        ("b@itworx.com", "Standard", "ITWorx", "2026-04-09", None, "source-dated", None),
     ]
 
 
@@ -431,7 +619,7 @@ def test_a_same_day_corrected_re_export_supersedes_the_drop_it_corrects(conn, pg
     refresh(conn)
 
     assert intervals(conn) == [
-        ("a@itworx.com", "Premium", "ITWorx", "2026-04-08", None, "source-dated")
+        ("a@itworx.com", "Premium", "ITWorx", "2026-04-08", None, "source-dated", None)
     ]
 
 
@@ -557,6 +745,9 @@ def test_the_seat_marts_expose_only_person_tier_organization_and_interval_dates(
         ("dim_seat", "valid_from"),
         ("dim_seat", "valid_to"),
         ("dim_seat", "valid_from_basis"),
+        ("dim_seat", "valid_to_basis"),
+        # `dim_seat_current` holds only open intervals, so a closing basis would be NULL on
+        # every row -- it stays off this mart deliberately.
         ("dim_seat_current", "user_email"),
         ("dim_seat_current", "seat_tier"),
         ("dim_seat_current", "anthropic_org_name"),
