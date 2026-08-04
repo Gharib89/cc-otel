@@ -63,6 +63,10 @@ for a minority of cases, a date the derivation previously had to guess.
 - **A `valid_to_basis` column mirroring `valid_from_basis`.** Would make the revoke-dated share of
   closures measurable the way the boundary-basis finding does for openings. Deferred, not rejected —
   one Claude revocation exists in the whole population, so the measure has nothing to measure yet.
+  **Settled by ADR-0025** (#421): added anyway, once it emerged this deferral's re-entry condition
+  was unreachable — the promoted columns take no backfill and the loader refuses a re-load of the
+  very drop carrying that one revocation, so the exact-dated share is zero, not one, until IS
+  exports again.
 
 ## Consequences
 
@@ -76,8 +80,9 @@ for a minority of cases, a date the derivation previously had to guess.
   because it costs a predicate, and because IS's export behaviour may widen: if revocation records
   start covering removals, the same rule silently starts producing more exact dates.
 - `dq_finding`'s `seat_boundary_basis` gauge still measures openings only, so the reported
-  observation-dated share does not move. The closures it cannot see remain invisible to it — the
-  deferred `valid_to_basis` column above is what would change that.
+  observation-dated share does not move. ADR-0025 added `valid_to_basis`, so the closures are no
+  longer invisible — but they are visible on `marts.dim_seat`, not through this gauge, which
+  ADR-0025 deliberately left measuring openings.
 - A revoke date is not validated against the drop's as-of date the way an assignment date is
   (`impossible_as_of`). A revocation dated after the export reporting it would be clamped by the
   interval logic rather than refused at load. Accepted: no such row exists, and the clamp is

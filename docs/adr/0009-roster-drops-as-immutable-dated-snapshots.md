@@ -110,7 +110,8 @@ denominator that did not exist yet. Decision log: #290; implementation: #292 (in
   the source emails out of band.
 - Closure and tier-change boundaries are observation-dated where the source supplies no date, so
   worst-case error is half the drop cadence (~1 week). Every derived interval carries a
-  `valid_from_basis` marker (#293) so the inferred share of the timeline is measurable.
+  `valid_from_basis` marker (#293) so the inferred share of the timeline is measurable — of its
+  opening half only, until ADR-0025 added the closing counterpart `valid_to_basis`.
 - A plausible-looking bad export dropping a handful of people passes the guards; it is caught
   after the fact by the telemetry-after-close finding (#293) — Anthropic enforces licensing
   server-side, so a genuinely revoked seat cannot emit.
