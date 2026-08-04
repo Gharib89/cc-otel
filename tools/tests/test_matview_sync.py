@@ -88,6 +88,19 @@ def test_render_canonical_staging_view_uses_or_replace_and_no_grant() -> None:
     assert text.endswith(";\n") and not text.endswith("\n\n")
 
 
+def test_render_canonical_staging_matview_would_carry_no_grant() -> None:
+    # ADR-0026: the grant rule keys on schema, not kind — a staging matview
+    # (none exists today) must not render a grant that would never be live.
+    obj = DbObject(
+        kind="matview",
+        schema="staging",
+        name="stg_probe_mv",
+        definition=" SELECT 1 AS k;",
+        index_def="CREATE UNIQUE INDEX stg_probe_mv_pk ON staging.stg_probe_mv USING btree (k)",
+    )
+    assert "GRANT" not in render_canonical(obj)
+
+
 def test_render_canonical_marts_view_carries_the_reader_grant() -> None:
     text = render_canonical(_MARTS_VIEW)
     assert "CREATE OR REPLACE VIEW marts.dq_finding_current AS\n SELECT finding_type" in text

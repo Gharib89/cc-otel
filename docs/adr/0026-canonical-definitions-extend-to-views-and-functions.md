@@ -30,6 +30,10 @@ The tool keeps its name (`matview_sync`) — the check/author/bootstrap skeleton
 git-HEAD down-body rule, and throwaway-DB verify loop are kind-agnostic; only the catalog reader
 and the migration template vary, held in one per-kind table.
 
+Object names are unique across both schemas and all kinds — the divergence key, the on-disk file
+stem, and `--name` resolution all assume it, and the tool enforces it with a hard error rather
+than a silent last-write-wins.
+
 ## Migration template per kind
 
 A matview migration stays DROP + CREATE (ADR-0008). A plain view or function generates

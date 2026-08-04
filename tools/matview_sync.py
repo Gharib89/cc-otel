@@ -58,6 +58,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal, NamedTuple
 
 import psycopg
 
@@ -76,12 +77,22 @@ _HEADER = (
     "-- Verified against {catalog} by --check (CI + local gate).\n"
 )
 
-# Per-kind facts: the header noun, the catalog --check reads, and the dir tier
-# the canonical file lives under (db/<tier>/<schema>/<name>.sql).
-_KINDS: dict[str, tuple[str, str, str]] = {
-    "matview": ("mart", "pg_matviews.definition", "views"),
-    "view": ("view", "pg_views.definition", "views"),
-    "function": ("function", "pg_get_functiondef()", "functions"),
+Kind = Literal["matview", "view", "function"]
+
+
+class _KindSpec(NamedTuple):
+    """Per-kind facts — the one table every kind-dependent site reads (ADR-0026)."""
+
+    noun: str  # header wording
+    catalog: str  # what --check verifies against, named in the header
+    tier: str  # dir tier under db/ (db/<tier>/<schema>/<name>.sql)
+    drop_word: str  # DROP <word> IF EXISTS, for a brand-new object's down body
+
+
+_KINDS: dict[Kind, _KindSpec] = {
+    "matview": _KindSpec("mart", "pg_matviews.definition", "views", "MATERIALIZED VIEW"),
+    "view": _KindSpec("view", "pg_views.definition", "views", "VIEW"),
+    "function": _KindSpec("function", "pg_get_functiondef()", "functions", "FUNCTION"),
 }
 
 # The CREATE line every canonical file opens its DDL with — how --name learns
@@ -92,7 +103,7 @@ _CREATE_RE = re.compile(
     r" (marts|staging)\.([a-z_][a-z0-9_]*)",
     re.MULTILINE,
 )
-_KIND_BY_CREATE = {
+_KIND_BY_CREATE: dict[str, Kind] = {
     "MATERIALIZED VIEW": "matview",
     "OR REPLACE VIEW": "view",
     "OR REPLACE FUNCTION": "function",
@@ -112,7 +123,7 @@ class DbObject:
     functions. ``index_def`` is the matview's unique index (no ``;``); ``None``
     for the other kinds."""
 
-    kind: str  # 'matview' | 'view' | 'function'
+    kind: Kind
     schema: str  # 'marts' | 'staging'
     name: str
     definition: str
@@ -129,9 +140,13 @@ def render_canonical(obj: DbObject) -> str:
     (write to disk) and ``--check`` (render from live, compare to disk). A marts
     view or matview carries the reader grant; staging objects and functions
     have none to carry (#426)."""
-    noun, catalog, _ = _KINDS[obj.kind]
-    header = _HEADER.format(schema=obj.schema, name=obj.name, noun=noun, catalog=catalog)
-    grant = f"\nGRANT SELECT ON {obj.schema}.{obj.name} TO {_READ_ROLE};\n"
+    spec = _KINDS[obj.kind]
+    header = _HEADER.format(schema=obj.schema, name=obj.name, noun=spec.noun, catalog=spec.catalog)
+    grant = (
+        f"\nGRANT SELECT ON {obj.schema}.{obj.name} TO {_READ_ROLE};\n"
+        if obj.schema == "marts"
+        else ""
+    )
     if obj.kind == "matview":
         return (
             header
@@ -143,7 +158,7 @@ def render_canonical(obj: DbObject) -> str:
         )
     if obj.kind == "view":
         body = header + f"CREATE OR REPLACE VIEW {obj.schema}.{obj.name} AS\n{obj.definition}\n"
-        return body + grant if obj.schema == "marts" else body
+        return body + grant
     return header + f"{obj.definition.rstrip()};\n"
 
 
@@ -171,19 +186,19 @@ def render_migration(slug: str, current: str, previous: str | None) -> str:
     schema, name = match.group(2), match.group(3)
     if name != slug:
         raise ValueError(f"{slug}: canonical file creates {schema}.{name}, not {slug}")
+    drop_word = _KINDS[kind].drop_word
     if kind == "matview":
         if previous is not None:
-            up_body = f"DROP MATERIALIZED VIEW {schema}.{slug};\n\n{current.rstrip()}"
-            down_body = f"DROP MATERIALIZED VIEW {schema}.{slug};\n\n{previous.rstrip()}"
+            up_body = f"DROP {drop_word} {schema}.{slug};\n\n{current.rstrip()}"
+            down_body = f"DROP {drop_word} {schema}.{slug};\n\n{previous.rstrip()}"
         else:
             up_body = current.rstrip()
-            down_body = f"DROP MATERIALIZED VIEW IF EXISTS {schema}.{slug};"
+            down_body = f"DROP {drop_word} IF EXISTS {schema}.{slug};"
     else:
         up_body = current.rstrip()
         if previous is not None:
             down_body = previous.rstrip()
         else:
-            drop_word = "VIEW" if kind == "view" else "FUNCTION"
             down_body = f"DROP {drop_word} IF EXISTS {schema}.{slug};"
     return (
         f"-- migrate:up\n-- matview_sync: {slug}\n-- noqa: disable=all\n\n"
@@ -291,8 +306,7 @@ def read_live_objects(conn: psycopg.Connection) -> list[DbObject]:
 
 def _object_dir(obj: DbObject) -> Path:
     """The canonical dir for ``obj``: ``db/<tier>/<schema>/``."""
-    _, _, tier = _KINDS[obj.kind]
-    return _REPO_ROOT / "db" / tier / obj.schema
+    return _REPO_ROOT / "db" / _KINDS[obj.kind].tier / obj.schema
 
 
 def _canonical_paths() -> list[Path]:

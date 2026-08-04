@@ -155,6 +155,22 @@ def test_function_roundtrip_replaces_and_reconverges(conn: psycopg.Connection) -
         conn.execute("DROP FUNCTION IF EXISTS marts._rt_probe_fn")
 
 
+def test_main_check_exits_zero_against_a_migrated_db(pg_url: str) -> None:
+    # The --check gate through the real CLI — first coverage for main -> _run_check
+    # (#426 deliverable). --database-url skips the self-spun container.
+    assert ms.main(["--check", "--database-url", pg_url]) == 0
+
+
+def test_main_check_exits_one_on_divergence(
+    pg_url: str, tmp_path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # An empty canonical tree diverges from every live object: exit 1, report on
+    # stderr — the gate contract CI and the local gate act on.
+    monkeypatch.setattr(ms, "_REPO_ROOT", tmp_path)
+    assert ms.main(["--check", "--database-url", pg_url]) == 1
+    assert "no canonical file" in capsys.readouterr().err
+
+
 def test_author_new_mart_writes_migration_normalizes_and_converges(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
