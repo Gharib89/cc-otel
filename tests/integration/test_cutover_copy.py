@@ -651,6 +651,24 @@ def test_sweep_does_not_target_a_seat_whose_watermark_predates_the_floor(
     assert emails(target, "raw.metrics", "ts") == [(SEAT, BELOW_FLOOR)]
 
 
+def test_sweep_target_sets_stay_per_table(
+    conn: psycopg.Connection, pg_url: str, target: psycopg.Connection, target_url: str
+) -> None:
+    # The split case #409 names (engy.salem): flipped for raw.metrics, absent from raw.events
+    # entirely -- a sweep target for one table and not the other, because each table carries its
+    # own watermark set and event-time column.
+    seed_last_batch(conn)
+    metric(conn, EARLY)
+    event(conn, EARLY)
+    metric(target, FLIP)
+
+    copy(pg_url, target_url, "--sweep")
+
+    # raw.metrics moved the seat's normal watermark-bounded window; raw.events swept it whole.
+    assert emails(target, "raw.metrics", "ts") == [(SEAT, EARLY), (SEAT, FLIP)]
+    assert emails(target, "raw.events", "event_time") == [(SEAT, EARLY)]
+
+
 def test_sweep_never_copies_rows_with_no_user_email(
     conn: psycopg.Connection, pg_url: str, target: psycopg.Connection, target_url: str
 ) -> None:

@@ -506,7 +506,8 @@ def main(argv: list[str] | None = None) -> int:
                         " watermarks(), and sweep targets are seats production has never seen"
                     )
                 print(message)
-            finite_marks = {e: m for e, m in all_marks.items() if e not in set(below_floor)}
+            dropped = set(below_floor)
+            finite_marks = {e: m for e, m in all_marks.items() if e not in dropped}
             marks: dict[str, datetime | str] = dict(finite_marks)
 
             sweep_emails: list[str] = []
