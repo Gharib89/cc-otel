@@ -80,8 +80,9 @@ def copy(pg_url: str, target_url: str, *extra: str) -> None:
     assert run(pg_url, target_url, "--execute", *extra) == 0
 
 
-def quiet_interim(conn: psycopg.Connection, hours: float = 25) -> None:
-    """Seed ``meta.processed_batches`` so interim reads as write-quiet for ``--sweep`` (ADR-0021).
+def seed_last_batch(conn: psycopg.Connection, hours: float = 25) -> None:
+    """Seed ``meta.processed_batches`` with a batch ``hours`` old — at the 25h default interim
+    reads as write-quiet for ``--sweep``, at 1h it does not (ADR-0021).
 
     The ``conn`` fixture does not truncate this table (other tests may have left rows), so every
     sweep test resets it and seeds its own row.
@@ -534,7 +535,7 @@ def test_sweep_copies_a_seats_whole_window_when_production_has_never_seen_it(
 ) -> None:
     # #409's target: interim holds rows for this seat above the floor, and production's
     # watermarks() has no entry for it at all -- not unflipped-with-a-pending-watermark, never seen.
-    quiet_interim(conn)
+    seed_last_batch(conn)
     metric(conn, EARLY)
     metric(conn, LATE)
 
@@ -550,7 +551,7 @@ def test_a_sweep_rerun_copies_nothing_further(
 ) -> None:
     # Idempotent the same way the normal path is: once swept, the seat has production rows, so
     # it is no longer absent from watermarks() and the next run's window for it collapses.
-    quiet_interim(conn)
+    seed_last_batch(conn)
     metric(conn, EARLY)
     metric(conn, LATE)
 
@@ -569,7 +570,7 @@ def test_sweep_refuses_when_interim_has_written_within_the_last_24_hours(
 ) -> None:
     # Write-quiet is the load-bearing guarantee (ADR-0021): a seed batch an hour old means interim
     # could still gain rows for this seat, so the sweep must refuse rather than risk stranding them.
-    quiet_interim(conn, hours=1)
+    seed_last_batch(conn, hours=1)
     metric(conn, EARLY)
 
     assert run(pg_url, target_url, "--execute", "--sweep") == 1
@@ -585,8 +586,8 @@ def test_sweep_refuses_when_no_batch_has_ever_been_recorded(
     target_url: str,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # MAX(processed_at) is NULL with no rows at all -- quiet cannot be measured, so this refuses
-    # too, conservatively (the issue did not cover this case explicitly).
+    # MAX(processed_at) is NULL with no rows at all -- write-quiet cannot be measured, so this
+    # refuses too, conservatively (the issue did not cover this case explicitly).
     conn.execute("TRUNCATE meta.processed_batches")
     metric(conn, EARLY)
 
@@ -597,11 +598,15 @@ def test_sweep_refuses_when_no_batch_has_ever_been_recorded(
 
 
 def test_sweep_leaves_an_already_flipped_seat_to_its_normal_window(
-    conn: psycopg.Connection, pg_url: str, target: psycopg.Connection, target_url: str
+    conn: psycopg.Connection,
+    pg_url: str,
+    target: psycopg.Connection,
+    target_url: str,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # Both ride in the same run: SEAT is already flipped, so --sweep must not touch it -- only its
     # normal watermark-bounded window moves. OTHER has no production rows at all -- a sweep target.
-    quiet_interim(conn)
+    seed_last_batch(conn)
     metric(conn, EARLY)
     metric(conn, LATE)  # above SEAT's own watermark -- stays in interim either way
     metric(target, FLIP)
@@ -609,6 +614,10 @@ def test_sweep_leaves_an_already_flipped_seat_to_its_normal_window(
 
     copy(pg_url, target_url, "--sweep")
 
+    # A sweep target is by definition never flipped, so the count line keeps the two apart.
+    assert "raw.metrics: 1 seat(s) flipped + 1 sweep target(s), 2 row(s) to copy" in (
+        capsys.readouterr().out
+    )
     assert emails(target, "raw.metrics", "ts") == [
         (SEAT, EARLY),
         (OTHER, EARLY),
@@ -626,7 +635,7 @@ def test_sweep_does_not_target_a_seat_whose_watermark_predates_the_floor(
     # A below-floor seat has a production row, so it is present in watermarks() and can never be a
     # sweep target -- unlike a seat production has never seen at all. The existing not-copyable
     # message gains a clause saying so.
-    quiet_interim(conn)
+    seed_last_batch(conn)
     metric(conn, EARLY)
     metric(target, BELOW_FLOOR)
 
@@ -648,7 +657,7 @@ def test_sweep_never_copies_rows_with_no_user_email(
     # Rows with no user_email carry no seat identity to derive a sweep target from, and cannot
     # participate in the watermark collapse a re-run relies on -- never swept, whatever the count
     # (ADR-0021's accepted residual).
-    quiet_interim(conn)
+    seed_last_batch(conn)
     metric(conn, EARLY, email=None)
 
     copy(pg_url, target_url, "--sweep")

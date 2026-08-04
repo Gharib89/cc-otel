@@ -96,7 +96,7 @@ Migration-authoring loop, the throwaway-container rationale, and the `.env` cave
 |---|---|
 | `db/` | dbmate migrations + `schema.sql` + `views/marts/` canonical mart definitions |
 | `bootstrap/` | env bring-up runbook + PowerShell scripts (operator-run) |
-| `tools/` | Curation + ops tooling over the blob reservoir (sweep, basis drift, data dictionary, replay, scrub, compact) + reference-data ingest (`roster_load.py`) + the interim->prod cutover copy (`cutover_copy.py`, ADR-0020) + CI gate-path derivation (`gate_paths.py`) |
+| `tools/` | Curation + ops tooling over the blob reservoir (sweep, basis drift, data dictionary, replay, scrub, compact) + reference-data ingest (`roster_load.py`) + the interim->prod cutover copy + terminal sweep (`cutover_copy.py`, ADR-0020/0021) + CI gate-path derivation (`gate_paths.py`) |
 | `analysis/` | marimo + DuckDB notebook lab over the blob reservoir (on-demand local EDA, `--group analysis`; #87) |
 | `scripts/` | skill-sync + cloud-ship bootstrap + dev-migrate + `ship/` (the ship skill's deterministic mechanics: preflight, isolate, claim, local-gate, ci-wait, merge) + `backfill/` (one-shot POC→interim backfill, ADR-0006) |
 | `.claude/skills/` | tracked agent skills (vendored + project-native) |
