@@ -19,7 +19,10 @@
 --
 -- The Claude test reads the *raw* subscription values, not `seat_tier`: `normalize_tier` strips
 -- the `Claude ` prefix and passes other products through verbatim, so a normalized tier cannot
--- say which product it came from.
+-- say which product it came from. LIKE, not ILIKE, deliberately: this is the same case-sensitive
+-- prefix test `normalize_tier` applies, and the two must agree. A re-cased export would land an
+-- unstripped `seat_tier` *and* stop exact-dating here -- one visible symptom, not two silent ones.
+-- Loosening one side alone would split them.
 --
 -- Consequence, intended: the intervals of one person may now have a *gap*. A person whose
 -- Claude seat was revoked on the 28th and who still appears in the next drop holding Github
@@ -28,7 +31,8 @@
 -- where the next interval opens, so no seat-day is counted twice.
 --
 -- Same output columns as before, so `CREATE OR REPLACE` keeps the three seat marts and the two
--- dependent staging views attached; the down section restores the body at git HEAD.
+-- dependent staging views attached; the down section restores git HEAD's derivation, stripped of
+-- its explanatory comments (matching how the other hand-authored staging-view migrations do it).
 CREATE OR REPLACE VIEW staging.stg_seat_interval AS
 WITH drop_of_date AS (
     -- One observation point per as-of date. ref.roster_drop.as_of_date is deliberately not
