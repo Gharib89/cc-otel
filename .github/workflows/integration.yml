@@ -79,7 +79,8 @@ jobs:
       - name: Verify column_spec converges with the migrations (#167)
         run: uv run python -m tools.spec_sync --check
 
-      # Every mart body lives once as a canonical db/views/marts/ file; this proves
-      # the files converge with pg_matviews.definition on a from-zero DB (#263).
-      - name: Verify canonical mart files converge with the marts (#263)
+      # Every view, matview, and function in marts + staging lives once as a
+      # canonical db/views/ or db/functions/ file; this proves the files converge
+      # with the catalog deparse on a from-zero DB (#263, ADR-0026).
+      - name: Verify canonical definitions converge with the live objects (#263)
         run: uv run python -m tools.matview_sync --check

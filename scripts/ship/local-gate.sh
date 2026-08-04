@@ -200,8 +200,9 @@ if wf integration; then
   # spec_sync self-spins a throwaway container; unset DATABASE_URL so it never
   # reaches for a real DB (.env points at Azure — CLAUDE.md).
   docker_gate spec-sync bash -c 'unset DATABASE_URL; uv run python -m tools.spec_sync --check'
-  # matview_sync self-spins a throwaway container too (#263): every mart body must
-  # converge with its canonical db/views/marts/ file, bidirectionally.
+  # matview_sync self-spins a throwaway container too (#263): every view, matview,
+  # and function body must converge with its canonical db/views/ or db/functions/
+  # file, bidirectionally (ADR-0026).
   docker_gate matview-sync bash -c 'unset DATABASE_URL; uv run python -m tools.matview_sync --check'
 fi
 
