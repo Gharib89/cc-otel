@@ -140,11 +140,15 @@ A **seat** whose holder's email has never appeared in telemetry — the compleme
 _Avoid_: idle seat, unadopted seat, silent seat
 
 **Roster drop**:
-One roster file as received from IS, identified by its operator-supplied as-of date — a current-state snapshot with no status column, no revocation date, no export timestamp. Landed immutably in `ref` (`roster_drop` + `seat_roster_snapshot`, assignment grain) by `tools.roster_load`; seat history is derived from the accumulated drops, never merged at load time. Absence from a newer drop is revocation.
+One roster file as received from IS, identified by its operator-supplied as-of date — a current-state snapshot with no person-level status column and no export timestamp. Landed immutably in `ref` (`roster_drop` + `seat_roster_snapshot`, assignment grain) by `tools.roster_load`; seat history is derived from the accumulated drops, never merged at load time. Absence from a newer drop is revocation. Since the 2026-08-02 drop the file also carries **revocation events** (ADR-0024) — which subscription was revoked, and when — but they cover a minority of removals and do not displace absence.
 _Avoid_: roster import, seat file
 
+**Revocation event**:
+IS's record that one subscription was revoked on one date — `revoked_subscription_raw` + `revoke_date` on `ref.seat_roster_snapshot`, at assignment grain, first carried by the 2026-08-02 **roster drop** (ADR-0024). Per *subscription*, not per person: most are Github Copilot revocations, and a person can hold a revocation record while still holding a Claude subscription. It exact-dates a **seat interval**'s close only when the person is left holding no Claude subscription at all; otherwise it is inert.
+_Avoid_: revocation status, seat closure (the closure is the derived interval boundary, not this record)
+
 **Seat interval**:
-A contiguous period over which a **seat**'s tier and Anthropic organization were unchanged — the derived SCD2 record, one row of `marts.dim_seat` (#293). Half-open `[valid_from, valid_to)`, with `valid_to` null while the seat is open, so a tier change closes one interval exactly where the next opens and no **seat-day** is counted twice. Each boundary carries a `valid_from_basis` marker: source-dated (from IS's assignment date) or observation-dated (from the drop's as-of date, all that exists for a closure until IS supplies a revocation date).
+A contiguous period over which a **seat**'s tier and Anthropic organization were unchanged — the derived SCD2 record, one row of `marts.dim_seat` (#293). Half-open `[valid_from, valid_to)`, with `valid_to` null while the seat is open, so a tier change closes one interval exactly where the next opens and no **seat-day** is counted twice. A person's intervals need not be contiguous with each other, though: a **revocation event** can close a Claude seat before the drop that reported it, leaving a genuine seatless gap (ADR-0024). Each boundary carries a `valid_from_basis` marker: source-dated (from IS's assignment date) or observation-dated (from the drop's as-of date, all that exists for a closure IS records no revocation date for).
 _Avoid_: seat history row, validity period
 
 **Seat-day**:
