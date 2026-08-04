@@ -8,6 +8,10 @@ columns are per-subscription revocation *events*, so the truncation guards and c
 stay exactly as written here; a revoke date only exact-dates a closure where the person is left
 holding no Claude subscription, and that exception can leave a genuine gap in one person's intervals.
 
+**Amended in place by #420 for the as-of source** — IS's export timestamp arrived as a dated
+filename, so the loader reads the as-of from there when present. No new ADR: the *as-of* decision
+below is refined, not reversed — the date is still declared and still validated identically.
+
 The `seat_roster` table feeding the adoption report is fabricated from telemetry (#163): tier is
 wrong for real users, "off-roster" is structurally impossible, and the licensed-seat denominator
 equals the observed-user count by construction. IS now supplies a real roster by email, roughly
@@ -58,7 +62,8 @@ denominator that did not exist yet. Decision log: #290; implementation: #292 (in
   consecutive absences) was rejected: it pays permanent latency on every legitimate revocation to
   defend indirectly against truncation, and derived history already provides the recovery path —
   delete the bad drop, refresh, history heals.
-- **The as-of date is the operator's, validated against what the data can prove.** The file
+- **The as-of date is declared, never inferred from the filesystem, and validated against what
+  the data can prove.** The file
   carries no in-file export timestamp and a filesystem timestamp resets on copy. Since the
   2026-08-02 drop the *filename* carries the export date, so the loader reads it from there when
   present and `--as-of` overrides it (#420) — the source widens, the validation does not. An

@@ -152,7 +152,10 @@ def normalize_tier(raw: str | None) -> str | None:
 
 
 def as_of_from_filename(filename: str) -> date | None:
-    """The export date IS puts in the filename — ``claude_users_20260802.csv`` -> 2026-08-02.
+    """The date a dated filename carries — ``claude_users_20260802.csv`` -> 2026-08-02.
+
+    Any unambiguous eight-digit run in the name is taken to be IS's export date; nothing here can
+    tell one introduced downstream from one IS wrote, which is what ``--as-of`` is for.
 
     The dated filename is the form the export timestamp #291 asked for actually arrived in
     (#420); there is still no in-file timestamp column. The eight-digit run must not be
