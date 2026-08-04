@@ -742,7 +742,9 @@ CREATE TABLE ref.seat_roster_snapshot (
     manager_name text,
     department text,
     cost_center text,
-    extra jsonb DEFAULT '{}'::jsonb NOT NULL
+    extra jsonb DEFAULT '{}'::jsonb NOT NULL,
+    revoked_subscription_raw text,
+    revoke_date date
 );
 
 
@@ -817,7 +819,13 @@ CREATE VIEW staging.stg_seat_interval AS
             s.user_email,
             (array_agg(s.seat_tier ORDER BY s.subscription_seq))[1] AS seat_tier,
             (array_agg(s.anthropic_org_name ORDER BY s.subscription_seq))[1] AS anthropic_org_name,
-            (array_agg(s.assignment_date ORDER BY s.subscription_seq))[1] AS assignment_date
+            (array_agg(s.assignment_date ORDER BY s.subscription_seq))[1] AS assignment_date,
+            bool_or(COALESCE((s.subscription_raw ~~ 'Claude %'::text), false)) AS holds_claude,
+            max(
+                CASE
+                    WHEN (s.revoked_subscription_raw ~~ 'Claude %'::text) THEN s.revoke_date
+                    ELSE NULL::date
+                END) AS revoked_claude_on
            FROM (ref.seat_roster_snapshot s
              JOIN drop_of_date d ON ((s.drop_id = d.drop_id)))
           GROUP BY d.as_of_date, s.user_email
@@ -827,8 +835,13 @@ CREATE VIEW staging.stg_seat_interval AS
             o.seat_tier,
             o.anthropic_org_name,
             o.assignment_date,
+            o.holds_claude,
             q.prev_as_of,
             q.next_as_of,
+                CASE
+                    WHEN (NOT o.holds_claude) THEN o.revoked_claude_on
+                    ELSE NULL::date
+                END AS claude_closed_on,
             lag(o.as_of_date) OVER (PARTITION BY o.user_email ORDER BY o.as_of_date) AS prev_seen_on,
             lag(o.seat_tier) OVER (PARTITION BY o.user_email ORDER BY o.as_of_date) AS prev_tier,
             lag(o.anthropic_org_name) OVER (PARTITION BY o.user_email ORDER BY o.as_of_date) AS prev_org,
@@ -842,6 +855,8 @@ CREATE VIEW staging.stg_seat_interval AS
             sighting.anthropic_org_name,
             sighting.assignment_date,
             sighting.next_as_of,
+            sighting.holds_claude,
+            sighting.claude_closed_on,
             ((sighting.prev_seen_on IS NULL) OR (sighting.prev_seen_on IS DISTINCT FROM sighting.prev_as_of) OR (sighting.seat_tier IS DISTINCT FROM sighting.prev_tier) OR (sighting.anthropic_org_name IS DISTINCT FROM sighting.prev_org)) AS starts_interval,
             ((sighting.assignment_date IS NOT NULL) AND ((sighting.prev_seen_on IS NULL) OR (sighting.assignment_date IS DISTINCT FROM sighting.prev_assignment_date))) AS is_source_dated
            FROM sighting
@@ -852,6 +867,8 @@ CREATE VIEW staging.stg_seat_interval AS
             boundary.anthropic_org_name,
             boundary.next_as_of,
             boundary.starts_interval,
+            boundary.holds_claude,
+            boundary.claude_closed_on,
                 CASE
                     WHEN boundary.is_source_dated THEN boundary.assignment_date
                     ELSE boundary.as_of_date
@@ -869,6 +886,8 @@ CREATE VIEW staging.stg_seat_interval AS
             dated.next_as_of,
             dated.valid_from,
             dated.valid_from_basis,
+            dated.holds_claude,
+            dated.claude_closed_on,
             sum(
                 CASE
                     WHEN dated.starts_interval THEN 1
@@ -884,6 +903,8 @@ CREATE VIEW staging.stg_seat_interval AS
             (array_agg(numbered.anthropic_org_name ORDER BY numbered.as_of_date))[1] AS anthropic_org_name,
             (array_agg(numbered.valid_from ORDER BY numbered.as_of_date))[1] AS valid_from,
             (array_agg(numbered.valid_from_basis ORDER BY numbered.as_of_date))[1] AS valid_from_basis,
+            (array_agg(numbered.holds_claude ORDER BY numbered.as_of_date))[1] AS is_claude_seat,
+            (array_agg(numbered.claude_closed_on ORDER BY numbered.as_of_date))[1] AS claude_closed_on,
             (array_agg(numbered.next_as_of ORDER BY numbered.as_of_date DESC))[1] AS next_as_of_after_last_seen
            FROM numbered
           GROUP BY numbered.user_email, numbered.interval_seq
@@ -896,6 +917,7 @@ CREATE VIEW staging.stg_seat_interval AS
             x.first_seen_on,
             x.last_seen_on,
                 CASE
+                    WHEN (x.is_claude_seat AND (x.next_claude_closed_on IS NOT NULL)) THEN GREATEST(x.valid_from, LEAST(x.next_claude_closed_on, x.next_valid_from))
                     WHEN (LEAST(x.next_as_of_after_last_seen, x.next_valid_from) IS NULL) THEN NULL::date
                     ELSE GREATEST(x.valid_from, LEAST(x.next_as_of_after_last_seen, x.next_valid_from))
                 END AS valid_to
@@ -907,8 +929,11 @@ CREATE VIEW staging.stg_seat_interval AS
                     r.anthropic_org_name,
                     r.valid_from,
                     r.valid_from_basis,
+                    r.is_claude_seat,
+                    r.claude_closed_on,
                     r.next_as_of_after_last_seen,
-                    lead(r.valid_from) OVER (PARTITION BY r.user_email ORDER BY r.interval_seq) AS next_valid_from
+                    lead(r.valid_from) OVER (PARTITION BY r.user_email ORDER BY r.interval_seq) AS next_valid_from,
+                    lead(r.claude_closed_on) OVER (PARTITION BY r.user_email ORDER BY r.interval_seq) AS next_claude_closed_on
                    FROM interval_run r) x
         )
  SELECT user_email,
@@ -1921,4 +1946,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260802135613'),
     ('20260802135640'),
     ('20260802135724'),
-    ('20260802150012');
+    ('20260802150012'),
+    ('20260804100116'),
+    ('20260804100120');

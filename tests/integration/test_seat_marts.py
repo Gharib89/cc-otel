@@ -16,11 +16,25 @@ from _helpers import ins_event, ins_metric
 from tools.roster_load import main
 
 HEADER = "email,Team,subscription_1,assignment_date_1"
+REVOKE_HEADER = f"{HEADER},revoked_subscription_1,revoke_date_1"
 SEAT_MARTS = ("dim_seat", "dim_seat_current", "fact_seat_day")
 
 
 def seat(email: str, tier: str = "Claude Standard", assigned: str = "", org: str = "ITWorx") -> str:
     return f"{email},{org},{tier},{assigned}"
+
+
+def revoking_seat(
+    email: str,
+    tier: str = "Claude Standard",
+    assigned: str = "",
+    *,
+    revoked: str = "",
+    revoked_on: str = "",
+    org: str = "ITWorx",
+) -> str:
+    """A row for ``REVOKE_HEADER``: the subscription held now, plus the one IS says was revoked."""
+    return f"{seat(email, tier, assigned, org)},{revoked},{revoked_on}"
 
 
 def roster(tmp_path: Path, *rows: str, name: str, header: str = HEADER) -> Path:
@@ -181,6 +195,148 @@ def test_an_organization_move_opens_a_new_interval(conn, pg_url, tmp_path):
     assert intervals(conn) == [
         ("a@itworx.com", "Standard", "ITWorx", "2026-04-08", "2026-06-20", "source-dated"),
         ("a@itworx.com", "Standard", "ITWorx2", "2026-06-20", None, "observation-dated"),
+    ]
+
+
+# --- revocation dating (#419) -----------------------------------------------
+
+
+def test_a_revoked_claude_seat_closes_on_the_revoke_date(conn, pg_url, tmp_path):
+    """The 2026-08-02 drop's one Claude revocation (`yara.yassien`), reproduced.
+
+    The person keeps appearing in the export, holding Github Copilot, and IS records the Claude
+    subscription it revoked. The revoke date is deliberately earlier than the drop's as-of here
+    — the whole point of the column is that it says something the as-of cannot.
+    """
+    load(
+        pg_url,
+        roster(tmp_path, seat("yara@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-07-25",
+    )
+    load(
+        pg_url,
+        roster(
+            tmp_path,
+            revoking_seat(
+                "yara@itworx.com",
+                "Github Copilot",
+                revoked="Claude Standard",
+                revoked_on="7/28/2026",
+            ),
+            name="d2.csv",
+            header=REVOKE_HEADER,
+        ),
+        "2026-08-02",
+    )
+    refresh(conn)
+
+    assert intervals(conn) == [
+        # Closed on the revoke date, not the 2026-08-02 as-of the drop was taken.
+        ("yara@itworx.com", "Standard", "ITWorx", "2026-04-08", "2026-07-28", "source-dated"),
+        # The Copilot interval is untouched: it still opens where it was observed.
+        (
+            "yara@itworx.com",
+            "Github Copilot",
+            "ITWorx",
+            "2026-08-02",
+            None,
+            "observation-dated",
+        ),
+    ]
+
+
+def test_a_revoked_copilot_subscription_is_not_a_seat_event(conn, pg_url, tmp_path):
+    # 42 of the 43 revocation records in the 2026-08-02 drop are this shape. The person's Claude
+    # seat is untouched, so nothing may close — not even a zero-length interval.
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-07-25",
+    )
+    load(
+        pg_url,
+        roster(
+            tmp_path,
+            revoking_seat(
+                "a@itworx.com",
+                assigned="4/8/2026",
+                revoked="Github Copilot",
+                revoked_on="7/28/2026",
+            ),
+            name="d2.csv",
+            header=REVOKE_HEADER,
+        ),
+        "2026-08-02",
+    )
+    refresh(conn)
+
+    assert intervals(conn) == [
+        ("a@itworx.com", "Standard", "ITWorx", "2026-04-08", None, "source-dated")
+    ]
+
+
+def test_a_revoked_claude_tier_alongside_a_held_one_is_a_tier_change(conn, pg_url, tmp_path):
+    # A tier move records the old tier as revoked while the person still holds a Claude
+    # subscription. Exact-dating that close would open a gap the person never had, so the
+    # interval logic's own boundary wins: the old tier closes where the new one opens.
+    load(
+        pg_url,
+        roster(tmp_path, seat("a@itworx.com", assigned="4/8/2026"), name="d1.csv"),
+        "2026-07-25",
+    )
+    load(
+        pg_url,
+        roster(
+            tmp_path,
+            revoking_seat(
+                "a@itworx.com",
+                "Claude Premium",
+                "8/1/2026",
+                revoked="Claude Standard",
+                revoked_on="7/28/2026",
+            ),
+            name="d2.csv",
+            header=REVOKE_HEADER,
+        ),
+        "2026-08-02",
+    )
+    refresh(conn)
+
+    assert intervals(conn) == [
+        ("a@itworx.com", "Standard", "ITWorx", "2026-04-08", "2026-08-01", "source-dated"),
+        ("a@itworx.com", "Premium", "ITWorx", "2026-08-01", None, "source-dated"),
+    ]
+
+
+def test_a_vanished_person_still_closes_at_the_as_of_of_the_drop_they_left(conn, pg_url, tmp_path):
+    # Four people left the 2026-08-02 population this way: simply absent, with no revocation
+    # record of any kind. The promoted columns must not weaken that inference — an absent person
+    # has no row in the drop, so there is nothing for the revoke date to date.
+    load(
+        pg_url,
+        roster(
+            tmp_path,
+            seat("stays@itworx.com", assigned="4/8/2026"),
+            seat("vanishes@itworx.com", assigned="4/9/2026"),
+            name="d1.csv",
+        ),
+        "2026-07-25",
+    )
+    load(
+        pg_url,
+        roster(
+            tmp_path,
+            revoking_seat("stays@itworx.com", assigned="4/8/2026"),
+            name="d2.csv",
+            header=REVOKE_HEADER,
+        ),
+        "2026-08-02",
+    )
+    refresh(conn)
+
+    assert intervals(conn) == [
+        ("stays@itworx.com", "Standard", "ITWorx", "2026-04-08", None, "source-dated"),
+        ("vanishes@itworx.com", "Standard", "ITWorx", "2026-04-09", "2026-08-02", "source-dated"),
     ]
 
 
