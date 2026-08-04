@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import NamedTuple
 
@@ -288,7 +289,7 @@ def report_gaps(source: psycopg.Connection, target: psycopg.Connection) -> None:
 
 
 def seat_counts(
-    conn: psycopg.Connection, table: str, time_column: str, marks: dict[str, datetime | str]
+    conn: psycopg.Connection, table: str, time_column: str, marks: Mapping[str, datetime | str]
 ) -> dict[str, int]:
     """Rows per seat inside that seat's ``[floor, watermark)`` window.
 
@@ -352,7 +353,7 @@ def copy_table(
     table: str,
     time_column: str,
     columns: list[str],
-    marks: dict[str, datetime | str],
+    marks: Mapping[str, datetime | str],
 ) -> int:
     """Stream one table's below-watermark rows source -> target; return the row count copied.
 
@@ -503,9 +504,8 @@ def main(argv: list[str] | None = None) -> int:
                         " watermarks(), and sweep targets are seats production has never seen"
                     )
                 print(message)
-            marks: dict[str, datetime | str] = {
-                e: m for e, m in raw_marks.items() if e not in set(below_floor)
-            }
+            finite = {e: m for e, m in raw_marks.items() if e not in set(below_floor)}
+            marks: dict[str, datetime | str] = dict(finite)
 
             sweep_emails: list[str] = []
             if args.sweep:
@@ -516,7 +516,7 @@ def main(argv: list[str] | None = None) -> int:
                     marks[email] = "infinity"
 
             captured[table] = marks
-            _seed_watermarks(source, {e: m for e, m in marks.items() if e not in sweep_emails})
+            _seed_watermarks(source, finite)
             if sweep_emails:
                 _seed_sweep_watermarks(source, sweep_emails)
             if args.sweep:
