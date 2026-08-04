@@ -27,12 +27,17 @@ prints the resolved target host and database **first**: the ambient ``DATABASE_U
 database (interim since the POC delete, ADR-0016), so the most natural invocation writes HR data
 into whichever environment that variable happens to point at.
 
+The as-of date comes from the filename when it carries one (``claude_users_20260802.csv`` ->
+2026-08-02) — the form the export timestamp #291 asked for actually arrived in (#420) — and is
+typed with ``--as-of`` otherwise, which also overrides a dated filename. Whichever source it
+came from, it faces exactly the refusals below.
+
 Refusals that no flag overrides: byte-identical content already ingested, and an as-of date
 earlier than the newest assignment date in the file (provably impossible). Refusals that
 ``--force`` overrides: an as-of duplicating or preceding the newest existing drop, and the three
 whole-file-truncation guards (row count down more than 10%, an organization gone, a tier gone).
 
-    uv run python -m tools.roster_load --file claude_users.csv --as-of 2026-07-24
+    uv run python -m tools.roster_load --file claude_users_20260802.csv
     uv run python -m tools.roster_load --file claude_users.csv --as-of 2026-07-24 --execute
 """
 
@@ -144,6 +149,26 @@ def normalize_tier(raw: str | None) -> str | None:
     if not text:
         return None
     return text.removeprefix("Claude ").strip()
+
+
+def as_of_from_filename(filename: str) -> date | None:
+    """The export date IS puts in the filename — ``claude_users_20260802.csv`` -> 2026-08-02.
+
+    The dated filename is the form the export timestamp #291 asked for actually arrived in
+    (#420); there is still no in-file timestamp column. The eight-digit run must not be
+    digit-adjacent but need not end the stem, so a forwarded drop re-saved as
+    ``claude_users_20260802 (1).csv`` still resolves.
+
+    ``None`` when the name carries no *unambiguous* date — nothing parseable, or two different
+    dates, in which case which one is the export date is the operator's call to type.
+    """
+    found = set()
+    for match in re.finditer(r"(?<!\d)(\d{8})(?!\d)", filename):
+        try:
+            found.add(datetime.strptime(match.group(1), "%Y%m%d").date())
+        except ValueError:
+            continue
+    return found.pop() if len(found) == 1 else None
 
 
 def _parse_date(value: str, column: str) -> date | None:
@@ -438,9 +463,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--file", required=True, type=Path, help="roster CSV as received from IS")
     p.add_argument(
         "--as-of",
-        required=True,
         type=date.fromisoformat,
-        help="the drop's as-of date (YYYY-MM-DD); the file carries no export timestamp",
+        help="the drop's as-of date (YYYY-MM-DD); optional when the filename carries a YYYYMMDD"
+        " date, which this then overrides",
     )
     p.add_argument("--notes", help="free-text note recorded on the drop")
     p.add_argument("--database-url", help="target DB; defaults to $DATABASE_URL")
@@ -461,6 +486,21 @@ def main(argv: list[str] | None = None) -> int:
     # against loading HR data into whatever live database the ambient DATABASE_URL names.
     print(f"Target: {_target_label(database_url)}")
 
+    derived = as_of_from_filename(args.file.name)
+    as_of: date | None = args.as_of or derived
+    if as_of is None:
+        print(
+            "No as-of date: the filename carries no unambiguous YYYYMMDD date — pass --as-of",
+            file=sys.stderr,
+        )
+        return 2
+    # Where the date came from, before any line consumes it: a derived date is validated by the
+    # same refusals as a typed one, so the operator has to be able to see which one is in play.
+    if args.as_of is None:
+        print(f"As-of {as_of} from the filename")
+    elif derived is not None and derived != args.as_of:
+        print(f"As-of {as_of} from --as-of, overriding the filename's {derived}")
+
     try:
         content = args.file.read_bytes()
         rows = parse_rows(content.decode("utf-8-sig"))
@@ -468,7 +508,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Refused: {err}", file=sys.stderr)
         return 1
     digest = hashlib.sha256(content).hexdigest()
-    print(f"File: {args.file.name} sha256={digest[:12]}... rows={len(rows)} as-of={args.as_of}")
+    print(f"File: {args.file.name} sha256={digest[:12]}... rows={len(rows)} as-of={as_of}")
 
     with psycopg.connect(database_url) as conn:
         existing = _drop_by_hash(conn, digest)
@@ -481,7 +521,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 1
 
-        blocker = impossible_as_of(args.as_of, rows)
+        blocker = impossible_as_of(as_of, rows)
         if blocker is not None:
             print(f"Refused: {blocker} — nothing written", file=sys.stderr)
             return 1
@@ -497,7 +537,7 @@ def main(argv: list[str] | None = None) -> int:
         if blank_tiers:
             print(f"Data quality: {blank_tiers} row(s) with no tier — loaded, not rejected")
 
-        violations = guard_violations(args.as_of, prior_as_of, prior, rows)
+        violations = guard_violations(as_of, prior_as_of, prior, rows)
         for violation in violations:
             print(f"Guard: {violation}")
         if violations and not args.force:
@@ -514,9 +554,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         drop_id = _insert_drop(
-            conn, args.as_of, args.file.name, digest, rows, getpass.getuser(), args.notes
+            conn, as_of, args.file.name, digest, rows, getpass.getuser(), args.notes
         )
-        print(f"Loaded drop {drop_id}: {len(rows)} snapshot rows at as-of {args.as_of}")
+        print(f"Loaded drop {drop_id}: {len(rows)} snapshot rows at as-of {as_of}")
 
     # The drop is committed; a refresh failure costs freshness, not data, so it is reported
     # rather than raised — the hourly marts.refresh_all() reconciles either way.

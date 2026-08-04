@@ -35,11 +35,12 @@ def seats(
     ]
 
 
-def run(pg_url: str, path: Path, as_of: str, *extra: str) -> int:
-    return main(["--file", str(path), "--as-of", as_of, "--database-url", pg_url, *extra])
+def run(pg_url: str, path: Path, as_of: str | None, *extra: str) -> int:
+    typed = ["--as-of", as_of] if as_of is not None else []
+    return main(["--file", str(path), *typed, "--database-url", pg_url, *extra])
 
 
-def load(pg_url: str, path: Path, as_of: str, *extra: str) -> None:
+def load(pg_url: str, path: Path, as_of: str | None, *extra: str) -> None:
     assert run(pg_url, path, as_of, "--execute", *extra) == 0
 
 
@@ -145,6 +146,63 @@ def test_the_promoted_revocation_columns_land_instead_of_extra(
         (1, "Github Copilot", "Claude Standard", "2026-07-28", {}),
         (2, None, "Claude Premium", "2026-07-20", {}),
     ]
+
+
+def test_a_dated_filename_supplies_the_as_of(
+    conn: psycopg.Connection, pg_url: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # #420: the export timestamp #291 asked IS for arrived as a dated filename.
+    path = roster(tmp_path, *seats(3), name="claude_users_20260802.csv")
+
+    load(pg_url, path, None)
+
+    out = capsys.readouterr().out.splitlines()
+    derived = next(i for i, line in enumerate(out) if line == "As-of 2026-08-02 from the filename")
+    file_line = next(i for i, line in enumerate(out) if line.startswith("File: "))
+    assert derived < file_line  # announced before the line that consumes it
+    row = conn.execute("SELECT as_of_date::text FROM ref.roster_drop").fetchone()
+    assert row == ("2026-08-02",)
+
+
+def test_an_explicit_as_of_overrides_the_filenames_date(
+    conn: psycopg.Connection, pg_url: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = roster(tmp_path, *seats(3), name="claude_users_20260802.csv")
+
+    load(pg_url, path, "2026-08-07")
+
+    assert "As-of 2026-08-07 from --as-of, overriding the filename's 2026-08-02" in (
+        capsys.readouterr().out
+    )
+    row = conn.execute("SELECT as_of_date::text FROM ref.roster_drop").fetchone()
+    assert row == ("2026-08-07",)
+
+
+def test_no_as_of_from_either_source_is_refused(
+    conn: psycopg.Connection, pg_url: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = roster(tmp_path, *seats(3), name="claude_users.csv")
+
+    assert run(pg_url, path, None, "--execute") == 2
+
+    assert "no unambiguous YYYYMMDD date" in capsys.readouterr().err
+    assert counts(conn) == (0, 0)
+
+
+def test_a_derived_as_of_faces_the_same_refusals_as_a_typed_one(
+    conn: psycopg.Connection, pg_url: str, tmp_path: Path
+) -> None:
+    # The filename's date is validated exactly like a typed one: this one precedes the newest
+    # assignment date in the file, which no flag overrides.
+    path = roster(
+        tmp_path,
+        "a@itworx.com,ITWorx,Claude Standard,7/20/2026",
+        name="claude_users_20260719.csv",
+        header=SHORT_HEADER,
+    )
+
+    assert run(pg_url, path, None, "--execute", "--force") == 1
+    assert counts(conn) == (0, 0)
 
 
 def test_reingesting_byte_identical_content_is_refused(

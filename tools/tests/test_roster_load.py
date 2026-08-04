@@ -10,6 +10,7 @@ import pytest
 from tools.roster_load import (
     RosterError,
     SeatRow,
+    as_of_from_filename,
     compute_delta,
     guard_violations,
     impossible_as_of,
@@ -257,6 +258,26 @@ class TestParseRows:
                     header="email,subscription_1,assignment_date_1",
                 )
             )
+
+
+class TestAsOfFromFilename:
+    @pytest.mark.parametrize(
+        ("filename", "expected"),
+        [
+            ("claude_users_20260802.csv", date(2026, 8, 2)),
+            # A forwarded drop re-saved under a numbered name keeps its date, so the run must
+            # not have to end the stem.
+            ("claude_users_20260802 (1).csv", date(2026, 8, 2)),
+            ("claude_users.csv", None),
+            ("claude_users_2026082.csv", None),  # seven digits is not a date
+            ("claude_users_202608021.csv", None),  # digit-adjacent, so not a standalone run
+            ("claude_users_20261302.csv", None),  # month 13
+            # Which of two dates is the export date is the operator's call, not a guess.
+            ("claude_users_20260802_20260816.csv", None),
+        ],
+    )
+    def test_reads_a_standalone_eight_digit_run(self, filename: str, expected: date | None) -> None:
+        assert as_of_from_filename(filename) == expected
 
 
 class TestComputeDelta:
