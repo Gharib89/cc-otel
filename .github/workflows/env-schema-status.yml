@@ -1,0 +1,125 @@
+name: env-schema-status
+
+# Deliberately not called "drift": CONTEXT.md locks **Drift** as a telemetry-key
+# term, and `schema-drift` is already local-gate.sh's name for schema.sql vs the
+# migrations (dev-migrate.sh --check). This asks a third question — is a
+# *deployed environment* missing migrations that exist on main — so it borrows
+# dbmate's own word, `status`.
+#
+# Scheduled environment watch (#414): nothing else in this repo tells you an
+# environment's schema is behind `main`, and the failure mode is silent. Every
+# Power BI partition is `SELECT *`, so a database missing the newest mart
+# columns still answers the query — Power BI then reconciles the semantic model
+# by DROPPING the columns the result set lacks, and the refresh reports success.
+# On 2026-08-03 prod was 8 migrations behind and a green refresh deleted 264
+# lines of TMDL; it surfaced only because a Desktop save re-serialized the file
+# (#247, ADR-0022).
+#
+# `dbmate status --exit-code` is the whole check: non-zero when a migration in
+# this ref's db/migrations/ is absent from the target. A scheduled run checks
+# out the default branch, so "pending" means exactly "behind main".
+#
+# Detection only — this never applies a migration. The fix is a deploy.
+#
+# Required repo secrets (all shared with deploy.yml, no new grants):
+#   AZURE_CLIENT_ID, AZURE_TENANT_ID          — shared OIDC app registration
+#   <ENV>_AZURE_SUBSCRIPTION_ID               — target subscription
+#   <ENV>_RESOURCE_GROUP                      — target resource group
+#   <ENV>_DATABASE_URL                        — dbmate status target
+# where <ENV> is INTERIM or PROD.
+on:
+  schedule:
+    # 05:00 UTC — 08:00 Cairo, so a red run is already waiting at the start of
+    # the working day rather than being found by the next person to deploy.
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  status:
+    name: schema status (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    strategy:
+      # Independent targets — prod's verdict must never be hidden by interim's.
+      fail-fast: false
+      matrix:
+        include:
+          - environment: interim
+            prefix: INTERIM
+          - environment: prod
+            prefix: PROD
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets[format('{0}_AZURE_SUBSCRIPTION_ID', matrix.prefix)] }}
+
+      - name: Detect runner egress IP
+        id: ip
+        run: echo "address=$(curl -fsS https://api.ipify.org)" >> "$GITHUB_OUTPUT"
+
+      # Public Postgres guarded by password alone (#11) — open the firewall to
+      # this single IP for the run, never a standing allow-all. Each matrix leg
+      # targets its own server, so the run-id rule name cannot collide.
+      - name: Open firewall rule for this run
+        env:
+          RESOURCE_GROUP: ${{ secrets[format('{0}_RESOURCE_GROUP', matrix.prefix)] }}
+        run: |
+          az postgres flexible-server firewall-rule create \
+            --resource-group "$RESOURCE_GROUP" \
+            --server-name ccotel-pg-${{ matrix.environment }} \
+            --name gha-${{ github.run_id }} \
+            --start-ip-address ${{ steps.ip.outputs.address }} \
+            --end-ip-address ${{ steps.ip.outputs.address }}
+
+      - name: Install dbmate
+        # Pinned to deploy.yml's version — the tool that would apply the fix
+        # must be the tool that reports the gap.
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/dbmate \
+            https://github.com/amacneil/dbmate/releases/download/v2.34.1/dbmate-linux-amd64
+          sudo chmod +x /usr/local/bin/dbmate
+
+      - name: Check migration status
+        env:
+          DATABASE_URL: ${{ secrets[format('{0}_DATABASE_URL', matrix.prefix)] }}
+        # dbmate exits 1 for pending migrations and 2 for anything else it could
+        # not do (unreachable host, bad credentials). Treating "couldn't tell"
+        # as "behind" would send someone to run a deploy that fixes nothing.
+        # The default shell is `bash -e`, so capture the status through `||`
+        # rather than reading $? on the next line — otherwise a pending-migration
+        # exit aborts the step before it can be reported.
+        run: |
+          rc=0
+          dbmate status --exit-code || rc=$?
+          case $rc in
+            0)
+              echo "${{ matrix.environment }} is level with ${{ github.ref_name }}."
+              ;;
+            1)
+              echo "::error::${{ matrix.environment }} is behind ${{ github.ref_name }} — the migrations listed above are not applied. A Power BI refresh against it can report success while silently dropping the missing columns from the semantic model (#414). Fix: run the deploy workflow against ${{ matrix.environment }}."
+              exit 1
+              ;;
+            *)
+              echo "::error::Could not read ${{ matrix.environment }}'s migration status (dbmate exited $rc) — this is a connectivity or credentials failure, not a missing migration. Deploying will not fix it."
+              exit 1
+              ;;
+          esac
+
+      - name: Close firewall rule for this run
+        if: always()
+        env:
+          RESOURCE_GROUP: ${{ secrets[format('{0}_RESOURCE_GROUP', matrix.prefix)] }}
+        run: |
+          az postgres flexible-server firewall-rule delete \
+            --resource-group "$RESOURCE_GROUP" \
+            --server-name ccotel-pg-${{ matrix.environment }} \
+            --name gha-${{ github.run_id }} \
+            --yes

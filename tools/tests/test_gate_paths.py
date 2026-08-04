@@ -197,7 +197,9 @@ def test_real_workflows_readme_triggers_nothing():
     assert triggered_workflows(["README.md"], WORKFLOWS_DIR) == []
 
 
-def test_real_workflows_deploy_and_publish_images_never_appear():
+def test_real_workflows_manual_and_scheduled_never_appear():
+    # These have no `pull_request` trigger at all, so no diff can select them
+    # and local-gate.sh carries them in EXCLUDED rather than as gate groups.
     all_touched = [
         "sink/src/cc_otel_sink/app.py",
         "db/migrations/x.sql",
@@ -209,11 +211,13 @@ def test_real_workflows_deploy_and_publish_images_never_appear():
         "powerbi/report/x.json",
         ".github/powerbi/validate.ps1",
         "collector/config.yaml",
+        ".github/workflows/env-schema-status.yml",
         "README.md",
     ]
     triggered = triggered_workflows(all_touched, WORKFLOWS_DIR)
     assert "deploy" not in triggered
     assert "publish-images" not in triggered
+    assert "env-schema-status" not in triggered
 
 
 # --- CLI entry point ------------------------------------------------------------
