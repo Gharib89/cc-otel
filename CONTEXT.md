@@ -140,7 +140,7 @@ A **seat** whose holder's email has never appeared in telemetry — the compleme
 _Avoid_: idle seat, unadopted seat, silent seat
 
 **Roster drop**:
-One roster file as received from IS, identified by its operator-supplied as-of date — a current-state snapshot with no person-level status column and no export timestamp. Landed immutably in `ref` (`roster_drop` + `seat_roster_snapshot`, assignment grain) by `tools.roster_load`; seat history is derived from the accumulated drops, never merged at load time. Absence from a newer drop is revocation. Since the 2026-08-02 drop the file also carries **revocation events** (ADR-0024) — which subscription was revoked, and when — but they cover a minority of removals and do not displace absence.
+One roster file as received from IS, identified by its as-of date — read from a dated filename (`claude_users_20260802.csv`) when the export carries one, typed by the operator otherwise (#420) — a current-state snapshot with no person-level status column and still no in-file export timestamp. Landed immutably in `ref` (`roster_drop` + `seat_roster_snapshot`, assignment grain) by `tools.roster_load`; seat history is derived from the accumulated drops, never merged at load time. Absence from a newer drop is revocation. Since the 2026-08-02 drop the file also carries **revocation events** (ADR-0024) — which subscription was revoked, and when — but they cover a minority of removals and do not displace absence.
 _Avoid_: roster import, seat file
 
 **Revocation event**:

@@ -51,8 +51,8 @@ uv run python -m tools.spec_sync --check       # gate: column_spec.py <-> migrat
 uv run python -m tools.spec_sync --name <slug> # author: spec delta -> new migration + schema.sql regen
 uv run python -m tools.matview_sync --check    # gate: canonical db/views/marts/ files <-> pg_matviews converge, both ways (needs Docker)
 uv run python -m tools.matview_sync --name <slug>  # author: edited mart file -> DROP+CREATE+index+GRANT migration (git-HEAD down body); then dev-migrate.sh regenerates schema.sql
-uv run python -m tools.roster_load --file <csv> --as-of YYYY-MM-DD  # dry-run an IS seat-roster drop: prints target host/db, then the delta (ADR-0009)
-uv run python -m tools.roster_load --file <csv> --as-of YYYY-MM-DD --execute [--force]  # land the drop in ref, then refresh the seat marts + dim_date (--force overrides the as-of/truncation guards)
+uv run python -m tools.roster_load --file <csv> [--as-of YYYY-MM-DD]  # dry-run an IS seat-roster drop: prints target host/db, then the delta (ADR-0009); as-of comes from a dated filename (claude_users_20260802.csv) unless typed, which overrides it (#420)
+uv run python -m tools.roster_load --file <csv> [--as-of YYYY-MM-DD] --execute [--force]  # land the drop in ref, then refresh the seat marts + dim_date (--force overrides the as-of/truncation guards)
 uv run python -m tools.compact               # dry-run the reservoir compaction catch-up: frozen partitions with no parquet counterpart (ADR-0015)
 uv run python -m tools.compact --execute     # build + upload one parquet per (signal, day); --rebuild re-derives existing counterparts (needed after tools.scrub)
 uv run python -m tools.basis_drift [--days 7|--since|--until]  # re-check each kept row's kept_basis against a recent window; exit 1 on basis drift (#366)

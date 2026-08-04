@@ -264,9 +264,9 @@ close when the person is left holding no Claude subscription (ADR-0024).
 **Safety flow — dry-run first, always:**
 
 ```sh
-uv run python -m tools.roster_load --file ~/Downloads/claude_users.csv --as-of 2026-07-24
-uv run python -m tools.roster_load --file ~/Downloads/claude_users.csv --as-of 2026-07-24 \
-    --execute --notes "IS email 24 Jul"
+uv run python -m tools.roster_load --file ~/Downloads/claude_users_20260802.csv
+uv run python -m tools.roster_load --file ~/Downloads/claude_users_20260802.csv \
+    --execute --notes "IS email 2 Aug"
 ```
 
 The first line of output is the resolved **target host and database** — check it before
@@ -274,8 +274,14 @@ anything else: the ambient `DATABASE_URL` names a live database — interim sinc
 delete (ADR-0016) — so the most natural invocation writes HR data into whichever
 environment that variable happens to point at. Pass `--database-url` to override.
 
-`--as-of` is required: the file carries no export timestamp and a filesystem timestamp resets
-on copy. The dry run then prints the delta against the newest existing drop — new seats, tier
+The as-of date is read from a `YYYYMMDD` run in the filename when there is one — the form IS's
+export timestamp arrived in (#420) — and announced on its own line before anything consumes it;
+`--as-of` is required otherwise, since the file carries no in-file timestamp and a filesystem
+timestamp resets on copy. An explicit `--as-of` overrides the filename, and a name carrying two
+different dates is treated as carrying none. However the date is resolved, it faces the same
+refusals below.
+
+The dry run then prints the delta against the newest existing drop — new seats, tier
 changes, **closures**, unchanged. Closures are seats absent from this file; IS sends no status
 column, so absence is revocation. Read that number before writing.
 
