@@ -391,3 +391,38 @@ committed would be permanent, because the copied rows collapse each seat's water
 missing ones then fall outside every future run's window. Only a clean verification commits;
 production's marts are refreshed after that, and a refresh failure is reported without failing the
 copy, since the rows are in and the hourly `marts.refresh_all()` reconciles.
+
+### `--sweep` — the terminal sweep for seats production has never seen (#409, ADR-0021)
+
+Additive to the normal run, not a separate mode: pass `--sweep` alongside `--execute` (or on a
+dry-run) and both ride in the same pass — every already-flipped seat's normal watermark-bounded
+window copies exactly as above, and seats production has never recorded at all get one on top.
+
+**The target set** is a seat interim holds rows for above the floor (`user_email IS NOT NULL`,
+`ts`/`event_time` `>= 2026-07-17`) that is **absent from `watermarks()` entirely** — computed
+before the below-floor filter drops anyone, because a below-floor seat *has* a production row and
+so is already present in `watermarks()`; it can never be a sweep target, and the run's existing
+"watermark at or below the floor" message gains a clause saying so. A seat with no `user_email` is
+never swept, whatever the count — it has no seat identity to derive a target or a watermark
+collapse from, so a re-run would copy it again into a table with no primary key (ADR-0017).
+
+**The mechanism** is `timestamptz 'infinity'`, seeded into the same watermark scratch table
+alongside the normal finite marks. Infinity compares greater than every finite timestamp, so the
+census, the copy, per-seat verification, the rollback-on-mismatch path and the dual-send probe are
+all correct with no second code path. Idempotent the same way the normal copy is: once swept, the
+seat has a production row, so it is no longer absent from `watermarks()` and its next window is
+`[floor, floor)`.
+
+**Write-quiet gate, no override.** `--sweep` refuses (exit 1, nothing written, dry-run and
+`--execute` alike) unless interim has gone `>= 24h` with no new batch, measured as
+`now() - MAX(meta.processed_batches.processed_at)` on the **interim** connection — that column is
+claimed by every batch that writes rows, so it is an exact "did interim just gain rows" clock,
+unlike a client-side event-time column that a skewed clock or a long-buffered flush can't be
+trusted to reflect. The measured age is printed either way. If no batch has ever been recorded the
+age is unmeasurable and the sweep refuses too (conservative). There is deliberately **no `--force`**:
+sweeping early is a decision about permanent data placement whose failure mode is silent.
+
+**Pre-copy watermark evidence.** A `--sweep` run prints every seeded seat's pre-copy watermark per
+table — a swept seat's as `infinity`, an already-flipped seat's as its real timestamp — so the
+run's output records which window it moved. This is run evidence, explicitly **not** a recovery
+cursor: no state is persisted from it.

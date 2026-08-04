@@ -25,6 +25,7 @@ watermark forever and reads identically to a row that never arrived (#415).
 
     uv run python -m tools.cutover_copy
     uv run python -m tools.cutover_copy --execute
+    uv run python -m tools.cutover_copy --execute --sweep
 """
 
 from __future__ import annotations
@@ -32,7 +33,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import datetime
+from collections.abc import Mapping
+from datetime import datetime, timedelta
 from typing import NamedTuple
 
 import psycopg
@@ -51,6 +53,11 @@ TABLES = (("raw.metrics", "ts"), ("raw.events", "event_time"))
 # duplicates could not be removed afterwards: ``raw.*`` has no primary key (ADR-0017) and this tool
 # has no delete. Arbitrary but fixed — the issue number and the window floor.
 LOCK_KEY = 245_20260717
+
+# ADR-0021's write-quiet gate for `--sweep`: refuse unless interim's last recorded batch is at
+# least this old. Fixed, no `--force` twin -- sweeping early is a decision about permanent data
+# placement whose failure mode is silent, and a knob invites lowering it under time pressure.
+SWEEP_WRITE_QUIET_WINDOW = timedelta(hours=24)
 
 # Source-side scratch holding the watermarks read off production, so one statement can apply every
 # seat's own window. TEMP: it lives in the source session and needs no cleanup or schema rights.
@@ -104,6 +111,39 @@ def watermarks(conn: psycopg.Connection, table: str, time_column: str) -> dict[s
     return {row[0]: row[1] for row in rows}
 
 
+def sweep_targets(
+    source: psycopg.Connection, table: str, time_column: str, marks: Mapping[str, datetime]
+) -> list[str]:
+    """Seats interim holds rows for, above the floor, that production's ``watermarks()`` has never
+    recorded at all (ADR-0021, `--sweep`).
+
+    ``marks`` must be the dict as ``watermarks()`` returned it, before the below-floor filter drops
+    anyone: a below-floor seat has a production row and so is already present here, and it must
+    stay excluded from sweeping -- it could never self-exclude on a re-run otherwise, since its
+    watermark never moves.
+    """
+    rows = source.execute(
+        sql.SQL(
+            "SELECT DISTINCT user_email FROM {table} WHERE user_email IS NOT NULL AND {tc} >= %s"
+        ).format(table=sql.SQL(table), tc=sql.Identifier(time_column)),
+        (FLOOR,),
+    ).fetchall()
+    return sorted(email for (email,) in rows if email not in marks)
+
+
+def _interim_write_quiet_age(source: psycopg.Connection) -> timedelta | None:
+    """Time since interim's last recorded batch, or ``None`` if none has ever been recorded.
+
+    ``meta.processed_batches.processed_at`` defaults to ``now()`` on the server and is claimed by
+    every batch that writes rows, so it is an exact "when did interim last gain rows" clock --
+    unlike ``MAX(ts)``/``MAX(event_time)``, which are client-side and would read quiet during a
+    late flush from a skewed clock.
+    """
+    row = source.execute("SELECT now() - MAX(processed_at) FROM meta.processed_batches").fetchone()
+    assert row is not None  # noqa: S101 — aggregate-only SELECT always returns one row
+    return row[0]
+
+
 def _columns(conn: psycopg.Connection, table: str) -> list[str]:
     schema, name = table.split(".")
     rows = conn.execute(
@@ -114,7 +154,17 @@ def _columns(conn: psycopg.Connection, table: str) -> list[str]:
     return [row[0] for row in rows]
 
 
-def _seed_watermarks(source: psycopg.Connection, marks: dict[str, datetime]) -> None:
+def _seed_watermarks(
+    source: psycopg.Connection, marks: Mapping[str, datetime], sweep_emails: list[str]
+) -> None:
+    """(Re)create the watermark scratch table: one finite mark per flipped seat, plus one
+    `timestamptz 'infinity'` row per sweep target (ADR-0021).
+
+    Infinity compares greater than every finite timestamp, so it needs no branching anywhere the
+    watermark table is joined. Cast in SQL rather than bound as a parameter: Postgres has no
+    implicit text -> timestamptz cast, and there is no Python ``datetime`` value for infinity to
+    pass instead.
+    """
     source.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(_MARKS))
     source.execute(
         sql.SQL(
@@ -126,6 +176,13 @@ def _seed_watermarks(source: psycopg.Connection, marks: dict[str, datetime]) -> 
             sql.SQL("INSERT INTO {} (user_email, watermark) VALUES (%s, %s)").format(_MARKS),
             list(marks.items()),
         )
+    if sweep_emails:
+        source.execute(
+            sql.SQL("INSERT INTO {} SELECT unnest(%s::text[]), 'infinity'::timestamptz").format(
+                _MARKS
+            ),
+            (sweep_emails,),
+        )
 
 
 def census(source: psycopg.Connection, table: str, time_column: str) -> Census:
@@ -134,7 +191,9 @@ def census(source: psycopg.Connection, table: str, time_column: str) -> Census:
     Everything not in ``to_copy`` stays in interim: an unflipped seat has no window yet, a row at
     or above its seat's watermark is post-flip interim traffic (a Claude Code process that had not
     restarted), and a row with no ``user_email`` has no seat to derive a window from. #248 Part B's
-    row-count-verified ``pg_dump`` is what keeps those queryable after decommission.
+    row-count-verified ``pg_dump`` is what keeps those queryable after decommission. Under
+    ``--sweep`` a sweep target is seeded with ``infinity``, so its rows land in ``to_copy`` and
+    only below-floor seats remain in the unflipped bucket (ADR-0021).
     """
     row = source.execute(
         sql.SQL(
@@ -232,19 +291,24 @@ def report_gaps(source: psycopg.Connection, target: psycopg.Connection) -> None:
 
 
 def seat_counts(
-    conn: psycopg.Connection, table: str, time_column: str, marks: dict[str, datetime]
+    conn: psycopg.Connection, table: str, time_column: str, marks: Mapping[str, datetime | str]
 ) -> dict[str, int]:
     """Rows per seat inside that seat's ``[floor, watermark)`` window.
 
     The watermarks are the ones captured **before** the copy: afterwards production's own minimum
     has dropped to the earliest copied row, so re-deriving them here would compare empty windows
     and pass vacuously.
+
+    ``mark`` may be a sweep target's ``"infinity"`` sentinel (ADR-0021) rather than a ``datetime``:
+    the explicit ``::timestamptz`` cast is a no-op for the latter and makes the former a valid
+    upper bound, since Postgres has no implicit text -> timestamptz cast to fall back on.
     """
     counts = {}
     for email, mark in marks.items():
         row = conn.execute(
             sql.SQL(
-                "SELECT count(*) FROM {table} WHERE user_email = %s AND {tc} >= %s AND {tc} < %s"
+                "SELECT count(*) FROM {table}"
+                " WHERE user_email = %s AND {tc} >= %s AND {tc} < %s::timestamptz"
             ).format(table=sql.SQL(table), tc=sql.Identifier(time_column)),
             (email, FLOOR, mark),
         ).fetchone()
@@ -291,7 +355,7 @@ def copy_table(
     table: str,
     time_column: str,
     columns: list[str],
-    marks: dict[str, datetime],
+    marks: Mapping[str, datetime | str],
 ) -> int:
     """Stream one table's below-watermark rows source -> target; return the row count copied.
 
@@ -329,6 +393,14 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--source-url", help="interim cc_otel; defaults to $INTERIM_DATABASE_URL")
     p.add_argument("--target-url", help="production cc_otel; defaults to $PROD_DATABASE_URL")
     p.add_argument("--execute", action="store_true", help="copy the rows (default: dry-run)")
+    p.add_argument(
+        "--sweep",
+        action="store_true",
+        help=(
+            "also copy [floor, infinity) for seats production has never seen at all (ADR-0021);"
+            " refuses unless interim has been write-quiet for >= 24h, no override"
+        ),
+    )
     return p.parse_args(argv)
 
 
@@ -356,11 +428,36 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    captured: dict[str, dict[str, datetime]] = {}
+    captured: dict[str, dict[str, datetime | str]] = {}
     with (
         psycopg.connect(source_url, autocommit=True) as source,
         psycopg.connect(target_url) as target,
     ):
+        # Checked first, before the lock or any per-table work: a sweep that will be refused should
+        # write nothing, on a dry-run exactly as on --execute.
+        if args.sweep:
+            age = _interim_write_quiet_age(source)
+            print(
+                "Interim write-quiet check: no batch ever recorded"
+                if age is None
+                else f"Interim write-quiet check: last batch {age} ago"
+            )
+            if age is None:
+                print(
+                    "Refused: --sweep needs interim write-quiet for >= 24h and"
+                    " meta.processed_batches has no batch recorded at all — write-quiet cannot"
+                    " be measured; nothing written",
+                    file=sys.stderr,
+                )
+                return 1
+            if age < SWEEP_WRITE_QUIET_WINDOW:
+                print(
+                    f"Refused: interim last wrote {age} ago, under the 24h --sweep requires,"
+                    " with no override — nothing written",
+                    file=sys.stderr,
+                )
+                return 1
+
         # One writer at a time. Held for the whole run and released when this connection closes;
         # session-level, so the rollback path below does not drop it early. A dry-run never takes
         # it — it writes nothing, and must stay available while a copy is in flight.
@@ -390,22 +487,51 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
 
         for table, time_column in TABLES:
-            marks = watermarks(target, table, time_column)
+            all_marks = watermarks(target, table, time_column)
             # A production row below the floor drags that seat's minimum below it, leaving an empty
             # window. Dropped from the set rather than copied as a no-op, so verification cannot
             # report the seat as matched on 0 == 0 while its interim rows sit there untouched.
-            below_floor = sorted(email for email, mark in marks.items() if mark <= FLOOR)
+            below_floor = sorted(email for email, mark in all_marks.items() if mark <= FLOOR)
             if below_floor:
-                print(
+                message = (
                     f"{table}: {len(below_floor)} seat(s) with a watermark at or below the floor:"
                     f" {', '.join(below_floor)} — a production row predates {FLOOR:%Y-%m-%d},"
                     " so nothing is copyable for them"
                 )
-                marks = {e: m for e, m in marks.items() if e not in set(below_floor)}
+                if args.sweep:
+                    # A below-floor seat has a production row -- it is present in `all_marks` -- so
+                    # it can never be a sweep target the way an entirely unseen seat is.
+                    message += (
+                        "; not swept either — a production row means they are already in"
+                        " watermarks(), and sweep targets are seats production has never seen"
+                    )
+                print(message)
+            dropped = set(below_floor)
+            finite_marks = {e: m for e, m in all_marks.items() if e not in dropped}
+            marks: dict[str, datetime | str] = dict(finite_marks)
+
+            sweep_emails: list[str] = []
+            if args.sweep:
+                # Computed from all_marks, before the below-floor filter: a below-floor seat must
+                # stay excluded from sweeping too, and it is already absent from `marks` above.
+                sweep_emails = sweep_targets(source, table, time_column, all_marks)
+                for email in sweep_emails:
+                    marks[email] = "infinity"
+
             captured[table] = marks
-            _seed_watermarks(source, marks)
+            _seed_watermarks(source, finite_marks, sweep_emails)
+            if args.sweep:
+                # Run evidence, not a recovery cursor: records which window this run moved, per
+                # seeded seat. No state is persisted from it.
+                for email in sorted(marks):
+                    print(f"{table}: {email} pre-copy watermark = {marks[email]}")
+
             counted = census(source, table, time_column)
-            print(f"{table}: {len(marks)} seat(s) flipped, {counted.to_copy} row(s) to copy")
+            # A sweep target is by definition never flipped (CONTEXT.md), so it is counted apart.
+            flipped = f"{len(finite_marks)} seat(s) flipped"
+            if args.sweep:
+                flipped += f" + {len(sweep_emails)} sweep target(s)"
+            print(f"{table}: {flipped}, {counted.to_copy} row(s) to copy")
             print(
                 f"{table} held in interim: {counted.held_unflipped} row(s) for"
                 f" {counted.unflipped_seats} unflipped seat(s), {counted.held_above} row(s) at or"
