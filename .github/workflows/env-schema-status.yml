@@ -90,13 +90,28 @@ jobs:
       - name: Check migration status
         env:
           DATABASE_URL: ${{ secrets[format('{0}_DATABASE_URL', matrix.prefix)] }}
+        # dbmate exits 1 for pending migrations and 2 for anything else it could
+        # not do (unreachable host, bad credentials). Treating "couldn't tell"
+        # as "behind" would send someone to run a deploy that fixes nothing.
+        # The default shell is `bash -e`, so capture the status through `||`
+        # rather than reading $? on the next line — otherwise a pending-migration
+        # exit aborts the step before it can be reported.
         run: |
-          if dbmate status --exit-code; then
-            echo "${{ matrix.environment }} is level with ${{ github.ref_name }}."
-          else
-            echo "::error::${{ matrix.environment }} is behind ${{ github.ref_name }} — the migrations listed above are not applied. A Power BI refresh against it can report success while silently dropping the missing columns from the semantic model (#414). Fix: run the deploy workflow against ${{ matrix.environment }}."
-            exit 1
-          fi
+          rc=0
+          dbmate status --exit-code || rc=$?
+          case $rc in
+            0)
+              echo "${{ matrix.environment }} is level with ${{ github.ref_name }}."
+              ;;
+            1)
+              echo "::error::${{ matrix.environment }} is behind ${{ github.ref_name }} — the migrations listed above are not applied. A Power BI refresh against it can report success while silently dropping the missing columns from the semantic model (#414). Fix: run the deploy workflow against ${{ matrix.environment }}."
+              exit 1
+              ;;
+            *)
+              echo "::error::Could not read ${{ matrix.environment }}'s migration status (dbmate exited $rc) — this is a connectivity or credentials failure, not a missing migration. Deploying will not fix it."
+              exit 1
+              ;;
+          esac
 
       - name: Close firewall rule for this run
         if: always()

@@ -26,7 +26,7 @@ the question exactly. Nothing ran it, and nothing consumed the answer.
   `::error::` annotation naming the environment and the fix. No issue is filed, and no state is
   reconciled between runs — a persistent gap simply keeps failing.
 - **Detection only.** The workflow never applies a migration; the fix stays the operator-run
-  `deploy` workflow. A watchdog that silently repairs prod would hide the very drift it exists to
+  `deploy` workflow. A watchdog that silently repairs prod would hide the very gap it exists to
   surface.
 - **Per-environment matrix with `fail-fast: false`,** so prod's verdict is never hidden by
   interim's. When interim retires at the cutover gate (ADR-0020, ADR-0021) its matrix leg is
@@ -59,8 +59,19 @@ the question exactly. Nothing ran it, and nothing consumed the answer.
   environment state — previously the repo knew nothing about a deployed environment between manual
   deploys.
 - A scheduled run costs metered Actions minutes daily. Two short jobs; accepted.
+- **Accepted residual — the watchdog can be switched off by silence.** This repo is public
+  (ADR-0018), and GitHub "automatically disable[s] [scheduled workflows] when no repository activity
+  has occurred in 60 days"; re-enabling is manual. So the one failure mode this check cannot cover
+  is its own: a quiet repo — increasingly likely now that report ownership has left it (ADR-0022) —
+  silently stops the watch. Deliberately not engineered around: every mitigation (an external
+  scheduler, a keepalive commit bot) costs more than the failure it prevents, and the check is
+  `workflow_dispatch`-able on demand. Not tracked as an issue; if the repo does go quiet, re-enable
+  the workflow from the Actions tab.
 - A deploy running concurrently with the cron can report a transient pending count and fail. Not
   guarded: deploys are manual and rare, the run is re-runnable, and the failure output names the
   migrations, so the false positive is self-evident.
+- A run that cannot reach the database fails too, but says so distinctly (`dbmate` exits 1 for
+  pending migrations and 2 for anything else), so a connectivity break never reads as "behind
+  `main`" and never sends anyone to run a pointless deploy.
 - `powerbi/HANDOVER.md`'s "a green refresh can silently shrink the model" trap stays as written. It
   documents the hazard for the report's owner; this ADR adds the detection the note could not.
