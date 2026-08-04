@@ -145,7 +145,7 @@ else
 # Workflow names with no local mirror at all (manual workflow_dispatch only —
 # never triggered by a PR diff today). Listed explicitly so they are skipped as
 # a deliberate decision; any OTHER unmapped triggered name fails loudly below.
-EXCLUDED=' deploy publish-images '
+EXCLUDED=' deploy publish-images env-schema-status '
 KNOWN_GATES=' python integration docker iac installer bootstrap ci-powerbi '
 
 if [ "$ALL" = 1 ]; then
