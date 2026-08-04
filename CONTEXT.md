@@ -184,5 +184,9 @@ _Avoid_: quiet, idle, drained (each reads as "nobody is working", which is the h
 The one-time copy of an entire `[2026-07-17, ∞)` window for a **seat** that has no production row at all — a machine that never emits again. Run once interim is **write-quiet**, so its right edge is fixed; a seat is excluded the moment it has any production row, which is what keeps the sweep safe to re-run. Everything the **ingest repoint** can reach is handled by the ordinary **flip watermark** copy instead. See ADR-0021.
 _Avoid_: backfill (that is ADR-0006's schema-v1→v2 mapping, a different operation), catch-up
 
+**Cutover shortfall**:
+Per **seat** and per table, how many of **interim**'s rows above the floor **production** demonstrably lacks — `sum(max(interim - production, 0))` over UTC days, so a production surplus on one day never cancels a shortfall on another. The honest measure of what the cutover still owes, because the copy's own "held at or above a **flip watermark**" count conflates three populations: rows already copied, rows a returning seat's collector replayed straight into production, and rows genuinely missing. Nothing is ever deleted from interim and a copied row collapses that seat's watermark onto itself, so all three read identically in the buckets. A lower bound and a detector, never a recovery cursor — `raw.*` has no primary key, so it says how many rows are missing, never which. See ADR-0021.
+_Avoid_: held rows, stranded count (the first names the bucket that cannot make the distinction; the second asserts a cause a count cannot establish)
+
 **Azure prod stack**:
 The production environment: a second Azure resource group — IS-provisioned but empty, in an ITWorx subscription — holding a Postgres Flexible Server (public endpoint) plus an Azure Container Apps environment running the collector + sink in one Container App. IS grants RG Contributor only; Ahmed deploys all of it, Postgres included, via Bicep (ADR-0004).

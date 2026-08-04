@@ -18,6 +18,11 @@ the next run's window is ``[floor, floor)``. Duplicates are unreachable without 
 
 Interim is left untouched -- it stays the fallback until #248 Part B's gate opens.
 
+Every run closes with the **cutover shortfall** per seat: how many of interim's rows above the
+floor production demonstrably lacks. That is the progress measure, not the held-in-interim
+buckets -- nothing is deleted from interim, so a copied row sits at or above its seat's collapsed
+watermark forever and reads identically to a row that never arrived (#415).
+
     uv run python -m tools.cutover_copy
     uv run python -m tools.cutover_copy --execute
 """
@@ -62,6 +67,15 @@ class Census(NamedTuple):
     unflipped_seats: int
     held_above: int
     held_no_email: int
+
+
+class Gap(NamedTuple):
+    """One seat's shortfall in production, against its interim total above the floor."""
+
+    user_email: str | None
+    short: int
+    interim: int
+    in_production: bool
 
 
 def _connection_label(database_url: str) -> str:
@@ -141,6 +155,80 @@ def census(source: psycopg.Connection, table: str, time_column: str) -> Census:
     ).fetchone()
     assert row is not None  # noqa: S101 — aggregate-only SELECT always returns one row
     return Census(*row)
+
+
+def _rows_by_seat_day(
+    conn: psycopg.Connection, table: str, time_column: str
+) -> dict[tuple[str | None, datetime], int]:
+    """Rows above the floor per ``(user_email, UTC day)``.
+
+    The day grain is what makes the comparison honest. A flat per-seat count is blind by the
+    seat's own post-flip production volume — an active seat holds thousands more rows in
+    production than in interim, and that surplus silently absorbs any pre-flip rows the copy
+    missed. Bucketing by day confines the overlap to the single day a seat's flip falls on, so a
+    shortfall on every other day is real. ``AT TIME ZONE 'UTC'`` is explicit because
+    ``date_trunc`` on a ``timestamptz`` otherwise reads the session's ``TimeZone``.
+    """
+    rows = conn.execute(
+        sql.SQL(
+            "SELECT user_email, date_trunc('day', {tc} AT TIME ZONE 'UTC'), count(*)"
+            " FROM {table} WHERE {tc} >= %s GROUP BY 1, 2"
+        ).format(table=sql.SQL(table), tc=sql.Identifier(time_column)),
+        (FLOOR,),
+    ).fetchall()
+    return {(row[0], row[1]): row[2] for row in rows}
+
+
+def seat_gaps(
+    source: psycopg.Connection, target: psycopg.Connection, table: str, time_column: str
+) -> list[Gap]:
+    """Per seat, how many interim rows above the floor production demonstrably lacks (#415).
+
+    The census buckets cannot answer "does production hold these rows?", which is the only
+    question the cutover cares about. Nothing is ever deleted from interim, so a copied seat's
+    rows stay there while its watermark collapses onto the earliest copied row — and they then
+    re-report as ``held_above`` on every later run, indistinguishable from rows that never
+    arrived. A returning seat whose collector replayed a queued batch through the repointed sink
+    (ADR-0021) reads the same way, and for that seat copying nothing is *correct*. Comparing the
+    two environments directly separates the three populations.
+
+    The shortfall is a **lower bound**: ``sum(max(interim - production, 0))`` over the days the
+    seat appears, so a production surplus on one day never cancels a shortfall on another. It is
+    counts, not row identities — ``raw.*`` has no primary key (ADR-0017), so it says how many rows
+    production lacks, never which. A detector, deliberately not a recovery cursor.
+    """
+    interim = _rows_by_seat_day(source, table, time_column)
+    production = _rows_by_seat_day(target, table, time_column)
+    seen = {email for email, _ in production}
+    shortfall: dict[str | None, int] = {}
+    totals: dict[str | None, int] = {}
+    for (email, day), count in interim.items():
+        shortfall[email] = shortfall.get(email, 0) + max(count - production.get((email, day), 0), 0)
+        totals[email] = totals.get(email, 0) + count
+    return [Gap(email, short, totals[email], email in seen) for email, short in shortfall.items()]
+
+
+def report_gaps(source: psycopg.Connection, target: psycopg.Connection) -> None:
+    """Print, per table, how many interim rows above the floor production is short, by seat."""
+    for table, time_column in TABLES:
+        short = [g for g in seat_gaps(source, target, table, time_column) if g.short]
+        if not short:
+            print(f"{table}: production holds every seat's interim rows above the floor")
+            continue
+        print(
+            f"{table} not in production: {sum(g.short for g in short)} row(s) above the floor"
+            f" across {len(short)} seat(s)"
+        )
+        for gap in sorted(short, key=lambda g: -g.short):
+            line = (
+                f"  {gap.user_email or '(no user_email)'}: {gap.short} of {gap.interim}"
+                " row(s) missing"
+            )
+            if gap.user_email is None:
+                line += " — never swept, no user_email to derive a seat from (ADR-0021)"
+            elif not gap.in_production:
+                line += " — no production rows at all (#409 --sweep target)"
+            print(line)
 
 
 def seat_counts(
@@ -336,6 +424,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{table}: copied {copied} row(s) for {len(marks)} seat(s)")
 
         if not args.execute:
+            # State as it stands: what a run would leave behind is this, less the to_copy above.
+            report_gaps(source, target)
             print("Dry-run — nothing written; pass --execute to copy")
             return 0
 
@@ -371,6 +461,10 @@ def main(argv: list[str] | None = None) -> int:
         # Both tables in one transaction: a failure leaves production exactly as it was, and the
         # next run recomputes identical watermarks.
         target.commit()
+
+        # The run's closing verdict, and only true of a committed run — reported after the commit
+        # so it names what is still missing rather than rows this run has just delivered.
+        report_gaps(source, target)
 
     # The rows are committed, so a refresh failure costs freshness rather than data — pg_cron's
     # hourly marts.refresh_all() reconciles either way.

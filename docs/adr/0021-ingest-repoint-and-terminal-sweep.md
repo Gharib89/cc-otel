@@ -18,6 +18,16 @@ for deletion.
 
 The fix is not a better copy. It is to stop interim from being a destination.
 
+> **Measurement correction, 2026-08-04 (#415).** The two figures above count each seat's *interim
+> rows above the floor*, not what production lacks, so they are not the unflipped population.
+> Measured after the repoint: eleven seats have no production row at all and hold **29,110 metrics
+> / 23,471 events** between them, while `hadeel.sharaf` has had a flip watermark since 2026-07-18
+> and is short **654 metrics / 799 events** — 1% of the volume attributed to her, not 51% / 68% of
+> the whole. The decision below is unaffected: the seats the repoint exists to reach are those
+> eleven, and the largest of them holding 7,165 rows idle at decommission is the same trade. What
+> the wrong figure hid is that the *copy* had already worked for every flipped seat — which is why
+> #415 landed a detector rather than a new copy path. See the last consequence.
+
 ## Decisions
 
 - **Interim's sink is repointed at production's database and reservoir.** `DATABASE_URL` →
@@ -135,23 +145,68 @@ The fix is not a better copy. It is to stop interim from being a destination.
   reservoir write is best-effort by design (ADR-0005) — the same silent-failure item #244's gate
   called out, now repeated for a second identity.
 
-- **A small post-repoint tail is accepted.** Event time is client-side, so a batch buffered before
-  the repoint and flushed after it lands in production carrying a pre-repoint timestamp, dragging
-  that seat's watermark below some of its own interim rows. Bounded to roughly one flush interval per
-  seat, and the same residual class ADR-0020 already accepts for sessions straddling the flip.
+- **A post-repoint watermark drag is accepted, and it is not bounded by a flush interval.** Event
+  time is client-side, so a batch buffered before the repoint and flushed after it lands in
+  production carrying a pre-repoint timestamp, dragging that seat's watermark below some of its own
+  interim rows.
+
+  **Amended 2026-08-04 (#415).** This ADR first bounded the drag at "roughly one flush interval per
+  seat". The collector's sending queue is file-backed and survives restarts, so the real bound is
+  queue depth: `mohamed.atallah`'s collector replayed a batch stamped `2026-08-03 03:31:28.595Z`
+  through the repointed sink at `20:23`, ~17 hours later. That instant is his earliest interim row
+  to the microsecond, so his watermark collapsed onto his own interim floor and `[floor, watermark)`
+  became **empty** — the copy moves 0 of his 175 rows.
+
+  Copying nothing is nonetheless **correct** for him: the same replay carried the whole backlog into
+  production, which holds 177 metrics / 353 events against interim's 175 / 341. The drag is
+  therefore not a data-loss mechanism on its own; what it destroys is the *evidence*, because a
+  fully collapsed window is indistinguishable in the census from a seat whose rows never arrived.
+  That is what the last consequence answers.
 
 - **Two residuals are named and closed, not tracked.**
   - **Rows with no `user_email` are never swept**, whatever the count. They cannot participate in the
     watermark collapse, so a second `--execute` would copy them again into a table with no primary
     key. Gating on production holding no such rows fails too — production holds its own. They stay in
     #248 Part B's archive.
-  - **The post-watermark tail** — 835 metrics / 365 events at or above an already-flipped seat's
-    watermark, from sessions resumed across the endpoint switch — is unrecoverable. `watermarks()`
-    reads `MIN()` over production, so the first copy replaced each boundary with the floor. Recovery
-    would need durable per-seat state (which ADR-0020 refused, so re-runs need no memory) or a
-    row-identity key (`raw.*` has none, ADR-0017). `cutover_copy` prints each seat's pre-copy
-    watermark as **run evidence** so a run's output says which window it moved; that log line is
-    explicitly not a cursor and no recovery path is built on it.
+  - **The post-watermark tail** — rows at or above an already-flipped seat's watermark, from
+    sessions resumed across the endpoint switch — is unrecoverable. `watermarks()` reads `MIN()`
+    over production, so the first copy replaced each boundary with the floor. Recovery would need
+    durable per-seat state (which ADR-0020 refused, so re-runs need no memory) or a row-identity key
+    (`raw.*` has none, ADR-0017). `cutover_copy` prints each seat's pre-copy watermark as **run
+    evidence** so a run's output says which window it moved; that log line is explicitly not a
+    cursor and no recovery path is built on it.
+
+    **Figures amended 2026-08-04 (#415).** First recorded as 835 metrics / 365 events. Measured as
+    a **cutover shortfall** instead — the count production demonstrably lacks, rather than the count
+    held above a watermark — it is **1,524 metrics / 834 events** across three seats
+    (`engy.salem` 759/0, `hadeel.sharaf` 654/799, `marwa.mehanna` 111/35). The original figure came
+    from the bucket that cannot distinguish an already-copied row from a missing one, so it was
+    never a measure of this residual. Still accepted and still not tracked: recovery would mean
+    hand-bounding a per-seat copy into an unkeyed table, unverifiable afterwards, for ~2,400 rows.
+
+- **Every run reports a cutover shortfall per seat, because the census buckets cannot** (added
+  2026-08-04, #415). `cutover_copy` prints, per table, how many of interim's rows above the floor
+  production demonstrably lacks: `sum(max(interim - production, 0))` grouped by `(user_email, UTC
+  day)`, naming each seat and flagging the ones with no production row at all as sweep targets.
+
+  It exists because `held_above` conflates three populations — already copied, replayed straight
+  into production by a returning collector, and genuinely missing — and nothing distinguishes them:
+  the copy never deletes from interim, and a copied row collapses that seat's watermark onto itself,
+  so its rows re-report as held on every later run. Per-seat verification cannot cover the gap
+  either; it compares `[floor, watermark)` on both sides, and a collapsed window makes that
+  `0 == 0`, passing vacuously. Measured 2026-08-04, `held_above` read 303,283 metrics against an
+  actual shortfall of 30,640.
+
+  **The day grain is load-bearing.** A flat per-seat count is blind by the seat's own post-flip
+  production volume — `ahmed.gharib` holds 14,141 *more* metrics rows in production than in interim,
+  a surplus that would absorb any pre-flip rows the copy missed. Bucketing by UTC day confines the
+  overlap to the single day a seat's flip falls on, which makes the figure a **lower bound** rather
+  than a possibly-negative wash.
+
+  Counts, not row identities: `raw.*` has no primary key (ADR-0017), so a shortfall says how many
+  rows production lacks, never which. It is a detector and deliberately not a recovery cursor — no
+  automated action is taken on it, and a non-zero shortfall does not fail a run, because the
+  accepted residuals above are permanently non-zero.
 
 - **Production's historical aggregates move when the sweep runs.** Every mart that reads `raw.*`
   does so through `LEFT JOIN`s only (`db/views/marts/dim_user.sql`, `fact_session.sql`) and the seat
