@@ -129,9 +129,19 @@ This is the first amendment that reaches production.
 - **The POC half of that policy is already spent.** ADR-0016 pulled it forward for Azure consumption
   cost: the POC `otel` dump was taken, verified and uploaded — 103,095,676 bytes,
   `sha256 fe40f81e…ec02c971`, covering 2026-05-21 → 2026-07-16 — before `rg-cc-otel-poc` was deleted
-  on 2026-07-28 (#248 Part A). This ADR therefore requires only one further `pg_dump`, interim's —
+  on 2026-07-28 (#248 Part A). This ADR therefore required only one further `pg_dump`, interim's —
   not a second POC one. The pre-floor parquet archive above is a separate requirement and was not
   part of Part A.
+
+  **The interim half is now spent too, 2026-08-05**, taken ahead of the gate on the same reasoning
+  as the parquets: the sink has been repointed since 2026-08-03 and `meta.processed_batches` shows
+  no batch since, so the dump is final rather than a moving snapshot, and taking it early retires
+  the irreversibility risk instead of holding it for twelve more days.
+  `interim-cc_otel-schemav2-2026-08-05.dump`, 33,579,063 bytes, `sha256 1ba51581…e1a401e3`,
+  covering 2026-05-24 → 2026-08-03. Verified as Part A was — Docker down, so full decompression via
+  `pg_restore --data-only` and a per-table count: **13 of 13 base tables, 2,265,726 rows, exact** —
+  then round-trip re-hashed after upload. What remains before `az group delete` is the two-week
+  clock alone.
 
 ## Considered options
 
