@@ -62,7 +62,6 @@ SYNC: list[SkillEntry] = [
     {"name": "grill-with-docs", "model_invokable": False},
     {"name": "grilling", "model_invokable": False},
     {"name": "implement", "model_invokable": False},
-    {"name": "qa", "model_invokable": False},
     {"name": "quiz-before-merge", "model_invokable": False},
     {"name": "research", "model_invokable": False},
     {"name": "tdd", "model_invokable": True},
@@ -70,7 +69,7 @@ SYNC: list[SkillEntry] = [
     {"name": "to-tickets", "model_invokable": False},
     {"name": "triage", "model_invokable": False},
     {"name": "wayfinder", "model_invokable": False},
-    {"name": "writing-great-skills", "model_invokable": True},
+    {"name": "writing-for-agents", "model_invokable": True},
 ]
 
 # Skills that appear as references (footer/menu links) but are never a real
@@ -124,7 +123,7 @@ def resolve_closure(seed: dict[str, bool], universe: set[str]) -> tuple[dict[str
 def strip_model_invocation_flag(skill_md: Path) -> bool:
     """Remove `disable-model-invocation` from the YAML frontmatter only.
 
-    The body must be left untouched — e.g. writing-great-skills' prose literally
+    The body must be left untouched — e.g. writing-for-agents' prose literally
     contains the string `disable-model-invocation: true`. Returns True if a line
     was removed.
     """
