@@ -37,6 +37,26 @@ This is the first amendment that reaches production.
   the pre-cutover weeks; a Postgres-only copy would leave production with rows it could never
   re-derive.
 
+- **The pre-floor reservoir keeps its compacted parquets and loses its raw blobs.** Added
+  2026-08-05, settling the disposition #248 Part B item 2 requires before
+  `az group delete rg-cc-otel-interim`. Because nothing below the boundary was copied, interim's
+  `raw` and `compacted` containers hold pre-floor content with no counterpart anywhere — the interim
+  `pg_dump` archives promoted columns as rows, not payloads. The six pre-floor compacted parquets
+  (`signal={logs,metrics}/dt=2026-07-{14,15,16}`, 965,440 bytes) are therefore copied into the
+  production storage account's `archive` container under
+  `interim-reservoir-prefloor-2026-08-05/`, verified by hash round-trip and carrying a provenance
+  manifest, exactly as Part A did. The pre-floor raw gzipped blobs are not copied and die with the
+  RG.
+
+  The parquet is the cheap side of the trade because it is **lossless for the payload**: compaction
+  writes one `json VARCHAR` column of payload text and commits to no OTLP schema (ADR-0015,
+  `tools/compact.py`), so the parquets preserve every attribute that was never promoted to a column
+  — the one thing that exists nowhere else once interim is deleted. The raw blobs add only per-blob
+  boundaries, and their sole consumer is replay, whose floor ADR-0017 already sets at 2026-07-17
+  *because* 2026-07-16 does not reconcile. The archived 2026-07-16 parquet is derived from those
+  same non-reconciling blobs, so it is explicitly **not authoritative** for that day; Postgres is,
+  via the dump. The manifest says so on its face.
+
 - **No dedup, because the row sets are disjoint.** Each tracked machine's installer bakes exactly one
   collector endpoint, so a machine emits to interim or to production, never both, and the copy cannot
   produce a duplicate. The one precedent for the other outcome — ADR-0006's backfill "drops the
@@ -109,7 +129,9 @@ This is the first amendment that reaches production.
 - **The POC half of that policy is already spent.** ADR-0016 pulled it forward for Azure consumption
   cost: the POC `otel` dump was taken, verified and uploaded — 103,095,676 bytes,
   `sha256 fe40f81e…ec02c971`, covering 2026-05-21 → 2026-07-16 — before `rg-cc-otel-poc` was deleted
-  on 2026-07-28 (#248 Part A). This ADR therefore requires the interim dump only.
+  on 2026-07-28 (#248 Part A). This ADR therefore requires only one further `pg_dump`, interim's —
+  not a second POC one. The pre-floor parquet archive above is a separate requirement and was not
+  part of Part A.
 
 ## Considered options
 
