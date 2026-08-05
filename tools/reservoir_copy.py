@@ -108,14 +108,15 @@ def plan(
     """
     partitions = []
     for signal in signals:
-        signal_prefix = f"signal={signal}/"
-        target_names = set(target.list_names(signal_prefix))
-        for day in partition_days(source.list_prefixes(signal_prefix)):
+        for day in partition_days(source.list_prefixes(f"signal={signal}/")):
             if day < FLOOR:
                 continue
+            # Listed per partition, not once per signal: production keeps growing past this
+            # window, and a signal-wide listing would page through every day it has ever held to
+            # answer a question about 18 of them. Same reason `verify` lists per partition.
             prefix = partition_prefix(signal, day)
             source_names = sorted(source.list_names(prefix))
-            in_target = {name for name in target_names if name.startswith(prefix)}
+            in_target = set(target.list_names(prefix))
             partitions.append(
                 Partition(
                     signal,
