@@ -6,11 +6,10 @@ import duckdb
 import pytest
 from azure.core.exceptions import ResourceNotFoundError
 
-from tools._window import compacted_name, partition_prefix
+from tools._window import compacted_name, partition_days, partition_prefix
 from tools.compact import (
     MissingCompactedContainer,
     compact_partition,
-    partition_days,
     plan,
     run,
 )

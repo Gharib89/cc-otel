@@ -39,7 +39,7 @@ from cc_otel_sink.config import load_settings
 
 from ._progress import Progress
 from ._reservoir import CurationReservoir, configure_duckdb
-from ._window import compacted_name, partition_glob
+from ._window import compacted_name, partition_days, partition_glob
 from .signals import ROUTES
 
 
@@ -57,28 +57,6 @@ class MissingCompactedContainer(RuntimeError):
             "(bootstrap/bootstrap.ps1 -Environment <env> -Step deploy) before compacting, "
             "or point CC_OTEL_BLOB_COMPACTED_CONTAINER at an existing container"
         )
-
-
-def partition_days(prefixes: list[str]) -> list[date]:
-    """Dates of the ``dt=<YYYY-MM-DD>/`` child prefixes in ``prefixes``, oldest first.
-
-    Ascending so a catch-up run works through the backlog in ingest order. A child that is
-    not a ``dt=`` partition — or carries a ``dt=`` value that is not an ISO date — is
-    skipped rather than raising: one stray prefix must not abort discovery of the other 27
-    partitions, and skipping one costs only that partition's speedup because the read path
-    falls back to raw. An unparseable ``dt=`` is still anomalous (only ``blob.py`` writes
-    here, always from a formatted UTC date), so it is named on stderr rather than swallowed.
-    """
-    days = []
-    for name in prefixes:
-        leaf = name.rstrip("/").rsplit("/", 1)[-1]
-        if not leaf.startswith("dt="):
-            continue
-        try:
-            days.append(date.fromisoformat(leaf.removeprefix("dt=")))
-        except ValueError:
-            print(f"skipping unparseable partition prefix {name!r}", file=sys.stderr)
-    return sorted(days)
 
 
 def plan(

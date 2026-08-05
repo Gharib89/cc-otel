@@ -29,7 +29,11 @@ This is the first amendment that reaches production.
   NULL. One date satisfies all three; no separate judgement call was needed.
 
 - **Both stores move, on the same boundary.** Raw Postgres (#245 — `tools.cutover_copy`, a
-  client-side `COPY` pipe over `raw.metrics` and `raw.events`) and the blob reservoir partitions (#246 — `azcopy`, same paths). Holding one window
+  client-side `COPY` pipe over `raw.metrics` and `raw.events`) and the blob reservoir partitions (#246
+  — `tools.reservoir_copy`, same paths; this originally said `azcopy`, and #246 shipped a repo tool
+  instead so that the copy carries the floor, the ADR-0021 write-quiet gate and a name-set
+  verification the way the Postgres half does, none of which a bare `azcopy` invocation can).
+  Holding one window
   across both is what keeps replay and column curation (ADR-0017, #16) working from prod storage over
   the pre-cutover weeks; a Postgres-only copy would leave production with rows it could never
   re-derive.

@@ -1,8 +1,8 @@
 # Curation & ops tooling — operator runbook
 
-Eight command-line tools for curating and operating the redacted-blob reservoir (the
+Nine command-line tools for curating and operating the redacted-blob reservoir (the
 `raw` container), the column registry, the seat-roster reference data, and the interim -> prod
-cutover copy. They are
+cutover copy (both halves — Postgres rows and reservoir blobs). They are
 **manual / on-demand** — never wired into CI or the sink. This is the human operator guide;
 the agent-facing curation workflow lives in
 [`docs/agents/column-curation.md`](../docs/agents/column-curation.md).
@@ -17,6 +17,7 @@ the agent-facing curation workflow lives in
 | `tools.compact` | collapse each frozen reservoir partition into one parquet in the `compacted` container | no (writes only the derived container) |
 | `tools.roster_load` | land an IS seat-roster drop as an immutable dated snapshot in `ref` | **yes** (writes HR data) |
 | `tools.cutover_copy` | copy interim's pre-flip `raw` telemetry into production, bounded per seat by the flip watermark | **yes** (writes production telemetry; never deletes) |
+| `tools.reservoir_copy` | copy interim's reservoir blobs from the cutover floor up into production's `raw` container, same paths | **yes** (writes production blobs; never deletes) |
 
 ## Prerequisites
 
@@ -33,6 +34,7 @@ the agent-facing curation workflow lives in
    |---|---|---|
    | `DATABASE_URL` | sweep, basis_drift, gen_data_dictionary, replay, roster_load | Postgres connection string |
    | `INTERIM_DATABASE_URL` / `PROD_DATABASE_URL` | cutover_copy | the two environments' `cc_otel` connection strings — it needs both at once, so it reads its own pair rather than the ambient `DATABASE_URL` |
+   | `INTERIM_BLOB_ACCOUNT_URL` / `PROD_BLOB_ACCOUNT_URL` | reservoir_copy | the two environments' storage-account URLs, same reason — copy `CC_OTEL_BLOB_ACCOUNT_URL` out of `.env.interim` and `.env.prod` |
    | `CC_OTEL_BLOB_ACCOUNT_URL` | sweep, basis_drift, scrub, replay, compact | `https://<account>.blob.core.windows.net` |
    | `CC_OTEL_BLOB_CONTAINER` | sweep, basis_drift, scrub, replay, compact | container name (default `raw`) |
    | `CC_OTEL_BLOB_COMPACTED_CONTAINER` | compact, basis_drift | the derived container, `compacted` (ADR-0015); unset ⇒ `compact` refuses to run, and `basis_drift` reads raw throughout (~30x slower) |
@@ -55,7 +57,8 @@ Grant the role on the storage account (or the named container) to the identity y
 | `tools.scrub` | **Storage Blob Data Contributor** | overwrites blobs in place |
 | `tools.compact` | **Storage Blob Data Reader** on `raw` + **Storage Blob Data Contributor** on `compacted` | reads raw via DuckDB, writes only the derived container |
 | `tools.roster_load` | *(none — Postgres only)* | never touches blobs (ADR-0009 keeps no file copy) |
-| `tools.cutover_copy` | *(none — Postgres only)* | the reservoir half of the cutover is `azcopy` (#246) |
+| `tools.cutover_copy` | *(none — Postgres only)* | the reservoir half of the cutover is `tools.reservoir_copy` (#246) |
+| `tools.reservoir_copy` | **Storage Blob Data Reader** on interim `raw` + **Storage Blob Data Contributor** on production `raw` | downloads interim's blobs and uploads them to production under the same names; interim is only ever read |
 
 > Progress: sweep / basis_drift / scrub / replay / compact print a throttled `label: n[/total]` line to **stderr**
 > every ~2s over long windows so a big run is visibly alive. stdout stays pipe-clean.
@@ -304,7 +307,8 @@ committed, and the hourly `marts.refresh_all()` reconciles.
 
 The raw half of the cutover data policy (#245, ADR-0020). Interim and production run the same
 schema behind the same sink image, so this is an **identity copy** — no mapping layer, which is
-why ADR-0002's ban on translated history does not apply. The reservoir half is `azcopy` (#246).
+why ADR-0002's ban on translated history does not apply. The reservoir half is
+`tools.reservoir_copy` (#246, below).
 
 A seat's **flip watermark** is `MIN(<event time>)` over that seat's *production* rows — the moment
 its machine started emitting to prod. The copy moves interim rows in `[2026-07-17, watermark)` and
@@ -438,3 +442,56 @@ sweeping early is a decision about permanent data placement whose failure mode i
 table — a swept seat's as `infinity`, an already-flipped seat's as its real timestamp — so the
 run's output records which window it moved. This is run evidence, explicitly **not** a recovery
 cursor: no state is persisted from it.
+
+## `tools.reservoir_copy` — copy interim's reservoir blobs into production (destructive)
+
+The reservoir half of the same cutover data policy (#246, ADR-0020), twin of `cutover_copy`: same
+window, same floor (`2026-07-17`), same direction. Blob paths are **identical** on both ends —
+`signal=<metrics|logs>/dt=<YYYY-MM-DD>/<HHMMSS>-<uuid4>.json.gz` — so production's reservoir
+becomes replay- and curation-capable back to the floor (ADR-0017), addressed exactly as interim's
+was. Pre-floor blobs are deliberately left behind: they die with the interim RG, and #248 Part B's
+archive dump is their only surviving record.
+
+**Safety flow — dry-run first, always:**
+
+```sh
+export INTERIM_BLOB_ACCOUNT_URL='https://<interim-account>.blob.core.windows.net'
+export PROD_BLOB_ACCOUNT_URL='https://<prod-account>.blob.core.windows.net'
+uv run python -m tools.reservoir_copy            # read-only: per-partition counts both ends
+uv run python -m tools.reservoir_copy --execute  # copy the missing blobs, then verify
+```
+
+The first two lines name the resolved **source and target** account and container. Check them: a
+swapped pair would copy production's live blobs back into interim, which is due to be deleted. A
+source and target resolving to the same container is refused outright. Both ends are addressed by
+**account URL under `az login`** — a connection string names one account and this tool needs two,
+so an ambient `CC_OTEL_BLOB_CONNECTION_STRING` never decides either end.
+
+**What a run moves** is, per `(signal, day)` partition from the floor up, the source blob names
+production does not already hold. Set difference on **names**, not a count comparison: a name
+carries a `uuid4()` and so identifies one blob globally, which is also why the two sinks writing
+into the same post-repoint partition (ADR-0021) cannot collide. Production's own blobs in those
+partitions are its live post-flip traffic and are never copy targets — a partition line reading
+`0 missing of 343 interim blob(s); production holds 688` is the normal overlap on a flip day.
+
+**Idempotent by construction, and the repair for a short run is a re-run.** A name already in
+production is never a target again. Blob writes have no transaction, so verification *follows* the
+copy rather than gating it: it re-lists both containers and fails the run (exit 1) if any source
+name is still absent, leaving what did land in place. Nothing is ever deleted from either end.
+
+**Write-quiet gate, no override.** `--execute` refuses (exit 1, nothing written) unless interim's
+newest in-window blob is `>= 24h` old — the same window `cutover_copy --sweep` waits on (ADR-0021),
+for the same reason: until the ingest repoint has stopped interim gaining blobs, its right edge is
+still moving and a partition listing cannot settle. The age is read off the blob **name**, which
+`blob.py` stamps from the sink's UTC clock at write, so no `last_modified` round trip is needed;
+an unreadable name is named on stderr and never counted as "quiet". A dry-run prints the age and is
+never refused. There is deliberately **no `--force`** — same reasoning as `--sweep`.
+
+**Then compact production.** The compacted container is derived and additive (ADR-0015), so the
+days this copy lands blobs into need their parquet counterpart built:
+
+```sh
+uv run python -m tools.compact --execute   # add --rebuild for a day production had already compacted
+```
+
+A successful `--execute` prints this as its closing line.
