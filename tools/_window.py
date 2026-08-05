@@ -20,9 +20,10 @@ def partition_days(prefixes: list[str]) -> list[date]:
     Ascending so a catch-up run works through the backlog in ingest order. A child that is
     not a ``dt=`` partition — or carries a ``dt=`` value that is not an ISO date — is
     skipped rather than raising: one stray prefix must not abort discovery of the other 27
-    partitions, and skipping one costs only that partition's speedup because the read path
-    falls back to raw. An unparseable ``dt=`` is still anomalous (only ``blob.py`` writes
-    here, always from a formatted UTC date), so it is named on stderr rather than swallowed.
+    partitions. What skipping costs is the caller's own: ``compact`` loses that partition's
+    speedup (the read path falls back to raw), while ``reservoir_copy`` would not copy it at
+    all. An unparseable ``dt=`` is anomalous either way — only ``blob.py`` writes here, always
+    from a formatted UTC date — so it is named on stderr rather than swallowed.
     """
     days = []
     for name in prefixes:

@@ -4,8 +4,9 @@ Built from the sink's own ``Settings`` (``CC_OTEL_BLOB_*``) so the tools read th
 container the sink writes — or, with ``from_settings``' container override, the compacted
 container beside it (ADR-0015), which the sink never touches. Two consumers:
 
-* ``CurationReservoir`` — list / download / overwrite, for ``tools.scrub``, ``tools.replay``
-  and ``tools.compact`` (the sink's ``BlobReservoir`` only writes new blobs).
+* ``CurationReservoir`` — list / download / overwrite, for ``tools.scrub``, ``tools.replay``,
+  ``tools.compact`` and ``tools.reservoir_copy`` (the sink's ``BlobReservoir`` only writes new
+  blobs).
 * ``configure_duckdb`` — register an Azure secret on a DuckDB connection so ``tools.sweep``,
   ``tools.compact`` and the ``analysis`` notebooks can read ``azure://…`` over the reservoir.
   The secret is account-scoped, so it reaches both containers.

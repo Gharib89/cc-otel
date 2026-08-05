@@ -2,7 +2,37 @@ from datetime import date
 
 import pytest
 
-from tools._window import compacted_url, date_range, globs, partition_glob, prefixes, resolve_window
+from tools._window import (
+    compacted_url,
+    date_range,
+    globs,
+    partition_days,
+    partition_glob,
+    prefixes,
+    resolve_window,
+)
+
+
+def test_partition_days_parses_dt_prefixes():
+    assert partition_days(["signal=logs/dt=2026-07-27/", "signal=logs/dt=2026-07-26/"]) == [
+        date(2026, 7, 26),
+        date(2026, 7, 27),
+    ]  # ascending, so catch-up runs oldest first
+
+
+def test_partition_days_ignores_children_that_are_not_partitions():
+    assert partition_days(["signal=logs/dt=2026-07-26/", "signal=logs/other/"]) == [
+        date(2026, 7, 26)
+    ]
+
+
+def test_partition_days_skips_an_unparseable_dt_without_aborting(capsys):
+    # One stray prefix must not abort discovery of every other partition — what skipping costs
+    # is the caller's: a lost speedup for compact, an uncopied partition for reservoir_copy.
+    assert partition_days(["signal=logs/dt=not-a-date/", "signal=logs/dt=2026-07-26/"]) == [
+        date(2026, 7, 26)
+    ]
+    assert "dt=not-a-date" in capsys.readouterr().err  # named, not silently swallowed
 
 
 def test_date_range_is_inclusive():

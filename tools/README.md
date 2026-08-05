@@ -60,7 +60,7 @@ Grant the role on the storage account (or the named container) to the identity y
 | `tools.cutover_copy` | *(none — Postgres only)* | the reservoir half of the cutover is `tools.reservoir_copy` (#246) |
 | `tools.reservoir_copy` | **Storage Blob Data Reader** on interim `raw` + **Storage Blob Data Contributor** on production `raw` | downloads interim's blobs and uploads them to production under the same names; interim is only ever read |
 
-> Progress: sweep / basis_drift / scrub / replay / compact print a throttled `label: n[/total]` line to **stderr**
+> Progress: sweep / basis_drift / scrub / replay / compact / reservoir_copy print a throttled `label: n[/total]` line to **stderr**
 > every ~2s over long windows so a big run is visibly alive. stdout stays pipe-clean.
 
 ## `tools.sweep` — find unclassified keys & redaction leaks

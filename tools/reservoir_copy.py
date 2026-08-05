@@ -30,10 +30,12 @@ from .signals import ROUTES
 # own live telemetry effectively begins here, and pre-floor blobs die with the interim RG.
 FLOOR = date(2026, 7, 17)
 
-# ADR-0021's write-quiet gate, as `tools.cutover_copy` applies it to `--sweep`: interim's right
-# edge must have stopped moving before a partition listing can settle. Same 24h, and deliberately
-# no `--force` twin -- copying early is a decision about permanent data placement, and the
-# failure mode is a verification that passes over a window that then grows.
+# ADR-0021's write-quiet window, the same 24h `tools.cutover_copy --sweep` waits on and for the
+# same reason: interim's right edge must have stopped moving before a partition listing can settle.
+# The *clock* differs because the store does -- `--sweep` reads `meta.processed_batches`, this reads
+# the newest blob name -- so each store answers for itself (CONTEXT.md *write-quiet*). Deliberately
+# no `--force` twin: copying early is a decision about permanent data placement, and the failure
+# mode is a verification that passes over a window that then grows.
 WRITE_QUIET_WINDOW = timedelta(hours=24)
 
 
@@ -94,12 +96,9 @@ def newest_write(names: Iterable[str]) -> datetime | None:
 
 
 def plan(
-    source: CurationReservoir,
-    target: CurationReservoir,
-    signals: tuple[str, ...],
-    floor: date = FLOOR,
+    source: CurationReservoir, target: CurationReservoir, signals: tuple[str, ...]
 ) -> list[Partition]:
-    """Every source partition from ``floor`` up, carrying the blob names production lacks.
+    """Every source partition from :data:`FLOOR` up, carrying the blob names production lacks.
 
     Discovered from the *source*, so production's own partitions outside the window are never
     considered. Set difference on blob **names** is exact rather than a count comparison:
@@ -112,7 +111,7 @@ def plan(
         signal_prefix = f"signal={signal}/"
         target_names = set(target.list_names(signal_prefix))
         for day in partition_days(source.list_prefixes(signal_prefix)):
-            if day < floor:
+            if day < FLOOR:
                 continue
             prefix = partition_prefix(signal, day)
             source_names = sorted(source.list_names(prefix))
@@ -195,10 +194,6 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     p.add_argument("--source-url", help="interim account URL; default $INTERIM_BLOB_ACCOUNT_URL")
     p.add_argument("--target-url", help="production account URL; default $PROD_BLOB_ACCOUNT_URL")
-    p.add_argument(
-        "--container",
-        help="reservoir container, same on both ends; default $CC_OTEL_BLOB_CONTAINER (raw)",
-    )
     p.add_argument("--execute", action="store_true", help="copy the blobs (default: dry-run)")
     return p.parse_args(argv)
 
@@ -207,7 +202,9 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     source_url = args.source_url or os.environ.get("INTERIM_BLOB_ACCOUNT_URL")
     target_url = args.target_url or os.environ.get("PROD_BLOB_ACCOUNT_URL")
-    container = args.container or os.environ.get("CC_OTEL_BLOB_CONTAINER", "raw")
+    # One container name for both ends -- ADR-0020's "same paths" includes the container, and both
+    # environments provision it as `raw` (iac/modules/storage.bicep).
+    container = os.environ.get("CC_OTEL_BLOB_CONTAINER", "raw")
     if not source_url or not target_url:
         print(
             "Need both accounts: pass --source-url/--target-url or set"

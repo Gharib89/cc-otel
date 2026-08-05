@@ -185,7 +185,7 @@ Retargeting **interim**'s sink at production's database and reservoir, so teleme
 _Avoid_: dual-write (that is a fleet-side second exporter endpoint, rejected in ADR-0020), failover
 
 **Write-quiet**:
-Interim provably gaining no new rows — `now() - MAX(meta.processed_batches.processed_at) >= 24 hours`, a server-side ingest clock rather than the client-supplied event time a skewed laptop or a late flush can backdate. The precondition for the **terminal sweep**, and a property of the topology after the **ingest repoint**, not a claim about the fleet. See ADR-0021.
+Interim provably gaining no new writes for `>= 24 hours`, measured per store on that store's own ingest clock: for `raw` rows `now() - MAX(meta.processed_batches.processed_at)`, a server-side clock rather than the client-supplied event time a skewed laptop or a late flush can backdate; for the **raw reservoir** the newest in-window blob's name, which the sink stamps from its UTC clock at write. The precondition for the **terminal sweep** and for the reservoir half of the cutover copy (`tools.reservoir_copy`, #246), and a property of the topology after the **ingest repoint**, not a claim about the fleet. Each store answers for itself — the repoint switches both targets at once, but a store is write-quiet only once its own clock says so. See ADR-0021.
 _Avoid_: quiet, idle, drained (each reads as "nobody is working", which is the heuristic this term exists to replace)
 
 **Terminal sweep**:
