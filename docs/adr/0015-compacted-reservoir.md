@@ -85,4 +85,5 @@ fetch 10–15 s → 0.6–1.6 s per partition, and the Jul 14 → 28 window from
   `docs/agents/column-curation.md` §6.
 - The residual read cost is python compute in the notebooks, which only bites on a full-window
   re-cut — the case the frozen `docs/research/` cuts already serve.
-- Prod is out of scope here; the prod reservoir azcopy is #246.
+- Prod is out of scope here; the prod reservoir copy is #246 (`tools.reservoir_copy`), which closes
+  by naming the `tools.compact` run its new blobs make due.

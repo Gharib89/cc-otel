@@ -59,6 +59,8 @@ uv run python -m tools.basis_drift [--days 7|--since|--until]  # re-check each k
 uv run python -m tools.cutover_copy          # dry-run the interim->prod raw copy: per-seat flip watermarks, what would move vs stay in interim (ADR-0020); reads INTERIM_DATABASE_URL + PROD_DATABASE_URL
 uv run python -m tools.cutover_copy --execute  # copy interim rows below each seat's watermark into prod, verify per-seat counts, refresh prod marts; re-run as seats flip
 uv run python -m tools.cutover_copy --execute --sweep  # additionally copy [floor, infinity) for seats production has never seen at all (ADR-0021); refuses unless interim has been write-quiet >= 24h on meta.processed_batches, no --force override
+uv run python -m tools.reservoir_copy        # dry-run the reservoir half of the cutover: per-(signal, day) blob names interim holds from 2026-07-17 up that prod lacks (#246, ADR-0020); reads INTERIM_BLOB_ACCOUNT_URL + PROD_BLOB_ACCOUNT_URL
+uv run python -m tools.reservoir_copy --execute  # copy those blobs into prod's raw container under the same names, then verify by re-listing; refuses unless interim's newest in-window blob is >= 24h old, no --force override; follow with tools.compact against prod
 scripts/ship/local-gate.sh   # path-aware local mirror of CI (JSON verdict; the ship skill's phase-5 gate)
 psql "$DATABASE_URL"         # ad-hoc DB access (Azure otel real data / cc_otel)
 ```
@@ -96,7 +98,7 @@ Migration-authoring loop, the throwaway-container rationale, and the `.env` cave
 |---|---|
 | `db/` | dbmate migrations + `schema.sql` + `views/` + `functions/` canonical definitions (ADR-0026) |
 | `bootstrap/` | env bring-up runbook + PowerShell scripts (operator-run) |
-| `tools/` | Curation + ops tooling over the blob reservoir (sweep, basis drift, data dictionary, replay, scrub, compact) + reference-data ingest (`roster_load.py`) + the interim->prod cutover copy + terminal sweep (`cutover_copy.py`, ADR-0020/0021) + CI gate-path derivation (`gate_paths.py`) |
+| `tools/` | Curation + ops tooling over the blob reservoir (sweep, basis drift, data dictionary, replay, scrub, compact) + reference-data ingest (`roster_load.py`) + the interim->prod cutover copy + terminal sweep (`cutover_copy.py`, ADR-0020/0021) + its reservoir half (`reservoir_copy.py`, #246) + CI gate-path derivation (`gate_paths.py`) |
 | `analysis/` | marimo + DuckDB notebook lab over the blob reservoir (on-demand local EDA, `--group analysis`; #87) |
 | `scripts/` | skill-sync + cloud-ship bootstrap + dev-migrate + `ship/` (the ship skill's deterministic mechanics: preflight, isolate, claim, local-gate, ci-wait, merge) + `backfill/` (one-shot POC→interim backfill, ADR-0006) |
 | `.claude/skills/` | tracked agent skills (vendored + project-native) |

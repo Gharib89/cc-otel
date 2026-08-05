@@ -85,5 +85,5 @@ the parallel-cutover gate.
 - **ADR-0004's parallel-cutover consequence no longer holds as written**, and CONTEXT.md's
   *parallel cutover* entry now describes interim as the fallback. ADR-0002 and ADR-0006 are
   untouched: production still starts fresh, and interim still carries mapped pilot history.
-- Prod is unaffected. The prod reservoir azcopy (#246) and the interim decommission (#248 Part B)
-  are unchanged.
+- Prod is unaffected. The prod reservoir copy (#246, `tools.reservoir_copy`) and the interim
+  decommission (#248 Part B) are unchanged.
