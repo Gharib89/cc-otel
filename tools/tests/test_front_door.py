@@ -84,12 +84,42 @@ def test_daily_counts_ignores_hours_azure_returned_no_total_for():
     assert row.counts == {"200": 12}
 
 
-def test_daily_counts_ignores_a_series_with_no_status_code_dimension():
+def test_daily_counts_matches_the_dimension_name_whatever_its_casing():
+    # The request filter spells it `statusCode`; the live response labels it `statuscode`. Neither
+    # spelling is load-bearing, because getting it wrong would not raise — it would drop every
+    # series and report the door as silent.
+    camel = {
+        "metadatavalues": [{"name": {"value": "statusCode"}, "value": "200"}],
+        "data": [{"timeStamp": "2026-08-05T09:00:00Z", "total": 374.0}],
+    }
+
+    (row,) = daily_counts(_payload(camel), [date(2026, 8, 5)])
+
+    assert row.counts == {"200": 374}
+
+
+def test_daily_counts_skips_one_unlabelled_series_among_labelled_ones():
+    unlabelled = {"metadatavalues": [], "data": [{"timeStamp": "2026-08-05T09:00Z", "total": 9}]}
+    payload = _payload(_series("200", {"2026-08-05T10:00:00Z": 4.0}), unlabelled)
+
+    (row,) = daily_counts(payload, [date(2026, 8, 5)])
+
+    assert row.counts == {"200": 4}
+
+
+def test_daily_counts_refuses_a_response_where_no_series_carries_the_dimension():
+    # The dangerous contract change: shrugging would fold every day to zero and read as silence.
     payload = _payload(
         {"metadatavalues": [], "data": [{"timeStamp": "2026-08-05T09:00Z", "total": 9}]}
     )
 
-    (row,) = daily_counts(payload, [date(2026, 8, 5)])
+    with pytest.raises(LookupError, match="statuscode"):
+        daily_counts(payload, [date(2026, 8, 5)])
+
+
+def test_daily_counts_accepts_a_response_with_no_series_at_all():
+    # A genuinely quiet window returns no timeseries — that is silence, not a broken contract.
+    (row,) = daily_counts(_payload(), [date(2026, 8, 5)])
 
     assert row.counts == {}
 
@@ -262,6 +292,15 @@ def test_main_refuses_a_window_with_no_days_in_it(az, capsys):
 
     assert main(["--days", "0", "--subscription", SUB, "--resource-group", RG]) == 2
     assert "no days" in capsys.readouterr().err
+
+
+def test_main_reports_a_vanished_status_split_as_tooling_not_as_silence(az, capsys):
+    az(_payload({"metadatavalues": [], "data": [{"timeStamp": "2026-08-05T09:00Z", "total": 9}]}))
+
+    assert main(["--subscription", SUB, "--resource-group", RG]) == 2
+    captured = capsys.readouterr()
+    assert "status-code split" in captured.err
+    assert "SILENT" not in captured.out
 
 
 def test_main_exits_1_while_the_front_door_is_still_receiving(az, capsys):

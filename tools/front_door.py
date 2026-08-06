@@ -32,6 +32,11 @@ APP_NAME = "ccotel-app-{env}"
 ENVIRONMENTS = ("interim", "prod")
 RESOURCE_TYPE = "Microsoft.App/containerapps"
 
+# The dimension the response splits on, lowercased for comparison. `--filter` spells it
+# `statusCode`; the response labels it `statuscode`. Compared case-insensitively so neither
+# spelling is load-bearing (#434 review).
+STATUS_DIMENSION = "statuscode"
+
 # A post the collector accepted. Anything else was rejected before the sink saw it -- a `401`
 # payload is dropped, never queued, so the rejected columns are live data loss, not retry noise.
 ACCEPTED = "200"
@@ -124,26 +129,42 @@ def fetch(subscription: str, resource_group: str, app: str, days: list[date]) ->
     return json.loads(result.stdout)
 
 
+def _status_code(series: dict) -> str | None:
+    """The status code labelling one timeseries, or ``None`` if it carries no such dimension.
+
+    Matched case-insensitively. The request filter spells it ``statusCode`` but the response
+    labels the dimension ``statuscode`` (verified against a live 2026-08-06 response), so neither
+    spelling can be assumed -- and getting it wrong would not raise, it would silently drop every
+    series and report the door as silent.
+    """
+    for meta in series.get("metadatavalues", []):
+        name = meta.get("name", {}).get("value")
+        if isinstance(name, str) and name.lower() == STATUS_DIMENSION:
+            return str(meta["value"])
+    return None
+
+
 def daily_counts(payload: dict, days: list[date]) -> list[Day]:
     """Hourly points folded into one row per requested UTC day, oldest first.
 
     The day grid comes from ``days``, not from the payload: a status code only gets a timeseries
     on the days it occurred, so a payload-derived grid would drop a silent day entirely instead of
     reporting it as zero -- and a dropped day cannot break a silence run that it should break.
+
+    Raises :class:`LookupError` if the response carried timeseries but **none** of them named a
+    status-code dimension. The request asks for one (``--filter "statusCode eq '*'"``), so its
+    absence means the contract moved -- and the failure mode of shrugging is the dangerous one:
+    every series would be skipped, every day would fold to zero, and the run would read as silence.
     """
     totals: dict[date, dict[str, int]] = {day: {} for day in days}
+    seen = matched = 0
     for metric in payload.get("value", []):
         for series in metric.get("timeseries", []):
-            code = next(
-                (
-                    meta["value"]
-                    for meta in series.get("metadatavalues", [])
-                    if meta.get("name", {}).get("value") == "statuscode"
-                ),
-                None,
-            )
+            seen += 1
+            code = _status_code(series)
             if code is None:
                 continue
+            matched += 1
             for point in series.get("data", []):
                 # `total` is absent or null for an hour with no requests -- an hour Azure has no
                 # data for looks the same, which is what RETENTION exists to keep out of range.
@@ -153,6 +174,11 @@ def daily_counts(payload: dict, days: list[date]) -> list[Day]:
                 day = date.fromisoformat(point["timeStamp"][:10])
                 if day in totals:
                     totals[day][code] = totals[day].get(code, 0) + int(total)
+    if seen and not matched:
+        raise LookupError(
+            f"none of the {seen} timeseries carried a {STATUS_DIMENSION!r} dimension"
+            " — the metric's response contract has changed"
+        )
     return [Day(day, totals[day]) for day in days]
 
 
@@ -259,7 +285,13 @@ def main(argv: list[str] | None = None) -> int:
         print("Needs `az login` with Monitoring Reader on the resource group.", file=sys.stderr)
         return 2
 
-    rows = daily_counts(payload, days)
+    try:
+        rows = daily_counts(payload, days)
+    except LookupError as exc:
+        # Never fall through to a verdict here: an unreadable split folds every day to zero, which
+        # is indistinguishable from a door nobody is posting to.
+        print(f"Could not read the status-code split: {exc}", file=sys.stderr)
+        return 2
     run = silent_days(rows, today)
     print(format_report(rows, app, run, today))
     return 0 if run >= SILENCE_DAYS else 1
