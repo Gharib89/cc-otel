@@ -822,6 +822,39 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
     ColumnSpec(
         "resource",
         "*",
+        "installer.stamp",
+        "promoted",
+        "installer_stamp",
+        "TEXT",
+        "derived",
+        description="Installer stamp the emitting process started with: "
+        "SHA256(wrapper + managed-settings + installer schema version).",
+        useful_for="fleet-config convergence: per seat, whether a re-push has reached the "
+        "running process. A hash says same-or-different, never which of two is newer",
+        decided_at="2026-08-06",
+        notes="promoted at first emission (#432); resource-only, so kind=derived reaches both "
+        "raw tables. No reservoir history to replay (ADR-0017) - NULL before the re-push that "
+        "first ships the attribute",
+    ),
+    ColumnSpec(
+        "resource",
+        "*",
+        "installer.stamp_on_disk",
+        "promoted",
+        "installer_stamp_on_disk",
+        "TEXT",
+        "derived",
+        description="Installer stamp the machine's managed-settings.json carried at emit time.",
+        useful_for="stale-session detection: a record whose installer_stamp differs from "
+        "installer_stamp_on_disk is running a config the disk has already replaced",
+        decided_at="2026-08-06",
+        notes="statusline-wrapper only (#432): the wrapper re-reads managed-settings.json every "
+        "call, so it is the one emitter that sees process config and disk config at once. NULL on "
+        "every natively-exported record",
+    ),
+    ColumnSpec(
+        "resource",
+        "*",
         "os.version",
         "kept",
         kept_basis="collinear",

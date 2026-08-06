@@ -118,12 +118,16 @@ def test_derived_coalesce_orders_own_signal_then_resource() -> None:
         "cc_version": ["app.version", "service.version"],
         "service_name": ["service.name"],
         "os_type": ["os.type"],
+        "installer_stamp": ["installer.stamp"],
+        "installer_stamp_on_disk": ["installer.stamp_on_disk"],
     }
     assert cs.derived_coalesce("events") == {
         "user_account_id": ["user.account_uuid", "user.account_id"],
         "cc_version": ["app.version", "service.version"],
         "service_name": ["service.name"],
         "os_type": ["os.type"],
+        "installer_stamp": ["installer.stamp"],
+        "installer_stamp_on_disk": ["installer.stamp_on_disk"],
     }
 
 
@@ -392,12 +396,15 @@ def _attr_list(pairs: dict[str, str]) -> list[dict[str, object]]:
     return [{"key": k, "value": {"stringValue": v}} for k, v in pairs.items()]
 
 
-# Every promoted resource row's path — service_name and os_type reach the raw tables
-# through the resource projection alone (#357), so the population guards below need them.
+# Every promoted resource row's path — these columns reach the raw tables through the
+# resource projection alone (#357 service_name/os_type, #432 the installer stamps), so
+# the population guards below need them.
 _RESOURCE = [
     {"key": "service.version", "value": {"stringValue": "1.0"}},
     {"key": "service.name", "value": {"stringValue": "claude-code"}},
     {"key": "os.type", "value": {"stringValue": "windows"}},
+    {"key": "installer.stamp", "value": {"stringValue": "a" * 64}},
+    {"key": "installer.stamp_on_disk", "value": {"stringValue": "b" * 64}},
 ]
 
 
