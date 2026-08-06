@@ -1,6 +1,6 @@
 # Curation & ops tooling — operator runbook
 
-Nine command-line tools for curating and operating the redacted-blob reservoir (the
+Ten command-line tools for curating and operating the redacted-blob reservoir (the
 `raw` container), the column registry, the seat-roster reference data, and the interim -> prod
 cutover copy (both halves — Postgres rows and reservoir blobs). They are
 **manual / on-demand** — never wired into CI or the sink. This is the human operator guide;
@@ -18,6 +18,7 @@ the agent-facing curation workflow lives in
 | `tools.roster_load` | land an IS seat-roster drop as an immutable dated snapshot in `ref` | **yes** (writes HR data) |
 | `tools.cutover_copy` | copy interim's pre-flip `raw` telemetry into production, bounded per seat by the flip watermark | **yes** (writes production telemetry; never deletes) |
 | `tools.reservoir_copy` | copy interim's reservoir blobs from the cutover floor up into production's `raw` container, same paths | **yes** (writes production blobs; never deletes) |
+| `tools.front_door` | count requests per UTC day at an environment's collector ingress, split by status code — the **front-door silence** measurement | no (reads one Azure metric) |
 
 ## Prerequisites
 
@@ -35,6 +36,7 @@ the agent-facing curation workflow lives in
    | `DATABASE_URL` | sweep, basis_drift, gen_data_dictionary, replay, roster_load | Postgres connection string |
    | `INTERIM_DATABASE_URL` / `PROD_DATABASE_URL` | cutover_copy | the two environments' `cc_otel` connection strings — it needs both at once, so it reads its own pair rather than the ambient `DATABASE_URL` |
    | `INTERIM_BLOB_ACCOUNT_URL` / `PROD_BLOB_ACCOUNT_URL` | reservoir_copy | the two environments' storage-account URLs, same reason — copy `CC_OTEL_BLOB_ACCOUNT_URL` out of `.env.interim` and `.env.prod` |
+   | `AZURE_SUBSCRIPTION_ID` / `RESOURCE_GROUP` | front_door | the target environment's own pair — `set -a; . ./.env.interim; set +a`. Neither has a default: interim lives in the **VS Enterprise** subscription, not your `az` default, so a guess would measure the wrong front door and report silence |
    | `CC_OTEL_BLOB_ACCOUNT_URL` | sweep, basis_drift, scrub, replay, compact | `https://<account>.blob.core.windows.net` |
    | `CC_OTEL_BLOB_CONTAINER` | sweep, basis_drift, scrub, replay, compact | container name (default `raw`) |
    | `CC_OTEL_BLOB_COMPACTED_CONTAINER` | compact, basis_drift | the derived container, `compacted` (ADR-0015); unset ⇒ `compact` refuses to run, and `basis_drift` reads raw throughout (~30x slower) |
@@ -59,6 +61,7 @@ Grant the role on the storage account (or the named container) to the identity y
 | `tools.roster_load` | *(none — Postgres only)* | never touches blobs (ADR-0009 keeps no file copy) |
 | `tools.cutover_copy` | *(none — Postgres only)* | the reservoir half of the cutover is `tools.reservoir_copy` (#246) |
 | `tools.reservoir_copy` | **Storage Blob Data Reader** on interim `raw` + **Storage Blob Data Contributor** on production `raw` | downloads interim's blobs and uploads them to production under the same names; interim is only ever read |
+| `tools.front_door` | *(none — no blob or Postgres access)* | needs **Monitoring Reader** on the resource group instead; it shells out to `az monitor metrics list` and reads nothing else |
 
 > Progress: sweep / basis_drift / scrub / replay / compact / reservoir_copy print a throttled `label: n[/total]` line to **stderr**
 > every ~2s over long windows so a big run is visibly alive. stdout stays pipe-clean.
@@ -495,3 +498,50 @@ uv run python -m tools.compact --execute   # add --rebuild for a day production 
 ```
 
 A successful `--execute` prints this as its closing line.
+
+## `tools.front_door` — is anything still posting to this environment's ingress?
+
+Read-only. Answers the one question every other quiet-check in this repo cannot: **is a machine
+still reaching this endpoint.** `tools.cutover_copy --sweep` and `tools.reservoir_copy` both measure
+a *store* — `meta.processed_batches`, the newest blob name — and after the **ingest repoint** those
+stores answer about production. Interim's stores read quiet *because* its sink writes elsewhere,
+while its collector endpoint stays live and in use (ADR-0027, #431).
+
+```sh
+set -a; . ./.env.interim; set +a          # AZURE_SUBSCRIPTION_ID + RESOURCE_GROUP
+uv run python -m tools.front_door                          # last 14 days
+uv run python -m tools.front_door --since 2026-07-30       # a named window
+uv run python -m tools.front_door --env prod --days 30
+```
+
+It prints the resolved app, subscription and resource group first — check them, because a
+subscription and an environment that disagree would measure a different front door and report
+silence. Then one line per UTC day, counts per status code, then the verdict:
+
+```
+  2026-08-04  200   1367  401   1348  404      3
+  2026-08-05  200    374  401      0  404      0
+  2026-08-06  200    267  401      0  404      0  (partial day)
+STILL RECEIVING: 0 consecutive complete day(s) with zero 200s, of the 7 ADR-0027 requires ...
+```
+
+**Exit code is the verdict**: `0` = `SILENT` (the run has reached ADR-0027's seven days), `1` =
+`STILL RECEIVING`, `2` = it could not measure — a missing subscription/resource group, a window
+outside retention, or an `az` that would not answer. The `2` cases matter: an unreadable metric must
+never be mistaken for a door with no traffic, so the tool says so and refuses rather than printing a
+verdict.
+
+**Read the rejected columns as loss, not noise.** A `401` or `404` payload is dropped at the
+collector — never queued, never retried into existence — so `401 1348` on 2026-08-04 is 1,348 posts
+that exist nowhere. Accepted posts (`200`) are the only ones the silence run counts.
+
+**Today is reported but never counted.** The current UTC day is still accruing, so a quiet morning
+is not a quiet day; counting it would open the decommission gate hours early.
+
+**A window older than 93 days is refused.** That is Azure's platform-metric retention, and outside
+it the API returns an *empty series* rather than an error — unretained days would read as silence,
+the one direction this measurement must not fail in. Inside it the metric answers retrospectively,
+so nothing had to be collecting before the question was asked.
+
+There is deliberately no `--force` and no threshold flag: seven days is a constant, for the same
+reason `--sweep` has no override — the decision it feeds is `az group delete`.

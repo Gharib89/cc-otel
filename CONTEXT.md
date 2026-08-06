@@ -188,6 +188,14 @@ _Avoid_: dual-write (that is a fleet-side second exporter endpoint, rejected in 
 Interim provably gaining no new writes for `>= 24 hours`, measured per store on that store's own ingest clock: for `raw` rows `now() - MAX(meta.processed_batches.processed_at)`, a server-side clock rather than the client-supplied event time a skewed laptop or a late flush can backdate; for the **raw reservoir** the newest in-window blob's name, which the sink stamps from its UTC clock at write. The precondition for the **terminal sweep** and for the reservoir half of the cutover copy (`tools.reservoir_copy`, #246), and a property of the topology after the **ingest repoint**, not a claim about the fleet. Each store answers for itself — the repoint switches both targets at once, but a store is write-quiet only once its own clock says so. See ADR-0021.
 _Avoid_: quiet, idle, drained (each reads as "nobody is working", which is the heuristic this term exists to replace)
 
+**Front door**:
+An environment's collector **ingress** — the Container App HTTPS endpoint a **tracked machine** POSTs OTLP to, baked into that machine by its **installer**. Named separately from the environment because after the **ingest repoint** the two come apart: interim's front door is live while interim's stores are **write-quiet**, since the payloads it accepts land in production. An environment has one; retiring it destroys it.
+_Avoid_: endpoint (already taken — see **tracked machine**), collector URL, ingress (that is the Azure resource, not the thing a machine holds)
+
+**Front-door silence**:
+`>= 7` consecutive **complete** UTC days on which a **front door** accepted zero posts — `Requests` on its Container App split by `statusCode`, counting only `200` (ADR-0027). The precondition for retiring that front door, measured by `tools.front_door` and read as evidence by a human go/no-go, never as an automatic gate. The current day is reported but never counted: it is still accruing. Distinct from **write-quiet**, which asks whether a *store* gained rows — a repointed front door is loud while every store behind it is quiet, which is the gap this term exists to close. A rejected post (`401`, `404`) is not silence and is not a retry either: the payload is dropped, so it counts as loss.
+_Avoid_: no traffic, endpoint quiet, drained (each reads as a guess about the fleet rather than a measurement at the door)
+
 **Terminal sweep**:
 The one-time copy of an entire `[2026-07-17, ∞)` window for a **seat** that has no production row at all — a machine that never emits again. Run once interim is **write-quiet**, so its right edge is fixed; a seat is excluded the moment it has any production row, which is what keeps the sweep safe to re-run. Everything the **ingest repoint** can reach is handled by the ordinary **flip watermark** copy instead. See ADR-0021.
 _Avoid_: backfill (that is ADR-0006's schema-v1→v2 mapping, a different operation), catch-up
