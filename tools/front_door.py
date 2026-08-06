@@ -1,10 +1,10 @@
-"""Measure a **front door**: accepted and rejected posts per day at one ingress (#431).
+"""Measure a **front door**: accepted and rejected posts per day at one environment's (#431).
 
 Every other quiet-check in this repo reads a *store* -- ``meta.processed_batches`` for raw rows
 (ADR-0021), the newest blob name for the reservoir. After the **ingest repoint** those stores
-answer about production, not about the endpoint a **tracked machine** actually posts to, so they
-read green while interim's collector is in active use. This tool reads the endpoint itself, off
-the Container App's ``Requests`` platform metric split by ``statusCode``.
+answer about production, not about the front door a **tracked machine** actually posts to, so
+they read green while interim's collector is in active use. This tool reads the front door
+itself, off the Container App's ``Requests`` platform metric split by ``statusCode``.
 
 The verdict it prints is evidence for #248 Part B's human go/no-go, not an automatic gate:
 ``az group delete rg-cc-otel-interim`` under live traffic drops those payloads silently, because
@@ -157,17 +157,24 @@ def daily_counts(payload: dict, days: list[date]) -> list[Day]:
 
 
 def silent_days(rows: list[Day], today: date) -> int:
-    """Consecutive **complete** days with zero accepted posts, counted back from the newest.
+    """Consecutive **complete** days with zero accepted posts, counted back from **yesterday**.
 
-    Today is excluded, always: it is still accruing, so a morning with no posts yet is not a day
-    without posts. Counting it would let the run open the gate hours early -- the one direction
-    this measurement must never fail in.
+    Two exclusions, both in the conservative direction:
+
+    *Today* never counts -- it is still accruing, so a morning with no posts yet is not a day
+    without posts, and counting it would open the gate hours early.
+
+    The run is anchored at yesterday rather than at the newest row, so a window that stops short of
+    yesterday scores **zero** however quiet it was. Otherwise ``--until`` a month back would report
+    a seven-day run that ended weeks ago and exit ``SILENT`` on evidence saying nothing about now.
+    A day the window does not cover is unknown, and unknown is never silence.
     """
+    accepted = {row.day: row.accepted for row in rows}
     run = 0
-    for row in reversed([row for row in rows if row.day < today]):
-        if row.accepted:
-            break
+    day = today - timedelta(days=1)
+    while accepted.get(day) == 0:
         run += 1
+        day -= timedelta(days=1)
     return run
 
 
@@ -227,6 +234,14 @@ def main(argv: list[str] | None = None) -> int:
     # Named before the call, as `tools.reservoir_copy` names its two accounts: a subscription and
     # an environment that disagree would silently measure the wrong front door and report silence.
     print(f"Front door:   {app}  (subscription {subscription}, {resource_group})")
+    if not days:
+        # `--days 0`, or a `--since` past its `--until`. Refused rather than clamped: the operator
+        # asked a question with no days in it, and every later step here reads `days[0]`.
+        print(
+            "Refused: that window holds no days — check --days / --since / --until",
+            file=sys.stderr,
+        )
+        return 2
     print(f"Window:       {days[0]:%Y-%m-%d} .. {days[-1]:%Y-%m-%d} UTC ({len(days)} day(s))")
     if days[0] < today - RETENTION:
         print(

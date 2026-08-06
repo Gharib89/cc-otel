@@ -151,6 +151,15 @@ def test_silent_days_is_zero_when_the_window_holds_no_complete_day():
     assert silent_days(_rows({"2026-08-05": 0}), today=date(2026, 8, 5)) == 0
 
 
+def test_silent_days_is_zero_when_the_window_stops_short_of_yesterday():
+    # `--until` a month back would otherwise score a seven-day run that ended weeks ago and open
+    # the gate on evidence saying nothing about now. A day the window does not cover is unknown,
+    # and unknown is never silence.
+    stale = _rows(dict.fromkeys([f"2026-07-{d:02d}" for d in range(1, 12)], 0))
+
+    assert silent_days(stale, today=date(2026, 8, 6)) == 0
+
+
 # --- window ---------------------------------------------------------------------------
 
 
@@ -246,6 +255,13 @@ def test_main_refuses_a_window_older_than_platform_metric_retention(az, capsys):
 
     err = capsys.readouterr().err
     assert "retention" in err and "read as silence" in err
+
+
+def test_main_refuses_a_window_with_no_days_in_it(az, capsys):
+    az(_payload())
+
+    assert main(["--days", "0", "--subscription", SUB, "--resource-group", RG]) == 2
+    assert "no days" in capsys.readouterr().err
 
 
 def test_main_exits_1_while_the_front_door_is_still_receiving(az, capsys):

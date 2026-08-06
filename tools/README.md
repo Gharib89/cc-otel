@@ -1,8 +1,9 @@
 # Curation & ops tooling — operator runbook
 
 Ten command-line tools for curating and operating the redacted-blob reservoir (the
-`raw` container), the column registry, the seat-roster reference data, and the interim -> prod
-cutover copy (both halves — Postgres rows and reservoir blobs). They are
+`raw` container), the column registry, the seat-roster reference data, the interim -> prod
+cutover copy (both halves — Postgres rows and reservoir blobs), and the **front-door silence**
+measurement that gates retiring an environment (ADR-0027). They are
 **manual / on-demand** — never wired into CI or the sink. This is the human operator guide;
 the agent-facing curation workflow lives in
 [`docs/agents/column-curation.md`](../docs/agents/column-curation.md).
@@ -18,7 +19,7 @@ the agent-facing curation workflow lives in
 | `tools.roster_load` | land an IS seat-roster drop as an immutable dated snapshot in `ref` | **yes** (writes HR data) |
 | `tools.cutover_copy` | copy interim's pre-flip `raw` telemetry into production, bounded per seat by the flip watermark | **yes** (writes production telemetry; never deletes) |
 | `tools.reservoir_copy` | copy interim's reservoir blobs from the cutover floor up into production's `raw` container, same paths | **yes** (writes production blobs; never deletes) |
-| `tools.front_door` | count requests per UTC day at an environment's collector ingress, split by status code — the **front-door silence** measurement | no (reads one Azure metric) |
+| `tools.front_door` | count requests per UTC day at an environment's **front door**, split by status code — the **front-door silence** measurement | no (reads one Azure metric) |
 
 ## Prerequisites
 
@@ -499,7 +500,7 @@ uv run python -m tools.compact --execute   # add --rebuild for a day production 
 
 A successful `--execute` prints this as its closing line.
 
-## `tools.front_door` — is anything still posting to this environment's ingress?
+## `tools.front_door` — is anything still posting to this environment's front door?
 
 Read-only. Answers the one question every other quiet-check in this repo cannot: **is a machine
 still reaching this endpoint.** `tools.cutover_copy --sweep` and `tools.reservoir_copy` both measure
@@ -535,8 +536,11 @@ verdict.
 collector — never queued, never retried into existence — so `401 1348` on 2026-08-04 is 1,348 posts
 that exist nowhere. Accepted posts (`200`) are the only ones the silence run counts.
 
-**Today is reported but never counted.** The current UTC day is still accruing, so a quiet morning
-is not a quiet day; counting it would open the decommission gate hours early.
+**Today is reported but never counted, and the run is anchored at yesterday.** The current UTC day
+is still accruing, so a quiet morning is not a quiet day. And a window that stops short of
+yesterday scores zero however quiet it was — `--until 2026-07-01` cannot report a seven-day run
+that ended weeks ago, because a day the window does not cover is unknown, and unknown is not
+silence. Both rules run the same way: the gate must not open early.
 
 **A window older than 93 days is refused.** That is Azure's platform-metric retention, and outside
 it the API returns an *empty series* rather than an error — unretained days would read as silence,

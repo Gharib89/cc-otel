@@ -59,9 +59,12 @@ this repo, the report, or `marts.dq_finding`; the seat simply stops appearing.
   irreversible and its failure mode is silent, so a lowerable threshold invites being lowered under
   time pressure.
 
-- **Today never counts toward the run.** The current UTC day is reported but excluded from the
-  verdict — it is still accruing, so a morning with no posts yet is not a day without posts.
-  Counting it would open the gate hours early, the one direction this measurement must not fail in.
+- **The run is anchored at yesterday, and today never counts toward it.** The current UTC day is
+  reported but excluded from the verdict — it is still accruing, so a morning with no posts yet is
+  not a day without posts. A window that stops short of yesterday scores **zero** however quiet it
+  was, so `--until` a month back cannot report a run that ended weeks ago: a day the window does
+  not cover is unknown, and unknown is never silence. Both exclusions run the same direction —
+  the gate must not open early.
 
 - **A window reaching past Azure's 93-day platform-metric retention is refused.** Outside retention
   the API answers with an empty series rather than an error, so "no requests" and "no data" are
@@ -108,17 +111,29 @@ this repo, the report, or `marts.dq_finding`; the seat simply stops appearing.
   environment, a re-pointed collector, a replaced Container App — which is why it is an ADR rather
   than a checklist item on one issue.
 
-- **The 2026-08-04 `401` spike is recorded as accepted, not explained.** 1,348 rejected posts in one
-  day, against 2 the day before and 0 after. A `401` payload is dropped, so this is live data loss
-  on that date. Interim's `ContainerAppConsoleLogs_CL` holds **no** log line mentioning `401` for
-  the whole of 2026-08-04 — the rejection happens at the collector's `bearertokenauth` extension,
-  which does not log it — and the only revision that still exists (`--0000038`) was created at
-  13:13Z, eight hours after the spike began at 05:00Z, so the revision that served most of it is
-  gone along with whatever configuration it carried. The likeliest cause remains a machine
-  mid-transition holding one environment's endpoint and the other's bearer, which the wrapper's
-  env-then-disk resolution order (ADR-0003, `cc-otel-wrapper.mjs:204`) can produce. Accepted with
-  the figure rather than left unremarked; not tracked, because the population is frozen — the day
-  is past, the rows were never written anywhere, and nothing can recover them.
+- **The 2026-08-04 `401` spike is explained by mechanism and accepted by figure.** 1,348 rejected
+  posts in one day, against 2 the day before and 0 after. A `401` payload is dropped, so this is
+  live data loss on that date. Investigated 2026-08-06:
+
+  - The **repoint deploy is the trigger**. The activity log shows a `listSecrets` then a
+    `containerApps/write` at `2026-08-03 19:27:35–19:28:03Z`, caller `Ahmed.Gharib@itworx.com`,
+    which created revision `--0000036` and restarted the collector. That revision served the whole
+    spike (05:00Z until `--0000038` replaced it at 13:13Z) and no longer exists.
+  - The **wrapper resolves endpoint and bearer independently** — each checks `process.env` first,
+    then falls back to `managed-settings.json` on disk, read **once per process**
+    (ADR-0003, `installer/cc-otel-wrapper.mjs:214`). A process alive across the flip can therefore
+    pair one environment's front door with the other's token for its whole life.
+  - The **hourly shape says many stragglers, not one client**: bursty, tracking ITWorx working
+    hours (peaks 11:00–13:00Z and 16:00–19:00Z, near-zero at 07:00Z and 09:00Z), decaying to zero
+    by 08-05. A single mis-tokened client retrying would be flat, because the collector's retry is
+    unbounded.
+
+  **What no retained log can settle is which machines.** `bearertokenauth` logs nothing on reject
+  at any level, so interim's `ContainerAppConsoleLogs_CL` holds no `401` line for the whole day —
+  an architectural gap, not a retention one — and a `401` is refused before any body is parsed, so
+  it carries nothing identifying. Accepted with the figure rather than left unremarked, and not
+  tracked: the population is frozen, the rows were never written anywhere, and the same process-
+  lifetime cause is what this ADR's measurement now guards against repeating.
 
 - **`tools.front_door` is the first tool in this repo that shells out to `az`.** It resolves the
   executable through `shutil.which` (the CLI is `az.cmd` on Windows, which a bare argv cannot find)
