@@ -93,7 +93,7 @@ The orchestrator **stops** at these — a person decides, no step assumes:
 | **G2 · GHCR classic PAT** | interim + prod | Caught up front by `precheck` (the `GHCR_TOKEN` key). The ACA image-pull credential is a GitHub classic PAT (`read:packages`) created in the GitHub UI — a manual credential action; put it in `.env` before running. |
 | **G3 · Prod tenant verification** | prod only | Enforced by `precheck`'s tenant match: the unprefixed-identity design assumes prod lands in tenant `a1a5384f`. A different tenant breaks it (new app + federated credential + prefixed client/tenant). **Verify before prod bootstrap.** |
 | **G4 · IS RG grant** | prod only | Prod bootstrap cannot start until IS provisions the empty RG and grants Contributor scoped to it (ADR-0004); `deploy` halts if the RG is absent. Prod RG name is still pending ([#23](https://github.com/Gharib89/cc-otel/issues/23)). |
-| **G5 · Fleet cutover + interim decommission** | after prod | Out of scope for the orchestrator. Parallel cutover (ADR-0004): move the fleet and retire **interim** only once prod is proven — two weeks stable (#248 Part B). A judgement call — see the end of this file. The POC half is already spent (ADR-0016). |
+| **G5 · Fleet cutover + interim decommission** | after prod | Out of scope for the orchestrator. Parallel cutover (ADR-0004): move the fleet and retire **interim** only once prod is proven — two weeks stable **and** 7 days of front-door silence (#248 Part B, ADR-0027). A judgement call — see the end of this file. The POC half is already spent (ADR-0016). |
 
 ## `.env.<env>` — the one source of truth
 
@@ -346,7 +346,22 @@ hygiene so `pg_roles` reflects reality.)
 
 Once prod is proven, cut the fleet over to the prod sink and retire **interim**
 (parallel cutover, ADR-0004). A judgement call made with Ahmed — not part of any
-script or step. The gate is two weeks of stable prod post-cutover (#248 Part B).
+script or step. The gate is two weeks of stable prod post-cutover, **plus measured
+silence at interim's front door** (#248 Part B).
+
+The second half is not implied by the first. The **ingest repoint** (ADR-0021) sends
+interim's sink to production, so interim's own stores read quiet while its collector
+endpoint is still live and in use — and a machine posting into a deleted resource
+group loses those payloads silently, because its collector retries forever into a
+dead host and buffers. Measure the door itself before deleting it (ADR-0027):
+
+```sh
+set -a; . ./.env.interim; set +a
+uv run python -m tools.front_door --days 30   # exit 0 = SILENT, 1 = STILL RECEIVING
+```
+
+Seven consecutive complete UTC days with zero `200`s. Needs **Monitoring Reader** on
+the resource group; see `tools/README.md`.
 
 The POC half of this gate is already spent: `rg-cc-otel-poc` was archived and
 deleted on 2026-07-28, ahead of the gate and for cost, because it had no writer
