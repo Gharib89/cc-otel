@@ -113,4 +113,5 @@ convergence needs. It just never left the machine.
 - **`docs/data-dictionary.md` is not regenerated in the implementing PR.**
   `tools.gen_data_dictionary` reads live profiling stats from a database that already carries the
   columns; against a throwaway container it would zero every other column's stats. It is regenerated
-  after the deploy, on the next curation pass.
+  after the deploy, on the next curation pass — tracked by #436, whose re-entry condition also waits
+  on a re-push, since a regen against all-NULL columns records nothing worth reading.
