@@ -151,6 +151,13 @@ columns from `raw.*`, and a kept/denied section (metadata only — those keys ha
 column, so use `sweep` to see their live blob presence). Pure-Postgres; needs no blob
 access. Commit the regenerated file as step 5 of the promotion PR.
 
+The stats are **live**, so the regen needs a database that already carries the columns it is
+documenting. A promotion PR authored *before* its deploy therefore cannot regenerate honestly —
+against a throwaway container every other column's stats would read zero — so the regen moves to the
+first curation pass after the deploy, and the PR says so in its body (#432, ADR-0028). Silent lag
+between the dictionary and the registry is the drift this step exists to prevent; an announced lag
+with a named trigger is not.
+
 A column promoted under several registry rows can carry a different meaning per row
 (`duration_ms` is six event families' duration). Where the descriptions genuinely differ
 the cell names each one, prefixed by the narrowest registry label that tells them apart —

@@ -89,6 +89,14 @@ convergence needs. It just never left the machine.
   `installer_stamp_on_disk` is sparser than `installer_stamp`. Convergence then reads NULL, never
   false — the view must not call a seat stale on missing evidence.
 
+- **`is_converged` compares two independent recency clocks.** The process stamp rides every signal;
+  the disk stamp rides statusline pushes only, so a seat can hold a *newer* process reading than disk
+  reading and read `false` while its machine is in fact converged. That is why the view exposes
+  `stamp_seen_at` and `disk_stamp_seen_at` beside the verdict rather than a bare boolean: a `false`
+  whose disk reading is much older than its stamp reading is a stale *reading*, not a stale process.
+  The guarantee is one-sided — NULL on missing evidence, never a bare `false` — and old evidence is
+  the reader's to weigh.
+
 - **#248 Part B gains a companion read.** ADR-0027's measurement says interim's front door is silent;
   this one says which seats are still running the pre-repoint config, so a door that is not yet silent
   has named machines behind it instead of an unbounded tail.
