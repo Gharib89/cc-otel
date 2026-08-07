@@ -29,6 +29,7 @@ import {
   resolveEndpoint,
   resolveHeaders,
   readManagedSettingsEnv,
+  resolveInstallerStamps,
 } from "./cc-otel-wrapper.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -455,6 +456,63 @@ test("readManagedSettingsEnv: drops non-string values so downstream trim/split n
 });
 
 // ---------------------------------------------------------------------------
+// Installer stamp (#432) — the config a process runs vs the config on disk
+// ---------------------------------------------------------------------------
+
+const STAMP_A = "a".repeat(64);
+const STAMP_B = "b".repeat(64);
+
+test("resolveInstallerStamps: disk stamp comes from the managed-settings env block", () => {
+  const managed = { OTEL_RESOURCE_ATTRIBUTES: `installer.stamp=${STAMP_A}` };
+  assert.equal(resolveInstallerStamps({}, managed).diskStamp, STAMP_A);
+});
+
+test("resolveInstallerStamps: process stamp comes from the inherited env when Claude Code passes OTEL_* through", () => {
+  const env = { OTEL_RESOURCE_ATTRIBUTES: `department=eng,installer.stamp=${STAMP_B}` };
+  const stamps = resolveInstallerStamps(env, {});
+  assert.equal(stamps.processStamp, STAMP_B);
+  assert.equal(stamps.diskStamp, undefined);
+});
+
+test("resolveInstallerStamps: the two halves are read independently — divergence is the signal", () => {
+  const stamps = resolveInstallerStamps(
+    { OTEL_RESOURCE_ATTRIBUTES: `installer.stamp=${STAMP_A}` },
+    { OTEL_RESOURCE_ATTRIBUTES: `installer.stamp=${STAMP_B}` },
+  );
+  assert.equal(stamps.processStamp, STAMP_A);
+  assert.equal(stamps.diskStamp, STAMP_B);
+});
+
+test("resolveInstallerStamps: undefined halves when nothing carries a stamp (never throws)", () => {
+  assert.deepEqual(resolveInstallerStamps({}, {}), {
+    processStamp: undefined,
+    diskStamp: undefined,
+  });
+  assert.deepEqual(resolveInstallerStamps({ OTEL_RESOURCE_ATTRIBUTES: "  " }, { OTEL_RESOURCE_ATTRIBUTES: "department=eng" }), {
+    processStamp: undefined,
+    diskStamp: undefined,
+  });
+});
+
+test("buildOtlpBody: carries both stamps as resource attributes, so one row shows divergence", () => {
+  const body = buildOtlpBody(SAMPLE, Date.now(), IDENTITY, {
+    processStamp: STAMP_A,
+    diskStamp: STAMP_B,
+  });
+  assert.equal(resourceAttr(body, "installer.stamp"), STAMP_A);
+  assert.equal(resourceAttr(body, "installer.stamp_on_disk"), STAMP_B);
+});
+
+test("buildOtlpBody: omits a stamp it does not know (the statusline subprocess is usually stripped of OTEL_*)", () => {
+  const body = buildOtlpBody(SAMPLE, Date.now(), IDENTITY, { diskStamp: STAMP_A });
+  assert.equal(resourceAttr(body, "installer.stamp"), undefined);
+  assert.equal(resourceAttr(body, "installer.stamp_on_disk"), STAMP_A);
+  const bare = buildOtlpBody(SAMPLE, Date.now(), IDENTITY, {});
+  assert.equal(resourceAttr(bare, "installer.stamp"), undefined);
+  assert.equal(resourceAttr(bare, "installer.stamp_on_disk"), undefined);
+});
+
+// ---------------------------------------------------------------------------
 // Cross-language round-trip: real PS writer -> real JS reader (#231)
 // ---------------------------------------------------------------------------
 // The per-side tests above pin each half against its own hand-written fixture.
@@ -489,6 +547,31 @@ test("round-trip: PS-written managed-settings.json resolves through the JS reade
   const managed = readManagedSettingsEnv(dir);
   assert.equal(resolveEndpoint({}, managed), "https://c.example.com/v1/metrics");
   assert.equal(resolveHeaders({}, managed).Authorization, "Bearer tok");
+});
+
+test("round-trip: the PS-injected installer stamp reads back as the disk stamp (#432)", (t) => {
+  const stamp = "c".repeat(64);
+  const psCommand =
+    `. '${INSTALL_PS1.replace(/'/g, "''")}' -InstallRoot '/tmp/cc-otel-432';` +
+    ` Add-InstallerStampAttribute -Stamp '${stamp}' -ManagedSettingsJson (ConvertTo-ManagedSettingsJson` +
+    ` -TelemetryEnv (Get-DesiredTelemetryEnv -Endpoint 'https://c.example.com' -Token 'tok')` +
+    ` -WrapperPath '/x/cc-otel-wrapper.mjs')`;
+  const res = spawnSync("pwsh", ["-NoProfile", "-Command", psCommand], { encoding: "utf8" });
+
+  if (res.error?.code === "ENOENT") {
+    if (process.env.CI) throw new Error("pwsh missing in CI — the stamp seam is unverified");
+    t.skip("pwsh not installed locally");
+    return;
+  }
+  assert.equal(res.status, 0, `pwsh writer failed: ${res.stderr}`);
+
+  const dir = tmpDir("cc-otel-stamp-");
+  fs.writeFileSync(path.join(dir, "managed-settings.json"), res.stdout);
+
+  const managed = readManagedSettingsEnv(dir);
+  assert.equal(resolveInstallerStamps({}, managed).diskStamp, stamp);
+  // The endpoint/token must survive the injection: the same file still targets the collector.
+  assert.equal(resolveEndpoint({}, managed), "https://c.example.com/v1/metrics");
 });
 
 // ---------------------------------------------------------------------------

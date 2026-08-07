@@ -246,6 +246,24 @@ export function resolveHeaders(env = process.env, managed = MANAGED_SETTINGS_ENV
   return parseKv(raw);
 }
 
+// The installer stamps the managed env block with the config's identity hash
+// (OTEL_RESOURCE_ATTRIBUTES=installer.stamp=<sha256>, issue #432). Two values matter
+// and they come from different places:
+//   processStamp — the config the running Claude Code started with. Normally it
+//     reaches the pipeline through Claude Code's own exporter, not through here:
+//     Claude Code strips OTEL_* from this subprocess (see readManagedSettingsEnv), so
+//     this half is best-effort and is simply absent on current versions.
+//   diskStamp    — what managed-settings.json holds, read once per process
+//     (MANAGED_SETTINGS_ENV above). The statusline spawns a fresh process per refresh,
+//     so a re-push is picked up on the next refresh, not mid-process.
+// A seat whose latest two stamps differ is running a config the disk has replaced.
+export function resolveInstallerStamps(env = process.env, managed = MANAGED_SETTINGS_ENV) {
+  return {
+    processStamp: parseKv(firstNonBlank(env.OTEL_RESOURCE_ATTRIBUTES))["installer.stamp"],
+    diskStamp: parseKv(firstNonBlank(managed.OTEL_RESOURCE_ATTRIBUTES))["installer.stamp"],
+  };
+}
+
 const OTLP_ENDPOINT = resolveEndpoint();
 // Guard against a misconfigured value: Number("") is 0 and Number("abc") is NaN,
 // either of which would abort the request instantly. Fall back to the default.
@@ -292,7 +310,7 @@ export function throttleAllows({ stateFile, nowMs, windowMs = THROTTLE_WINDOW_MS
   return true;
 }
 
-export function buildOtlpBody(payload, nowMs = Date.now(), identity) {
+export function buildOtlpBody(payload, nowMs = Date.now(), identity, stamps) {
   if (!payload || typeof payload !== "object") return null;
   const rl = payload.rate_limits;
   if (!rl || typeof rl !== "object") return null;
@@ -351,6 +369,11 @@ export function buildOtlpBody(payload, nowMs = Date.now(), identity) {
   if (id?.email) resourceAttrs.push(attr("user.email", id.email));
   if (id?.accountId) resourceAttrs.push(attr("user.account_id", id.accountId));
   if (sessionId) resourceAttrs.push(attr("session.id", sessionId));
+  // Both stamps on one record: this is the only emitter that sees the process config
+  // and the disk config at the same instant (#432).
+  const { processStamp, diskStamp } = stamps ?? resolveInstallerStamps();
+  if (processStamp) resourceAttrs.push(attr("installer.stamp", processStamp));
+  if (diskStamp) resourceAttrs.push(attr("installer.stamp_on_disk", diskStamp));
 
   return {
     resourceMetrics: [

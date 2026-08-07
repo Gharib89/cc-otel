@@ -102,6 +102,50 @@ Describe 'Get-InstallerStamp' {
     }
 }
 
+Describe 'Add-InstallerStampAttribute' {
+    BeforeAll {
+        $script:managedBase = ConvertTo-ManagedSettingsJson `
+            -TelemetryEnv (Get-DesiredTelemetryEnv -Endpoint 'https://c' -Token 't') `
+            -WrapperPath 'C:\Program Files\ClaudeCode\cc-otel-wrapper.mjs'
+    }
+
+    It 'carries the stamp as an OTel resource attribute so every signal names the config (#432)' {
+        $parsed = (Add-InstallerStampAttribute -ManagedSettingsJson $managedBase -Stamp 'abc123') | ConvertFrom-Json
+        $parsed.env.OTEL_RESOURCE_ATTRIBUTES | Should -Be 'installer.stamp=abc123'
+    }
+
+    It 'leaves the rest of the document intact' {
+        $parsed = (Add-InstallerStampAttribute -ManagedSettingsJson $managedBase -Stamp 'abc123') | ConvertFrom-Json
+        $parsed.env.OTEL_EXPORTER_OTLP_ENDPOINT | Should -Be 'https://c'
+        $parsed.env.OTEL_EXPORTER_OTLP_HEADERS  | Should -Be 'Authorization=Bearer t'
+        $parsed.env.OTEL_LOG_TOOL_DETAILS       | Should -Be '1'
+        $parsed.statusLine.command | Should -Be 'node "C:/Program Files/ClaudeCode/cc-otel-wrapper.mjs"'
+    }
+
+    It 'is never an input to its own hash - the stamp is computed over the unstamped text' {
+        # The fixed point that makes the injection safe: Invoke-Install hashes the baked
+        # payload, then stamps it. Hashing the stamped text would give a different digest,
+        # so the attribute would report a stamp no other artifact knows.
+        $stamp   = Get-InstallerStamp -WrapperContent 'w' -ManagedSettingsJson $managedBase -SchemaVersion 2
+        $stamped = Add-InstallerStampAttribute -ManagedSettingsJson $managedBase -Stamp $stamp
+        (Get-InstallerStamp -WrapperContent 'w' -ManagedSettingsJson $stamped -SchemaVersion 2) | Should -Not -Be $stamp
+        (($stamped | ConvertFrom-Json).env.OTEL_RESOURCE_ATTRIBUTES) | Should -Be "installer.stamp=$stamp"
+    }
+
+    It 'overwrites a stamp already present, so a re-push cannot leave two' {
+        $once  = Add-InstallerStampAttribute -ManagedSettingsJson $managedBase -Stamp 'one'
+        $twice = Add-InstallerStampAttribute -ManagedSettingsJson $once -Stamp 'two'
+        (($twice | ConvertFrom-Json).env.OTEL_RESOURCE_ATTRIBUTES) | Should -Be 'installer.stamp=two'
+    }
+
+    It 'stamps a key the machine-env mirror will carry (OTEL_ prefixed, so the prune spares it)' {
+        $stamped = Add-InstallerStampAttribute -ManagedSettingsJson $managedBase -Stamp 'abc123'
+        $desired = @((($stamped | ConvertFrom-Json).env.PSObject.Properties).Name)
+        $desired | Should -Contain 'OTEL_RESOURCE_ATTRIBUTES'
+        (Select-StaleTelemetryVar -Existing $desired -Desired $desired) | Should -BeNullOrEmpty
+    }
+}
+
 Describe 'Get-WslLegTarget' {
     It 'targets a distro absent from the stamp map' {
         (Get-WslLegTarget -Distro @('Ubuntu') -StampMap @{} -Stamp 's') | Should -Be 'Ubuntu'
@@ -183,6 +227,19 @@ Describe 'Invoke-Install (orchestration)' {
         Invoke-Install -InstallRoot $script:target | Should -Be 0
         Test-Path -LiteralPath (Join-Path $script:target 'managed-settings.json') | Should -BeTrue
         Test-Path -LiteralPath (Join-Path $script:target 'cc-otel-wrapper.mjs')   | Should -BeTrue
+    }
+
+    It 'stamps the materialized managed settings and the env mirror with the persisted stamp (#432)' {
+        Invoke-Install -InstallRoot $script:target | Should -Be 0
+        $state = [System.IO.File]::ReadAllText((Join-Path $script:target '.install-state.json')) | ConvertFrom-Json
+        $state.stamp | Should -Match '^[0-9a-f]{64}$'
+        $attr = "installer.stamp=$($state.stamp)"
+        $onDisk = [System.IO.File]::ReadAllText((Join-Path $script:target 'managed-settings.json')) | ConvertFrom-Json
+        $onDisk.env.OTEL_RESOURCE_ATTRIBUTES | Should -Be $attr
+        # The mirror is what a *new* Claude Code process reads, so the stamp has to reach it too.
+        Should -Invoke Set-MachineEnvVar -Times 1 -Exactly -ParameterFilter {
+            $Name -eq 'OTEL_RESOURCE_ATTRIBUTES' -and $Value -eq $attr
+        }
     }
 
     It 'is idempotent - a clean second run also exits 0' {

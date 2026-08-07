@@ -159,6 +159,34 @@ function Get-InstallerStamp {
     return (Get-StringHash ($WrapperContent + $ManagedSettingsJson + $SchemaVersion))
 }
 
+function Add-InstallerStampAttribute {
+    <#
+    .SYNOPSIS Stamp the managed env block, as an OTel resource attribute.
+    .DESCRIPTION
+        Claude Code reads OTEL_* once at process start, so a re-push cannot reach a
+        running process. Carrying the stamp in OTEL_RESOURCE_ATTRIBUTES makes every
+        metric and event carry the config its process is actually running - the signal
+        that separates a converged seat from a stale one (issue #432).
+
+        Injected at materialization and never baked into the artifact: the stamp is a
+        hash OVER the managed-settings text, so a baked stamp would be an input to its
+        own hash and the runtime recompute would disagree with the value it read.
+
+        The installer owns the whole variable, it does not merge into it: any prior
+        machine-scope OTEL_RESOURCE_ATTRIBUTES was already pruned as stale (it is not in
+        the managed block - see Select-StaleTelemetryVar), so there is nothing to preserve.
+        A second attribute would be added here, beside the stamp, not from the machine.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$ManagedSettingsJson,
+        [Parameter(Mandatory)][string]$Stamp
+    )
+    $doc = $ManagedSettingsJson | ConvertFrom-Json
+    $doc.env | Add-Member -NotePropertyName 'OTEL_RESOURCE_ATTRIBUTES' `
+        -NotePropertyValue "installer.stamp=$Stamp" -Force
+    return ($doc | ConvertTo-Json -Depth 5)
+}
+
 function Get-WrapperStatusLineCommand {
     <#
     .SYNOPSIS The statusLine command that runs the wrapper via Node.
@@ -455,6 +483,11 @@ function Invoke-Install {
     }
     $wrapperContent = ConvertFrom-BakedPayload -Base64 $script:WrapperB64   # $null if wrapper not baked
     $stamp = Get-InstallerStamp -WrapperContent ([string]$wrapperContent) -ManagedSettingsJson $managedJson -SchemaVersion $script:InstallerSchemaVersion
+
+    # Stamp AFTER hashing (see Add-InstallerStampAttribute), and before anything is
+    # materialized: the file write, the machine-env mirror, and the WSL leg all read
+    # $managedJson, so one injection reaches all three.
+    $managedJson = Add-InstallerStampAttribute -ManagedSettingsJson $managedJson -Stamp $stamp
 
     $managedInstalledPath = Join-Path $InstallRoot 'managed-settings.json'
     $wrapperInstalledPath = Join-Path $InstallRoot 'cc-otel-wrapper.mjs'

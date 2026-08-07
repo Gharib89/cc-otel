@@ -538,7 +538,9 @@ CREATE TABLE raw.events (
     num_hooks smallint,
     num_success smallint,
     hook_source text,
-    total_duration_ms bigint
+    total_duration_ms bigint,
+    installer_stamp text,
+    installer_stamp_on_disk text
 );
 
 
@@ -706,7 +708,9 @@ CREATE TABLE raw.metrics (
     process_owner text,
     terminal_type text,
     service_name text,
-    os_type text
+    os_type text,
+    installer_stamp text,
+    installer_stamp_on_disk text
 );
 
 
@@ -1523,6 +1527,46 @@ ALTER TABLE marts.mart_refresh_log ALTER COLUMN id ADD GENERATED ALWAYS AS IDENT
 
 
 --
+-- Name: seat_config_convergence; Type: VIEW; Schema: marts; Owner: -
+--
+
+CREATE VIEW marts.seat_config_convergence AS
+ WITH stamped AS (
+         SELECT m.user_email,
+            m.ts AS seen_at,
+            m.installer_stamp,
+            m.installer_stamp_on_disk
+           FROM raw.metrics m
+        UNION ALL
+         SELECT e.user_email,
+            e.event_time,
+            e.installer_stamp,
+            e.installer_stamp_on_disk
+           FROM raw.events e
+        ), per_seat AS (
+         SELECT marts.email_bucket(s.user_email) AS user_email,
+            (s.user_email IS NULL) AS is_unknown,
+            max(s.seen_at) AS last_seen,
+            (array_agg(s.installer_stamp ORDER BY s.seen_at DESC) FILTER (WHERE (s.installer_stamp IS NOT NULL)))[1] AS installer_stamp,
+            max(s.seen_at) FILTER (WHERE (s.installer_stamp IS NOT NULL)) AS stamp_seen_at,
+            (array_agg(s.installer_stamp_on_disk ORDER BY s.seen_at DESC) FILTER (WHERE (s.installer_stamp_on_disk IS NOT NULL)))[1] AS installer_stamp_on_disk,
+            max(s.seen_at) FILTER (WHERE (s.installer_stamp_on_disk IS NOT NULL)) AS disk_stamp_seen_at
+           FROM stamped s
+          GROUP BY (marts.email_bucket(s.user_email)), (s.user_email IS NULL)
+        )
+ SELECT user_email,
+    last_seen,
+    (last_seen)::date AS last_seen_date,
+    installer_stamp,
+    stamp_seen_at,
+    installer_stamp_on_disk,
+    disk_stamp_seen_at,
+    (installer_stamp = installer_stamp_on_disk) AS is_converged,
+    is_unknown
+   FROM per_seat;
+
+
+--
 -- Name: column_registry; Type: TABLE; Schema: meta; Owner: -
 --
 
@@ -1977,4 +2021,7 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260804100116'),
     ('20260804100120'),
     ('20260804120629'),
-    ('20260804121300');
+    ('20260804121300'),
+    ('20260806180724'),
+    ('20260806182313'),
+    ('20260807063636');
