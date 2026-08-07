@@ -202,10 +202,41 @@ def test_render_migration_new_view_down_drops_if_exists() -> None:
     assert "DROP VIEW IF EXISTS staging.stg_probe;" in down
 
 
+def test_render_migration_view_down_drops_and_recreates_when_flagged() -> None:
+    # ADR-0026's no-DROP rule guards the *up* — a forward deploy must not take
+    # dependents with it. A down that has to narrow the column list has no OR
+    # REPLACE form at all, so it carries the DROP the up still never does (#437).
+    sql = render_migration("stg_probe", _VIEW_CURRENT, _VIEW_PREVIOUS, down_drops=True)
+    up, down = sql.split("-- migrate:down", 1)
+    assert "DROP" not in up
+    assert down.strip().startswith("DROP VIEW staging.stg_probe;")
+    assert "CREATE OR REPLACE VIEW staging.stg_probe AS\n SELECT 1;" in down
+
+
+def test_render_migration_down_drops_flag_is_inert_for_a_new_object() -> None:
+    # Nothing to restore, so the down stays the plain DROP ... IF EXISTS.
+    sql = render_migration("stg_probe", _VIEW_CURRENT, None, down_drops=True)
+    down = sql.split("-- migrate:down", 1)[1]
+    assert "DROP VIEW IF EXISTS staging.stg_probe;" in down
+    assert "CREATE OR REPLACE VIEW staging.stg_probe" not in down
+
+
+def test_render_migration_down_drops_flag_is_inert_for_a_matview() -> None:
+    # A matview down already is DROP + CREATE; the flag must not double it.
+    sql = render_migration("dim_model", _CURRENT, _PREVIOUS, down_drops=True)
+    down = sql.split("-- migrate:down", 1)[1]
+    assert down.count("DROP MATERIALIZED VIEW marts.dim_model;") == 1
+
+
 _FN_CURRENT = (
     "-- Canonical definition for marts.probe_fn.\n"
     "CREATE OR REPLACE FUNCTION marts.probe_fn()\n RETURNS void\n LANGUAGE sql\n"
     "AS $function$ SELECT $function$;\n"
+)
+_FN_PREVIOUS = (
+    "-- Canonical definition for marts.probe_fn.\n"
+    "CREATE OR REPLACE FUNCTION marts.probe_fn()\n RETURNS integer\n LANGUAGE sql\n"
+    "AS $function$ SELECT 1 $function$;\n"
 )
 
 
@@ -214,6 +245,14 @@ def test_render_migration_new_function_down_drops_function_if_exists() -> None:
     up, down = sql.split("-- migrate:down", 1)
     assert "CREATE OR REPLACE FUNCTION marts.probe_fn()" in up
     assert "DROP FUNCTION IF EXISTS marts.probe_fn;" in down
+
+
+def test_render_migration_function_down_drops_and_recreates_when_flagged() -> None:
+    sql = render_migration("probe_fn", _FN_CURRENT, _FN_PREVIOUS, down_drops=True)
+    up, down = sql.split("-- migrate:down", 1)
+    assert "DROP" not in up
+    assert down.strip().startswith("DROP FUNCTION marts.probe_fn;")
+    assert "RETURNS integer" in down
 
 
 def test_render_migration_rejects_file_whose_create_line_names_another_object() -> None:

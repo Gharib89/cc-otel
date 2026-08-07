@@ -33,7 +33,12 @@ Layout — ``db/<tier>/<schema>/<name>.sql``:
         apply fails loudly; hand-author that one cascade migration from the
         canonical files. ``migrate:down`` embeds the *previous* body verbatim
         from git HEAD (dbmate migrations are self-contained — they cannot read
-        sibling files at apply time). Applies it on a throwaway DB, normalizes
+        sibling files at apply time), prefixed with a DROP when OR REPLACE
+        cannot restore it — a column-adding view amendment, a
+        signature-changing function. Which shape that is gets *probed* against
+        the up state, never guessed from the SQL text, and when neither runs
+        the tool refuses rather than write a decorative down (#437). Applies it
+        on a throwaway DB, normalizes
         the file to the deparser form, and verifies convergence. Regenerating
         schema.sql is left to its owner, ``scripts/dev-migrate.sh`` (unlike
         ``spec_sync``, which shells out to it — matview_sync stays shell-free
@@ -162,7 +167,9 @@ def render_canonical(obj: DbObject) -> str:
     return header + f"{obj.definition.rstrip()};\n"
 
 
-def render_migration(slug: str, current: str, previous: str | None) -> str:
+def render_migration(
+    slug: str, current: str, previous: str | None, *, down_drops: bool = False
+) -> str:
     """Render a dbmate migration recreating ``<schema>.<slug>`` from its canonical file.
 
     ``current`` is the on-disk file (desired state); ``previous`` is the same file
@@ -172,6 +179,16 @@ def render_migration(slug: str, current: str, previous: str | None) -> str:
     dependents survive (#426). The up/down bodies embed each file body (trailing
     whitespace trimmed so the section separators stay clean) — git history is
     the lineage.
+
+    ``down_drops`` prefixes a view's or function's *down* with a DROP, for the
+    amendments whose previous body OR REPLACE cannot restore — a column-adding
+    view amendment, a signature-changing function (#437). ADR-0026's no-DROP
+    rule binds the **up**, where a forward deploy must leave dependents
+    standing; a down that has to narrow a column list has no OR REPLACE form at
+    all, so the alternative is not a gentler down but an unrunnable one. The
+    caller decides by probing (``_run_author``), never by guessing from text.
+    Inert where there is nothing to restore (a brand-new object) or where the
+    down already drops (a matview).
 
     The embedded bodies are verbatim catalog deparse (byte-exact for --check),
     which is not sqlfluff-clean — the same reason the canonical files under
@@ -197,7 +214,8 @@ def render_migration(slug: str, current: str, previous: str | None) -> str:
     else:
         up_body = current.rstrip()
         if previous is not None:
-            down_body = previous.rstrip()
+            prefix = f"DROP {drop_word} {schema}.{slug};\n\n" if down_drops else ""
+            down_body = f"{prefix}{previous.rstrip()}"
         else:
             down_body = f"DROP {drop_word} IF EXISTS {schema}.{slug};"
     return (
@@ -356,6 +374,49 @@ def _find_canonical(slug: str) -> Path | None:
     return None
 
 
+class _Rollback(Exception):
+    """Unwinds a probe transaction — probing must never leave the DB changed."""
+
+
+def _down_section(migration: str) -> str:
+    return migration.split("-- migrate:down", 1)[1].strip()
+
+
+def _applies(conn: psycopg.Connection, sql: str) -> bool:
+    """Does ``sql`` execute cleanly against ``conn``? Rolled back either way."""
+    try:
+        with conn.transaction():
+            conn.execute(sql)  # type: ignore[arg-type]
+            raise _Rollback
+    except _Rollback:
+        return True
+    except psycopg.Error:
+        return False
+
+
+def _choose_down_shape(
+    conn: psycopg.Connection, slug: str, current: str, previous: str
+) -> bool | None:
+    """The ``down_drops`` value whose down actually runs, or ``None`` if neither does.
+
+    Measured, not inferred: whether OR REPLACE can restore the previous body
+    turns on the two column lists, and the only reliable reader of that is
+    Postgres itself (#437). ``conn`` is already at the up state, which is
+    exactly the state a rollback would meet."""
+    shapes = {
+        down_drops: _down_section(render_migration(slug, current, previous, down_drops=down_drops))
+        for down_drops in (False, True)
+    }
+    if shapes[False] == shapes[True]:
+        # A matview, whose down already is DROP + CREATE: one shape, nothing to
+        # choose, and probing it would drop dependents' target for no benefit.
+        return False
+    for down_drops, body in shapes.items():
+        if _applies(conn, body):
+            return down_drops
+    return None
+
+
 def _git_head_file(path: Path) -> str | None:
     """The canonical file at git HEAD, or ``None`` if it isn't tracked yet."""
     rel = path.relative_to(_REPO_ROOT).as_posix()
@@ -437,12 +498,37 @@ def _run_author(slug: str) -> int:
             print(f"matview_sync: migration did not create {slug}.", file=sys.stderr)
             return 1
         normalized = render_canonical(live[slug])
-        if normalized != current:
+        renormalized = normalized != current
+        if renormalized:
             src.write_text(normalized, encoding="utf-8", newline="\n")
-            dest.write_text(
-                render_migration(slug, normalized, previous), encoding="utf-8", newline="\n"
-            )
+            current = normalized
             print(f"matview_sync: normalized {src.relative_to(_REPO_ROOT)} to the deparser form")
+        # Pick the down that runs, against the very state a rollback would meet
+        # (#437). A brand-new object's down is an unconditional DROP ... IF
+        # EXISTS — one shape, nothing to probe.
+        down_drops = False
+        if previous is not None:
+            chosen = _choose_down_shape(conn, slug, current, previous)
+            if chosen is None:
+                print(
+                    f"matview_sync: {slug}: no runnable down — the previous body cannot be "
+                    "restored by OR REPLACE, and the DROP that would restore it is refused "
+                    "(dependents). Hand-author this one migration from the canonical files.",
+                    file=sys.stderr,
+                )
+                return 1
+            down_drops = chosen
+        if down_drops or renormalized:
+            dest.write_text(
+                render_migration(slug, current, previous, down_drops=down_drops),
+                encoding="utf-8",
+                newline="\n",
+            )
+        if down_drops:
+            print(
+                f"matview_sync: {slug}: down carries a DROP — OR REPLACE cannot restore "
+                "the previous body. ADR-0026's no-DROP rule binds the up, not the down."
+            )
         div = divergence(conn)
     if not div.empty():
         print(
