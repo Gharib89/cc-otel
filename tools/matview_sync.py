@@ -167,6 +167,17 @@ def render_canonical(obj: DbObject) -> str:
     return header + f"{obj.definition.rstrip()};\n"
 
 
+def _kind_of(current: str) -> Kind | None:
+    """The kind a canonical file declares, from its own CREATE line."""
+    match = _CREATE_RE.search(current)
+    return _KIND_BY_CREATE[match.group(1)] if match else None
+
+
+def _down_section(migration: str) -> str:
+    """The ``migrate:down`` body of a rendered migration."""
+    return migration.split("-- migrate:down", 1)[1].strip()
+
+
 def render_migration(
     slug: str, current: str, previous: str | None, *, down_drops: bool = False
 ) -> str:
@@ -175,8 +186,9 @@ def render_migration(
     ``current`` is the on-disk file (desired state); ``previous`` is the same file
     at git HEAD (``None`` for a brand-new object). Kind and schema are read from
     the file's own CREATE line. A matview redefinition is DROP + CREATE both
-    ways; a plain view or function is CREATE OR REPLACE both ways — no DROP, so
-    dependents survive (#426). The up/down bodies embed each file body (trailing
+    ways; a plain view's or function's **up** is CREATE OR REPLACE with no DROP,
+    so dependents survive a forward deploy (#426), and its down is the same
+    unless ``down_drops`` says otherwise. The up/down bodies embed each file body (trailing
     whitespace trimmed so the section separators stay clean) — git history is
     the lineage.
 
@@ -363,35 +375,23 @@ def divergence(conn: psycopg.Connection) -> Divergence:
     return compute_divergence(_rendered_live(conn), disk_files())
 
 
-# --- CLI ----------------------------------------------------------------------
-
-
-def _find_canonical(slug: str) -> Path | None:
-    """The canonical file for ``slug``, searched across the three dirs."""
-    for p in _canonical_paths():
-        if p.stem == slug:
-            return p
-    return None
-
-
-class _Rollback(Exception):
-    """Unwinds a probe transaction — probing must never leave the DB changed."""
-
-
-def _down_section(migration: str) -> str:
-    return migration.split("-- migrate:down", 1)[1].strip()
+# --- down probe ---------------------------------------------------------------
 
 
 def _applies(conn: psycopg.Connection, sql: str) -> bool:
-    """Does ``sql`` execute cleanly against ``conn``? Rolled back either way."""
+    """Does ``sql`` execute cleanly against ``conn``? Rolled back either way.
+
+    ``psycopg.Rollback`` unwinds the block without escaping it, so a probe never
+    leaves the DB changed. Only ``DatabaseError`` counts as "this shape does not
+    work" — an ``InterfaceError`` means the connection died, which must not be
+    read as a verdict about the SQL."""
     try:
         with conn.transaction():
             conn.execute(sql)  # type: ignore[arg-type]
-            raise _Rollback
-    except _Rollback:
-        return True
-    except psycopg.Error:
+            raise psycopg.Rollback
+    except psycopg.DatabaseError:
         return False
+    return True
 
 
 def _choose_down_shape(
@@ -402,18 +402,28 @@ def _choose_down_shape(
     Measured, not inferred: whether OR REPLACE can restore the previous body
     turns on the two column lists, and the only reliable reader of that is
     Postgres itself (#437). ``conn`` is already at the up state, which is
-    exactly the state a rollback would meet."""
-    shapes = {
-        down_drops: _down_section(render_migration(slug, current, previous, down_drops=down_drops))
-        for down_drops in (False, True)
-    }
-    if shapes[False] == shapes[True]:
-        # A matview, whose down already is DROP + CREATE: one shape, nothing to
-        # choose, and probing it would drop dependents' target for no benefit.
+    exactly the state a rollback would meet.
+
+    A matview is not probed: its down already is DROP + CREATE, there is no
+    second shape to choose, and executing it here would drop the object its
+    dependents point at for no gain."""
+    if _kind_of(current) == "matview":
         return False
-    for down_drops, body in shapes.items():
+    for down_drops in (False, True):
+        body = _down_section(render_migration(slug, current, previous, down_drops=down_drops))
         if _applies(conn, body):
             return down_drops
+    return None
+
+
+# --- CLI ----------------------------------------------------------------------
+
+
+def _find_canonical(slug: str) -> Path | None:
+    """The canonical file for ``slug``, searched across the three dirs."""
+    for p in _canonical_paths():
+        if p.stem == slug:
+            return p
     return None
 
 
@@ -495,7 +505,11 @@ def _run_author(slug: str) -> int:
     with _ephemeral_pg.ephemeral_db(_CONTAINER, _MIGRATIONS_DIR) as conn:
         live = {o.name: o for o in read_live_objects(conn)}
         if slug not in live:
-            print(f"matview_sync: migration did not create {slug}.", file=sys.stderr)
+            dest.unlink()
+            print(
+                f"matview_sync: migration did not create {slug}; removed {dest.name}.",
+                file=sys.stderr,
+            )
             return 1
         normalized = render_canonical(live[slug])
         renormalized = normalized != current
@@ -510,10 +524,12 @@ def _run_author(slug: str) -> int:
         if previous is not None:
             chosen = _choose_down_shape(conn, slug, current, previous)
             if chosen is None:
+                dest.unlink()
                 print(
                     f"matview_sync: {slug}: no runnable down — the previous body cannot be "
                     "restored by OR REPLACE, and the DROP that would restore it is refused "
-                    "(dependents). Hand-author this one migration from the canonical files.",
+                    "(dependents). Hand-author this one migration from the canonical files; "
+                    f"removed {dest.name} rather than leave a down that cannot run.",
                     file=sys.stderr,
                 )
                 return 1

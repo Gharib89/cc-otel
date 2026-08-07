@@ -351,7 +351,44 @@ def test_author_picks_the_drop_down_for_a_column_adding_view_amendment(
 
     assert ms._run_author("rt_amend") == 0
     written = next(iter(migrations.glob("*rt_amend.sql"))).read_text(encoding="utf-8")
-    up, down = written.split("-- migrate:down", 1)
-    assert "DROP" not in up  # ADR-0026's no-DROP rule still binds the up
-    assert down.strip().startswith("DROP VIEW staging.rt_amend;")
-    assert "CREATE OR REPLACE VIEW staging.rt_amend AS\n SELECT 1 AS k;" in down
+    assert "DROP" not in _up(written)  # ADR-0026's no-DROP rule still binds the up
+    assert _down(written).startswith("DROP VIEW staging.rt_amend;")
+    assert "CREATE OR REPLACE VIEW staging.rt_amend AS\n SELECT 1 AS k;" in _down(written)
+
+
+def test_author_removes_the_migration_when_no_down_shape_runs(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Neither shape runs, so --name must leave nothing behind: a migration whose
+    # down cannot run is exactly the decorative artefact #437 set out to end,
+    # and a stray file in db/migrations/ would reach the schema-drift gate.
+    migrations = tmp_path / "db" / "migrations"
+    shutil.copytree(ms._MIGRATIONS_DIR, migrations)
+    shutil.copytree(ms._REPO_ROOT / "db" / "views", tmp_path / "db" / "views")
+    shutil.copytree(ms._REPO_ROOT / "db" / "functions", tmp_path / "db" / "functions")
+    monkeypatch.setattr(ms, "_REPO_ROOT", tmp_path)
+    monkeypatch.setattr(ms, "_MIGRATIONS_DIR", migrations)
+
+    def _file(select_sql: str) -> str:
+        return render_canonical(
+            DbObject(
+                kind="view", schema="staging", name="rt_block", definition=f" SELECT {select_sql};"
+            )
+        )
+
+    previous = _file("1 AS k")
+    (tmp_path / "db" / "views" / "staging" / "rt_block.sql").write_text(
+        _file("1 AS k,\n    2 AS v"), encoding="utf-8"
+    )
+    # Sorts last, so the dependent exists by the time the probe runs — and the
+    # DROP fallback is refused, leaving no runnable down at all.
+    (migrations / "99999999999999_rt_block_dep.sql").write_text(
+        "-- migrate:up\n-- noqa: disable=all\n\n"
+        "CREATE VIEW staging.rt_block_dep AS SELECT k FROM staging.rt_block;\n"
+        "\n-- migrate:down\n\nDROP VIEW IF EXISTS staging.rt_block_dep;\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ms, "_git_head_file", lambda path: previous)
+
+    assert ms._run_author("rt_block") == 1
+    assert not list(migrations.glob("*_rt_block.sql"))
