@@ -36,7 +36,8 @@ convergence needs. It just never left the machine.
 - **The wrapper reports the disk stamp; the process stamp arrives natively.** Claude Code strips
   `OTEL_*` from the statusLine subprocess (v2.1.128+, `cc-otel-wrapper.mjs`), so the wrapper cannot be
   relied on to see what its parent started with — it emits `installer.stamp` when its env does carry
-  one and always emits `installer.stamp_on_disk`, re-read from `managed-settings.json` on every call.
+  one and always emits `installer.stamp_on_disk`, read from `managed-settings.json` once per
+  statusline process — which is per refresh, so a re-push is picked up on the next one.
   Divergence is therefore read across the two row sources per seat, not within one record:
   `installer_stamp` (any signal) against `installer_stamp_on_disk` (statusline records only).
 
@@ -47,7 +48,10 @@ convergence needs. It just never left the machine.
   NULL for everything before the re-push that first ships them (ADR-0002's forward-only default).
 
 - **The convergence read is a plain view, `marts.seat_config_convergence`.** Per seat: latest stamp,
-  latest disk stamp, when each was last seen, and `is_converged`. Plain, not materialized (ADR-0026
+  latest disk stamp, when each was last seen, `is_converged`, and `is_unknown` — the last carried for
+  the same reason `marts.dim_user` carries it, since `marts.email_bucket` coalesces a NULL email to
+  `'(unknown)'` and a gate must be able to exclude a bucket it cannot attribute to a person rather
+  than count it as a seat. Plain, not materialized (ADR-0026
   makes that a first-class canonical definition): it is an ops read against `raw`, it must answer as
   of now rather than as of the last refresh, and it needs no refresh wiring. `is_converged` is
   three-valued — NULL while either stamp is unmeasured, because "not yet reported" is a different

@@ -253,7 +253,9 @@ export function resolveHeaders(env = process.env, managed = MANAGED_SETTINGS_ENV
 //     reaches the pipeline through Claude Code's own exporter, not through here:
 //     Claude Code strips OTEL_* from this subprocess (see readManagedSettingsEnv), so
 //     this half is best-effort and is simply absent on current versions.
-//   diskStamp    — what managed-settings.json says right now, re-read every call.
+//   diskStamp    — what managed-settings.json holds, read once per process
+//     (MANAGED_SETTINGS_ENV above). The statusline spawns a fresh process per refresh,
+//     so a re-push is picked up on the next refresh, not mid-process.
 // A seat whose latest two stamps differ is running a config the disk has replaced.
 export function resolveInstallerStamps(env = process.env, managed = MANAGED_SETTINGS_ENV) {
   return {

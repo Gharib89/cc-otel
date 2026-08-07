@@ -165,7 +165,7 @@ function Add-InstallerStampAttribute {
     .DESCRIPTION
         Claude Code reads OTEL_* once at process start, so a re-push cannot reach a
         running process. Carrying the stamp in OTEL_RESOURCE_ATTRIBUTES makes every
-        metric and event name the config its process is actually running - the signal
+        metric and event carry the config its process is actually running - the signal
         that separates a converged seat from a stale one (issue #432).
 
         Injected at materialization and never baked into the artifact: the stamp is a
