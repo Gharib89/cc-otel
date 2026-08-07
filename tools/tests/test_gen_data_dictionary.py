@@ -157,6 +157,37 @@ def test_render_records_the_server_it_profiled_not_just_the_database_name():
     )
 
 
+def test_render_keeps_a_sparse_column_distinguishable_from_an_empty_one():
+    # `installer_stamp_on_disk` is present on 32 of 466,906 rows; at one decimal that
+    # printed `0.0%` — the same cell an entirely NULL column gets. Telling "arriving,
+    # rarely" from "never arrived" is the whole reason these columns were promoted (#436).
+    md = render(
+        [
+            TableProfile(
+                table="metrics",
+                total_rows=466_906,
+                signal_counts=[
+                    SignalCount("claude_code.token.usage", 8, 0.0017, "2026-08-01", "2026-08-07")
+                ],
+                columns=[
+                    ColumnStat(
+                        "installer_stamp_on_disk", "text", 0.0069, 2.1, 1, "Disk stamp.", ""
+                    ),
+                    ColumnStat("never_arrived", "text", 0.0, None, 0, "Nothing yet.", ""),
+                ],
+            )
+        ],
+        [],
+        database="cc_otel",
+        generated="2026-08-07",
+        host="ccotel-pg-prod.postgres.database.azure.com",
+    )
+    assert "| `installer_stamp_on_disk` | text | <0.1% | 2.1% | 1 |" in md
+    assert "| `never_arrived` | text | 0.0% | — | 0 |" in md
+    # a signal name only appears at all because it has rows, so its share is never truly 0
+    assert "| `claude_code.token.usage` | 8 | <0.1% |" in md
+
+
 def test_render_has_sections_and_column_row():
     md = render(
         [_profile()],
