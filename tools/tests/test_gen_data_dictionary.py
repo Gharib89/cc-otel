@@ -140,12 +140,30 @@ def _profile() -> TableProfile:
     )
 
 
+def test_render_records_the_server_it_profiled_not_just_the_database_name():
+    # Interim and prod both name their database `cc_otel`, so the database name alone
+    # cannot tell a reader which environment a regeneration profiled (#436). The header
+    # is the document's only statement of its own basis — it has to carry the host.
+    md = render(
+        [_profile()],
+        [],
+        database="cc_otel",
+        generated="2026-08-07",
+        host="ccotel-pg-prod.postgres.database.azure.com",
+    )
+    assert (
+        "> Generated **2026-08-07** by `tools.gen_data_dictionary` against `cc_otel` on "
+        "`ccotel-pg-prod.postgres.database.azure.com`." in md
+    )
+
+
 def test_render_has_sections_and_column_row():
     md = render(
         [_profile()],
         [("resource", "*", "host.name", "kept", "Hostname.", "", "nature", None)],
         database="cc_otel",
         generated="2026-07-16",
+        host="localhost",
     )
     assert "# cc-otel — Data Dictionary" in md
     assert "## `raw.metrics`" in md
@@ -176,6 +194,7 @@ def test_kept_basis_column_renders_the_partner_and_omits_it_for_denied():
         ],
         database="cc_otel",
         generated="2026-07-30",
+        host="localhost",
     )
     assert "| resource | `*` | `os.version` | kept | collinear(os.type) |" in md
     assert "| events | `*` | `error` | denied | — |" in md

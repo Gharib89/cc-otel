@@ -238,13 +238,18 @@ def _pct(v: float | None) -> str:
 def render(
     profiles: list[TableProfile],
     kept_denied: list[KeptDeniedRow],
+    *,
     database: str,
     generated: str,
+    host: str,
 ) -> str:
     out: list[str] = [
         "# cc-otel — Data Dictionary",
         "",
-        f"> Generated **{generated}** by `tools.gen_data_dictionary` against `{database}`.",
+        # Keyword-only and undefaulted: `database` and `host` are interchangeable to the type
+        # checker, and a document that misreports its own basis is worse than one that omits it.
+        f"> Generated **{generated}** by `tools.gen_data_dictionary` against "
+        f"`{database}` on `{host}`.",
         "> Row counts are a live snapshot; treat them as representative, not exact.",
         "",
         "Descriptions come from `meta.column_registry` (the curated catalogue, #16); profiling",
@@ -317,7 +322,13 @@ def build(conn: psycopg.Connection) -> str:
         cur.execute("SELECT current_database()")
         database = cur.fetchone()[0]
     generated = datetime.now(UTC).strftime("%Y-%m-%d")
-    return render(profiles, _kept_denied(conn), database, generated)
+    return render(
+        profiles,
+        _kept_denied(conn),
+        database=database,
+        generated=generated,
+        host=conn.info.host,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

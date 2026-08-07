@@ -7,6 +7,8 @@ keys are listed. Uses the shared testcontainers harness (conftest) — never the
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 from tools.gen_data_dictionary import build
 
 
@@ -45,3 +47,17 @@ def test_build_joins_registry_with_live_stats(conn):
     assert "| collinear(os.type) |" in kept_denied  # os.version / wsl.version
     # a denied row has no basis to publish
     assert "| denied | — |" in kept_denied
+
+
+def test_build_records_the_server_it_connected_to(conn, pg_url):
+    """`build` reads the host off the live connection rather than rendering a placeholder.
+
+    Which environment a regeneration profiled is otherwise unrecoverable from the document —
+    every environment names its database `cc_otel` (#436). The expected host comes from the
+    fixture's own URL, so a hardcoded one in `render` fails here.
+    """
+    expected_host = urlsplit(pg_url).hostname
+
+    md = build(conn)
+
+    assert f"on `{expected_host}`." in md
