@@ -848,9 +848,9 @@ COLUMN_SPEC: tuple[ColumnSpec, ...] = (
         useful_for="stale-session detection: a record whose installer_stamp differs from "
         "installer_stamp_on_disk is running a config the disk has already replaced",
         decided_at="2026-08-06",
-        notes="statusline-wrapper only (#432): the wrapper re-reads managed-settings.json every "
-        "call, so it is the one emitter that sees process config and disk config at once. NULL on "
-        "every natively-exported record",
+        notes="statusline-wrapper only (#432): the wrapper reads managed-settings.json once per "
+        "process, which is once per statusline refresh, so it is the one emitter that sees process "
+        "config and disk config at once. NULL on every natively-exported record",
     ),
     ColumnSpec(
         "resource",
