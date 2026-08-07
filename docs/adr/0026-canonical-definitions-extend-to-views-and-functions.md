@@ -3,6 +3,11 @@
 **Status:** accepted. Amends ADR-0008 (canonical mart definitions + generated migrations).
 Scope settled with Ahmed on 2026-08-04 (#426; architecture review candidate 1).
 
+**The down-migration bullet under "Migration template per kind" is amended by #437**
+(2026-08-07) — the `CREATE OR REPLACE` / no-DROP rule binds the **up** only; a down that
+cannot be expressed as a replace now carries a `DROP`, chosen by probing. Everything else
+below stands.
+
 ADR-0008 gave every `marts` materialized view exactly one canonical body on disk
 (`db/views/marts/`), with migrations generated from those files and a bidirectional `--check`
 gate. Everything else in `staging` + `marts` stayed on the old regime — the "current" body was
@@ -44,10 +49,17 @@ A matview migration stays DROP + CREATE (ADR-0008). A plain view or function gen
   author-mode throwaway-DB apply; the operator hand-authors that one cascade migration from the
   canonical files, and `--check` proves the end state. No auto-cascade generation — recreating a
   dependency tree correctly is a deep feature for a rare case, and a wrong cascade drops marts.
-- The same asymmetry exists on the way down: a view's `migrate:down` is `CREATE OR REPLACE` of
-  the previous body, so the down of a column-*adding* migration is a column-*dropping* replace,
-  which Postgres forbids. It fails loudly if ever run; the escape hatch is the same. Function
-  downs have no such constraint.
+- **The no-DROP rule binds the up, not the down** (amended 2026-08-07, #437). It exists to
+  protect dependents during a *forward* deploy. A down has no such duty: it runs only when an
+  operator is deliberately unwinding that deploy. So where `CREATE OR REPLACE` cannot restore
+  the previous body — the down of a column-*adding* view amendment is a column-*dropping*
+  replace, which Postgres forbids; likewise a signature-changing function — `migrate:down`
+  carries `DROP` + `CREATE`. The alternative was never a gentler down but an unrunnable one.
+  `--name` picks the shape by **probing** the candidate down against the up state on the
+  throwaway DB, never by parsing the SQL, and when neither shape runs (a dependent refuses the
+  DROP) it refuses to write a decorative down and sends the operator to the same hand-authored
+  cascade as a structural up. As first written this bullet declared the broken down acceptable
+  and claimed function downs were unconstrained; both were wrong.
 
 Render templates: a marts view or matview carries `GRANT SELECT TO cc_otel_read`; staging objects
 and functions have no grant to carry. A function's file embeds `pg_get_functiondef()` verbatim,
