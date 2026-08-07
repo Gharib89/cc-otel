@@ -116,6 +116,15 @@ convergence needs. It just never left the machine.
 
 - **`docs/data-dictionary.md` is not regenerated in the implementing PR.**
   `tools.gen_data_dictionary` reads live profiling stats from a database that already carries the
-  columns; against a throwaway container it would zero every other column's stats. It is regenerated
-  after the deploy, on the next curation pass — tracked by #436, whose re-entry condition also waits
-  on a re-push, since a regen against all-NULL columns records nothing worth reading.
+  columns; against a throwaway container it would zero every other column's stats. Regenerated
+  instead in #436, against **prod** — the only environment the migration and the sink image reached,
+  and after the ingest repoint the only one whose stores still gain rows (ADR-0021: interim's front
+  door stays live, but its stores are write-quiet). Interim carries neither column. That regen also
+  re-based the whole document off interim, so the header now records the host as well as the database
+  name (every environment names its database `cc_otel`).
+
+- **The sparsity this decision predicts is on the record, not fixed.** At that regen the stamp was
+  arriving from one seat only (`count(DISTINCT installer_stamp) = 1`) because IS had not yet
+  re-pushed the installer, and `installer_stamp_on_disk` was entirely NULL on `raw.events` — the
+  statusline-wrapper sparsity named above, not a defect. The fleet re-push is #248's; the next
+  curation pass re-profiles both columns (`docs/agents/column-curation.md` §4).

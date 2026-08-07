@@ -158,6 +158,12 @@ first curation pass after the deploy, and the PR says so in its body (#432, ADR-
 between the dictionary and the registry is the drift this step exists to prevent; an announced lag
 with a named trigger is not.
 
+Point `DATABASE_URL` at the environment the migration and the sink image actually reached. Since the
+ingest repoint that is **prod**: interim's stores are write-quiet (ADR-0021), so even a migrated
+interim would profile every newly promoted column as 100% NULL. Every environment names its database
+`cc_otel`, so the generated header also records the **host** — that line is the document's only
+statement of which environment it profiled (#436).
+
 A column promoted under several registry rows can carry a different meaning per row
 (`duration_ms` is six event families' duration). Where the descriptions genuinely differ
 the cell names each one, prefixed by the narrowest registry label that tells them apart —

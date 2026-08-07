@@ -140,12 +140,61 @@ def _profile() -> TableProfile:
     )
 
 
+def test_render_records_the_server_it_profiled_not_just_the_database_name():
+    # Interim and prod both name their database `cc_otel`, so the database name alone
+    # cannot tell a reader which environment a regeneration profiled (#436). The header
+    # is the document's only statement of its own basis — it has to carry the host.
+    md = render(
+        [_profile()],
+        [],
+        database="cc_otel",
+        generated="2026-08-07",
+        host="ccotel-pg-prod.postgres.database.azure.com",
+    )
+    assert (
+        "> Generated **2026-08-07** by `tools.gen_data_dictionary` against `cc_otel` on "
+        "`ccotel-pg-prod.postgres.database.azure.com`." in md
+    )
+
+
+def test_render_keeps_a_sparse_column_distinguishable_from_an_empty_one():
+    # `installer_stamp_on_disk` is present on 32 of 466,906 rows; at one decimal that
+    # printed `0.0%` — the same cell an entirely NULL column gets. Telling "arriving,
+    # rarely" from "never arrived" is the whole reason these columns were promoted (#436).
+    md = render(
+        [
+            TableProfile(
+                table="metrics",
+                total_rows=466_906,
+                signal_counts=[
+                    SignalCount("claude_code.token.usage", 8, 0.0017, "2026-08-01", "2026-08-07")
+                ],
+                columns=[
+                    ColumnStat(
+                        "installer_stamp_on_disk", "text", 0.0069, 2.1, 1, "Disk stamp.", ""
+                    ),
+                    ColumnStat("never_arrived", "text", 0.0, None, 0, "Nothing yet.", ""),
+                ],
+            )
+        ],
+        [],
+        database="cc_otel",
+        generated="2026-08-07",
+        host="ccotel-pg-prod.postgres.database.azure.com",
+    )
+    assert "| `installer_stamp_on_disk` | text | <0.1% | 2.1% | 1 |" in md
+    assert "| `never_arrived` | text | 0.0% | — | 0 |" in md
+    # a signal name only appears at all because it has rows, so its share is never truly 0
+    assert "| `claude_code.token.usage` | 8 | <0.1% |" in md
+
+
 def test_render_has_sections_and_column_row():
     md = render(
         [_profile()],
         [("resource", "*", "host.name", "kept", "Hostname.", "", "nature", None)],
         database="cc_otel",
         generated="2026-07-16",
+        host="localhost",
     )
     assert "# cc-otel — Data Dictionary" in md
     assert "## `raw.metrics`" in md
@@ -176,6 +225,7 @@ def test_kept_basis_column_renders_the_partner_and_omits_it_for_denied():
         ],
         database="cc_otel",
         generated="2026-07-30",
+        host="localhost",
     )
     assert "| resource | `*` | `os.version` | kept | collinear(os.type) |" in md
     assert "| events | `*` | `error` | denied | — |" in md

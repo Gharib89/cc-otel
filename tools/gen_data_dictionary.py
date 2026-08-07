@@ -232,19 +232,32 @@ def _basis(kept_basis: str | None, partner: str | None) -> str:
 
 
 def _pct(v: float | None) -> str:
-    return "—" if v is None else f"{v:.1f}%"
+    """One decimal, except that a non-zero value never renders as `0.0%`.
+
+    At one decimal a column present on 32 of 466,906 rows printed the same `0.0%` as one
+    that had never arrived at all. "Rare" and "absent" are the distinction the sparse
+    columns are read for, so the floor case says `<0.1%` instead (#436).
+    """
+    if v is None:
+        return "—"
+    return "<0.1%" if 0 < v < 0.05 else f"{v:.1f}%"
 
 
 def render(
     profiles: list[TableProfile],
     kept_denied: list[KeptDeniedRow],
+    *,
     database: str,
     generated: str,
+    host: str,
 ) -> str:
     out: list[str] = [
         "# cc-otel — Data Dictionary",
         "",
-        f"> Generated **{generated}** by `tools.gen_data_dictionary` against `{database}`.",
+        # Keyword-only and undefaulted: `database` and `host` are interchangeable to the type
+        # checker, and a document that misreports its own basis is worse than one that omits it.
+        f"> Generated **{generated}** by `tools.gen_data_dictionary` against "
+        f"`{database}` on `{host}`.",
         "> Row counts are a live snapshot; treat them as representative, not exact.",
         "",
         "Descriptions come from `meta.column_registry` (the curated catalogue, #16); profiling",
@@ -271,7 +284,7 @@ def render(
             "|---|---:|---:|---|---|",
         ]
         out += [
-            f"| `{s.name}` | {s.rows:,} | {s.pct:.1f}% | {s.first_seen} | {s.last_seen} |"
+            f"| `{s.name}` | {s.rows:,} | {_pct(s.pct)} | {s.first_seen} | {s.last_seen} |"
             for s in p.signal_counts
         ]
         out += [
@@ -282,7 +295,7 @@ def render(
             "|---|---|---:|---:|---:|---|---|",
         ]
         out += [
-            f"| `{c.name}` | {c.data_type} | {c.non_null_pct:.1f}% | {_pct(c.unique_pct)} | "
+            f"| `{c.name}` | {c.data_type} | {_pct(c.non_null_pct)} | {_pct(c.unique_pct)} | "
             f"{c.distinct:,} | {c.description} | {c.useful_for} |"
             for c in p.columns
         ]
@@ -317,7 +330,13 @@ def build(conn: psycopg.Connection) -> str:
         cur.execute("SELECT current_database()")
         database = cur.fetchone()[0]
     generated = datetime.now(UTC).strftime("%Y-%m-%d")
-    return render(profiles, _kept_denied(conn), database, generated)
+    return render(
+        profiles,
+        _kept_denied(conn),
+        database=database,
+        generated=generated,
+        host=conn.info.host,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
