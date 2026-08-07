@@ -26,7 +26,7 @@ name: env-schema-status
 #   <ENV>_AZURE_SUBSCRIPTION_ID               — target subscription
 #   <ENV>_RESOURCE_GROUP                      — target resource group
 #   <ENV>_DATABASE_URL                        — dbmate status target
-# where <ENV> is INTERIM or PROD.
+# where <ENV> is the matrix leg's prefix — PROD today.
 on:
   schedule:
     # 05:00 UTC — 08:00 Cairo, so a red run is already waiting at the start of
@@ -43,12 +43,13 @@ jobs:
     name: schema status (${{ matrix.environment }})
     runs-on: ubuntu-latest
     strategy:
-      # Independent targets — prod's verdict must never be hidden by interim's.
+      # Independent targets — one leg's verdict must never be hidden by
+      # another's. One leg today: interim's was dropped ahead of its retirement
+      # because it can never report anything but red (#439, ADR-0023). The
+      # matrix stays so a second environment re-adds a leg.
       fail-fast: false
       matrix:
         include:
-          - environment: interim
-            prefix: INTERIM
           - environment: prod
             prefix: PROD
     steps:

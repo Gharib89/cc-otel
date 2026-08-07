@@ -3,6 +3,10 @@
 **Status:** accepted. Answers the fork raised in #414, which was `ready-for-human` precisely because
 the choice is about where this *class* of check belongs, not just about Power BI.
 
+**Amended in place by #439 for the leg-deletion trigger** — interim's leg was deleted ahead of its
+environment's retirement, because it can never report anything but red. No new ADR: the matrix
+decision below is refined, not reversed. Detail in the *Decisions* bullet.
+
 On 2026-08-03, repointing the report at `ccotel-pg-prod` (#247, ADR-0022) refreshed **green** while
 Power BI deleted columns from the semantic model: `dq_finding[subject]`, `[kind]`,
 `[first_detected_at]`, `[standing_since]`, columns from all five `bridge_session_*` marts,
@@ -28,9 +32,23 @@ the question exactly. Nothing ran it, and nothing consumed the answer.
 - **Detection only.** The workflow never applies a migration; the fix stays the operator-run
   `deploy` workflow. A watchdog that silently repairs prod would hide the very gap it exists to
   surface.
-- **Per-environment matrix with `fail-fast: false`,** so prod's verdict is never hidden by
-  interim's. When interim retires at the cutover gate (ADR-0020, ADR-0021) its matrix leg is
-  deleted; nothing else changes.
+- **Per-environment matrix with `fail-fast: false`,** so one leg's verdict is never hidden by
+  another's. Deleting a leg changes nothing else.
+- **A leg is deleted when it can no longer go green, not when its environment is deleted**
+  (amended 2026-08-07, #439). Originally this ADR tied interim's leg to the cutover gate
+  (ADR-0020, ADR-0021). Interim reached that state early: its last deploy was 2026-08-04, the
+  report has read prod since 2026-08-03 (ADR-0022), its stores are write-quiet by construction
+  (ADR-0021) and its RG is scheduled for deletion (#248 Part B) — so migrations landing on `main`
+  would never be applied to it, and deploying purely to green a watchdog is work done for the
+  watchdog's benefit. From 2026-08-08 its leg would have failed every day. Because the run-level
+  conclusion is `failure` whichever leg fails, `fail-fast: false` keeps prod's verdict *readable*
+  but cannot keep the run green — and a run that is red every day trains the team to ignore the
+  only alerting surface prod has, so a genuine prod gap (the #414 failure mode) arrives looking
+  exactly like the noise. The trigger is therefore **"this leg can never report anything but
+  red"**, which precedes decommission; same shape as ADR-0016 pulling the POC RG's deletion
+  forward. `continue-on-error` was rejected: a step that always reports and never fails is read by
+  nobody, and it leaves a dead leg for #248 Part B to delete anyway. The `INTERIM_*` secrets stay —
+  `deploy.yml` still reads them, and interim must stay deployable until its RG is gone.
 - **No new access.** It reuses `deploy.yml`'s OIDC app registration, its `<ENV>_`-prefixed secrets,
   and its open/close per-run firewall rule — the public Postgres stays guarded by password alone
   with no standing allow-all (ADR-0018).
@@ -58,7 +76,7 @@ the question exactly. Nothing ran it, and nothing consumed the answer.
 - The repo gains its first `schedule:`-triggered workflow and a recurring, unprompted signal about
   environment state — previously the repo knew nothing about a deployed environment between manual
   deploys.
-- A scheduled run costs metered Actions minutes daily. Two short jobs; accepted.
+- A scheduled run costs metered Actions minutes daily. One short job per live environment; accepted.
 - **Accepted residual — the watchdog can be switched off by silence.** This repo is public
   (ADR-0018), and GitHub "automatically disable[s] [scheduled workflows] when no repository activity
   has occurred in 60 days"; re-enabling is manual. So the one failure mode this check cannot cover
