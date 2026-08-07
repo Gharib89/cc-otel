@@ -3,6 +3,10 @@
 **Status:** accepted. Answers the fork raised in #414, which was `ready-for-human` precisely because
 the choice is about where this *class* of check belongs, not just about Power BI.
 
+**Amended in place by #439 for the leg-deletion trigger** — interim's leg was deleted ahead of its
+environment's retirement, because it can never report anything but red. No new ADR: the matrix
+decision below is refined, not reversed. Detail in the *Decisions* bullet.
+
 On 2026-08-03, repointing the report at `ccotel-pg-prod` (#247, ADR-0022) refreshed **green** while
 Power BI deleted columns from the semantic model: `dq_finding[subject]`, `[kind]`,
 `[first_detected_at]`, `[standing_since]`, columns from all five `bridge_session_*` marts,
@@ -29,7 +33,7 @@ the question exactly. Nothing ran it, and nothing consumed the answer.
   `deploy` workflow. A watchdog that silently repairs prod would hide the very gap it exists to
   surface.
 - **Per-environment matrix with `fail-fast: false`,** so one leg's verdict is never hidden by
-  another's. A retired environment's leg is deleted; nothing else changes.
+  another's. Deleting a leg changes nothing else.
 - **A leg is deleted when it can no longer go green, not when its environment is deleted**
   (amended 2026-08-07, #439). Originally this ADR tied interim's leg to the cutover gate
   (ADR-0020, ADR-0021). Interim reached that state early: its last deploy was 2026-08-04, the

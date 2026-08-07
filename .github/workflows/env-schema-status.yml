@@ -44,9 +44,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       # Independent targets — one leg's verdict must never be hidden by
-      # another's. One leg today: interim was dropped ahead of its retirement
-      # because it is permanently behind `main` and can never go green, and a
-      # daily red run is an alerting surface nobody reads (#439, ADR-0023). The
+      # another's. One leg today: interim's was dropped ahead of its retirement
+      # because it can never report anything but red (#439, ADR-0023). The
       # matrix stays so a second environment re-adds a leg.
       fail-fast: false
       matrix:
